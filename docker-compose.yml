@@ -1,0 +1,30 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "33013:8000"
+    restart: always
+    networks:
+      - default
+      - 1panel-network
+    env_file:
+      - .env
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "33012:5173"
+    depends_on:
+      - backend
+    env_file:
+      - .env
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    restart: always
+    networks:
+      - default
+      - 1panel-network
+
+networks:
+  1panel-network:
+    external: true
