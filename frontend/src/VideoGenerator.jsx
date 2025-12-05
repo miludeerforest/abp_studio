@@ -18,6 +18,52 @@ function VideoGenerator({ token, initialImage, initialPrompt, requestTimestamp, 
     const [isQueueRunning, setIsQueueRunning] = useState(false)
     const [selectedVideo, setSelectedVideo] = useState(null)
 
+    // Merge State
+    const [selectedVideoIds, setSelectedVideoIds] = useState(new Set())
+    const [isMerging, setIsMerging] = useState(false)
+
+    const toggleSelection = (id) => {
+        const newSet = new Set(selectedVideoIds)
+        if (newSet.has(id)) {
+            newSet.delete(id)
+        } else {
+            newSet.add(id)
+        }
+        setSelectedVideoIds(newSet)
+    }
+
+    const handleMergeVideos = async () => {
+        if (selectedVideoIds.size < 2) {
+            alert("请至少选择2个视频进行合成")
+            return
+        }
+        setIsMerging(true)
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/v1/merge-videos`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ video_ids: Array.from(selectedVideoIds) })
+            })
+            if (res.ok) {
+                // Success, refresh queue
+                setSelectedVideoIds(new Set()) // Clear selection
+                alert("视频合成成功！")
+                fetchQueue()
+            } else {
+                const txt = await res.text()
+                alert("合成失败: " + txt)
+            }
+        } catch (e) {
+            console.error("Merge failed", e)
+            alert("合成请求失败")
+        } finally {
+            setIsMerging(false)
+        }
+    }
+
     // Refs for latest state in async callbacks
     const queueRef = useRef(queue)
     const processingCountRef = useRef(processingCount)
@@ -392,6 +438,22 @@ function VideoGenerator({ token, initialImage, initialPrompt, requestTimestamp, 
                         >
                             {isQueueRunning ? '⏸️ 暂停队列' : '▶️ 开始生成'}
                         </button>
+                        {/* Merge Button */}
+                        {selectedVideoIds.size > 0 && (
+                            <button
+                                className="btn-primary"
+                                onClick={handleMergeVideos}
+                                disabled={isMerging}
+                                style={{
+                                    padding: '6px 16px',
+                                    fontSize: '0.9rem',
+                                    background: 'var(--primary-color)',
+                                    opacity: isMerging ? 0.7 : 1
+                                }}
+                            >
+                                {isMerging ? '🔄 合成中...' : `🔗 合成选中的视频 (${selectedVideoIds.size})`}
+                            </button>
+                        )}
                     </div>
                     <div style={{ display: 'flex', gap: '10px' }}>
                         <button className="btn-secondary" onClick={clearDone} style={{ fontSize: '0.8rem' }}>清除已完成</button>
@@ -399,6 +461,7 @@ function VideoGenerator({ token, initialImage, initialPrompt, requestTimestamp, 
                     </div>
                 </div>
 
+                {/* Queue List Item Update: Add Checkbox */}
                 {queue.length === 0 ? (
                     <div style={{
                         height: '200px',
@@ -419,14 +482,27 @@ function VideoGenerator({ token, initialImage, initialPrompt, requestTimestamp, 
                         {queue.map(item => (
                             <div key={item.id} className="queue-item" style={{
                                 display: 'grid',
-                                gridTemplateColumns: '80px 1fr 120px 100px',
+                                gridTemplateColumns: '40px 80px 1fr 120px 100px', // Adjusted grid
                                 gap: '16px',
-                                background: 'rgba(255,255,255,0.03)',
-                                border: '1px solid var(--card-border)',
+                                background: selectedVideoIds.has(item.id) ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255,255,255,0.03)',
+                                border: selectedVideoIds.has(item.id) ? '1px solid var(--primary-color)' : '1px solid var(--card-border)',
                                 borderRadius: '8px',
                                 padding: '12px',
-                                alignItems: 'center'
+                                alignItems: 'center',
+                                transition: 'all 0.2s'
                             }}>
+                                {/* Checkbox */}
+                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                    {item.status === 'done' && (
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedVideoIds.has(item.id)}
+                                            onChange={() => toggleSelection(item.id)}
+                                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                        />
+                                    )}
+                                </div>
+
                                 {/* Thumbnail */}
                                 <div
                                     style={{

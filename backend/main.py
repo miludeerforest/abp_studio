@@ -328,43 +328,25 @@ from sqlalchemy import func
 
 @app.get("/api/v1/stats")
 def get_stats(db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
-    # Helper to get counts by date trunc
-    # Note: SQLite date trunc is different from Postgres. Assuming Postgres per config.
-    # Postgres: date_trunc('day', created_at)
+    # 1. User Summary Stats (Total Counts)
+    users = db.query(User).all()
+    user_stats = []
     
-    def get_time_stats(model, time_unit):
-        # Result: [{date: '2023-01-01', count: 10, user_id: 1}, ...]
-        # For simplicity, let's just group by user and time
-        # This might be complex query. Let's do simple aggregation.
-        
-        # 1. Image Stats
-        img_q = db.query(
-            func.date_trunc(time_unit, ImageGenerationLog.created_at).label('date'),
-            ImageGenerationLog.user_id,
-            func.count(ImageGenerationLog.id).label('count')
-        ).group_by('date', ImageGenerationLog.user_id).all()
-        
-        # 2. Video Stats
-        vid_q = db.query(
-            func.date_trunc(time_unit, VideoQueueItem.created_at).label('date'),
-            VideoQueueItem.user_id,
-            func.count(VideoQueueItem.id).label('count')
-        ).group_by('date', VideoQueueItem.user_id).all()
-        
-        return {"images": img_q, "videos": vid_q}
+    for u in users:
+        img_count = db.query(ImageGenerationLog).filter(ImageGenerationLog.user_id == u.id).count()
+        vid_count = db.query(VideoQueueItem).filter(VideoQueueItem.user_id == u.id).count()
+        user_stats.append({
+            "username": u.username,
+            "role": u.role,
+            "image_count": img_count,
+            "video_count": vid_count
+        })
 
-    # Since user wants "Each User and All Users" stats by Day/Week/Month
-    # We can pre-calculate or just return raw aggregated data for Frontend to chart.
-    # Let's return a comprehensive structure.
-    
-    # Time Stats (Last 30 days)
-    # Since sqlite/postgres differences, let's do python-side aggregation for safety/speed on small datasets
-    # or simple SQL.
-    # Postgres 'date_trunc' is reliable.
-    
-    # Let's return raw daily counts for last 30 days
+    # 2. Daily Activity (Last 30 Days)
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     
+    # SQLite uses strftime or date function. func.date works in most.
+    # Group by Date only (All users combined) for the main chart
     img_daily = db.query(
         func.date(ImageGenerationLog.created_at).label('date'),
         func.count(ImageGenerationLog.id).label('count')
@@ -380,7 +362,7 @@ def get_stats(db: Session = Depends(get_db), admin: User = Depends(get_current_a
     by_day_vid = [{"date": str(r.date), "count": r.count, "type": "video"} for r in vid_daily]
 
     return {
-        "user_stats": stats,
+        "user_stats": user_stats,
         "by_day": by_day_img + by_day_vid,
         "by_week": [], # Placeholder
         "by_month": [] # Placeholder
@@ -1297,7 +1279,109 @@ def update_queue_item(
         
     db.commit()
     db.refresh(item)
+    db.commit()
+    db.refresh(item)
     return item
+
+# --- Video Merge ---
+class MergeRequest(BaseModel):
+    video_ids: List[str]
+
+@app.post("/api/v1/merge-videos")
+async def merge_videos_endpoint(
+    req: MergeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    # 1. Validate and fetch videos
+    videos = []
+    for vid in req.video_ids:
+        item = db.query(VideoQueueItem).filter(VideoQueueItem.id == vid).first()
+        if not item:
+            logger.warning(f"Video {vid} not found during merge")
+            continue
+        # Only allow successfully generated videos using their *result* path
+        # Assuming result_url is http://.../uploads/queue/xxx.mp4
+        # We need the local file path.
+        if item.status != "done" or not item.result_url:
+             logger.warning(f"Video {vid} not ready or missing result")
+             continue
+        videos.append(item)
+    
+    if not videos:
+        raise HTTPException(status_code=400, detail="No valid videos selected for merging")
+
+    # 2. Resolve local paths
+    # Result URL: http://base/uploads/queue/video_123.mp4
+    # File Path: /app/uploads/queue/video_123.mp4
+    # We can infer filename from result_url
+    local_paths = []
+    for v in videos:
+        # result_url likely ends with filename
+        filename = v.result_url.split('/')[-1]
+        local_path = os.path.join(QUEUE_DIR, filename)
+        if os.path.exists(local_path):
+            local_paths.append(local_path)
+        else:
+            logger.error(f"File missing on disk: {local_path}")
+
+    if len(local_paths) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 valid video files to merge")
+
+    # 3. Create ffmpeg list file
+    import tempfile
+    timestamp = int(datetime.now().timestamp())
+    concat_list_path = os.path.join(QUEUE_DIR, f"concat_list_{timestamp}.txt")
+    output_filename = f"merged_{timestamp}.mp4"
+    output_path = os.path.join(QUEUE_DIR, output_filename)
+
+    try:
+        with open(concat_list_path, 'w') as f:
+            for path in local_paths:
+                f.write(f"file '{path}'\n")
+        
+        # 4. Run ffmpeg
+        # ffmpeg -f concat -safe 0 -i list.txt -c copy output.mp4
+        cmd = [
+            "ffmpeg", "-f", "concat", "-safe", "0", 
+            "-i", concat_list_path, 
+            "-c", "copy", "-y", 
+            output_path
+        ]
+        
+        logger.info(f"Running merge command: {' '.join(cmd)}")
+        process = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode != 0:
+            logger.error(f"FFmpeg merge failed: {stderr.decode()}")
+            raise Exception("FFmpeg merge process failed")
+
+        # 5. Create new Queue Item for the merged video
+        new_item = VideoQueueItem(
+            id=str(int(datetime.now().timestamp() * 1000)),
+            filename=output_filename,
+            file_path=output_path,
+            prompt="Merged Video: " + ", ".join([v.filename for v in videos]),
+            status="done", # Immediately done
+            result_url=f"/uploads/queue/{output_filename}",
+            user_id=user.id
+        )
+        db.add(new_item)
+        db.commit()
+        db.refresh(new_item)
+        
+        # Cleanup list file
+        if os.path.exists(concat_list_path):
+            os.remove(concat_list_path)
+            
+        return new_item
+
+    except Exception as e:
+        logger.error(f"Merge error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/v1/queue/{item_id}")
 def delete_queue_item(
