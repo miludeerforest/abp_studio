@@ -1,0 +1,37 @@
+# General
+.DS_Store
+.idea/
+.vscode/
+*.log
+tmp/
+
+# Environment Variables (Secrets)
+.env
+.env.*
+!.env.example
+
+# Docker
+docker-compose.override.yml
+
+# Backend (Python)
+backend/__pycache__/
+backend/*.pyc
+backend/venv/
+backend/.venv/
+backend/env/
+backend/.env
+# User generated content (Images/Videos)
+backend/uploads/
+# Local Database files (if any)
+*.sqlite3
+*.db
+
+# Frontend (Node/React)
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*

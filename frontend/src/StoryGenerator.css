@@ -1,0 +1,315 @@
+.story-generator-root {
+    padding: 1rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.story-generator-root .steps-header {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    margin-bottom: 2rem;
+}
+
+.story-generator-root .step-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0.5;
+    transition: all 0.3s;
+}
+
+.story-generator-root .step-item.active {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.story-generator-root .step-number {
+    width: 32px;
+    height: 32px;
+    background: #333;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.story-generator-root .step-item.active .step-number {
+    background: #a855f7;
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+}
+
+.story-generator-root .workspace {
+    background: #181926;
+    border-radius: 16px;
+    padding: 2rem;
+    min-height: 500px;
+}
+
+.story-generator-root .input-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.story-generator-root .upload-box {
+    border: 2px dashed #444;
+    border-radius: 12px;
+    height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: #1e1e1e;
+    overflow: hidden;
+}
+
+.story-generator-root .upload-box:hover {
+    border-color: #a855f7;
+    background: #252528;
+}
+
+.story-generator-root .preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.story-generator-root .upload-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    color: #888;
+}
+
+.story-generator-root .upload-placeholder .icon {
+    font-size: 3rem;
+}
+
+.story-generator-root .config-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.story-generator-root .config-panel h3 {
+    color: #fff;
+    margin-bottom: 0.5rem;
+}
+
+.story-generator-root .script-input {
+    width: 100%;
+    background: #12131f;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 1rem;
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1.5;
+    resize: none;
+}
+
+.story-generator-root .script-input:focus {
+    border-color: #a855f7;
+    outline: none;
+}
+
+.story-generator-root .primary-btn {
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.3s;
+    margin-top: auto;
+}
+
+.story-generator-root .primary-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.story-generator-root .secondary-btn {
+    background: #333;
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.story-generator-root .storyboard-editor .shots-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.story-generator-root .shot-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.story-generator-root .shot-header {
+    font-weight: bold;
+    color: #a855f7;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.story-generator-root .shot-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.story-generator-root .shot-body label {
+    font-size: 0.85rem;
+    color: #888;
+}
+
+.story-generator-root .shot-body textarea {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #333;
+    color: #fff;
+    border-radius: 4px;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+.story-generator-root .story-text {
+    font-size: 0.85rem;
+    color: #aaa;
+    font-style: italic;
+    background: #111;
+    padding: 0.5rem;
+    border-radius: 4px;
+}
+
+.story-generator-root .code-font {
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+
+.story-generator-root .actions-bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 2rem;
+    border-top: 1px solid #333;
+    padding-top: 1rem;
+}
+
+.story-generator-root .results-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.story-generator-root .result-card {
+    background: #1e1e1e;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+}
+
+.story-generator-root .card-header {
+    padding: 0.5rem 1rem;
+    background: #252528;
+    display: flex;
+    justify-content: space-between;
+}
+
+.story-generator-root .badge {
+    background: #a855f7;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.story-generator-root .image-container {
+    width: 100%;
+    aspect-ratio: 9/16;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.story-generator-root .image-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.story-generator-root .error-placeholder {
+    color: #ef4444;
+    padding: 1rem;
+    text-align: center;
+}
+
+.story-generator-root .card-footer {
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    flex: 1;
+}
+
+.story-generator-root .result-desc {
+    font-size: 0.9rem;
+    color: #ccc;
+    flex: 1;
+}
+
+.story-generator-root .btn-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.story-generator-root .icon-btn {
+    flex: 1;
+    background: #333;
+    border: 1px solid #444;
+    color: white;
+    padding: 0.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    transition: background 0.2s;
+}
+
+.story-generator-root .icon-btn:hover {
+    background: #444;
+}
+
+.story-generator-root .error-banner {
+    background: #ef4444;
+    color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
