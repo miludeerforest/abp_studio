@@ -1,0 +1,659 @@
+import React, { useState, useEffect } from 'react';
+import './Gallery.css';
+
+// Product categories
+const CATEGORIES = [
+    { value: 'all', label: '全部', icon: '🏷️' },
+    { value: 'security', label: '安防监控', icon: '📹' },
+    { value: 'daily', label: '日用百货', icon: '🧴' },
+    { value: 'beauty', label: '美妆护肤', icon: '💄' },
+    { value: 'digital', label: '数码3C', icon: '🎧' },
+    { value: 'other', label: '其他品类', icon: '📦' },
+];
+
+const Gallery = ({ onSelectForVideo }) => {
+    const [activeTab, setActiveTab] = useState('images'); // 'images' or 'videos'
+    const userRole = localStorage.getItem('role') || 'user';
+
+    // Pagination State
+    const [imgPage, setImgPage] = useState(1);
+    const [vidPage, setVidPage] = useState(1);
+    const LIMIT = 9;
+
+    // Filter State
+    const [categoryFilter, setCategoryFilter] = useState('all');
+
+    // Data State
+    const [images, setImages] = useState([]);
+    const [videos, setVideos] = useState([]);
+    const [loading, setLoading] = useState(false);
+
+    // Batch Selection State (admin only)
+    const [selectMode, setSelectMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState(new Set());
+
+    // Detailed items for lightbox
+    const [selectedImage, setSelectedImage] = useState(null);
+    const [selectedVideo, setSelectedVideo] = useState(null);
+
+    // Totals for pagination
+    const [totalImages, setTotalImages] = useState(0);
+    const [totalVideos, setTotalVideos] = useState(0);
+
+    useEffect(() => {
+        if (activeTab === 'images') fetchImages();
+        else fetchVideos();
+        // Reset selection when switching tabs or filters
+        setSelectedIds(new Set());
+        setSelectMode(false);
+    }, [activeTab, imgPage, vidPage, categoryFilter]);
+
+    const fetchImages = async () => {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        const offset = (imgPage - 1) * LIMIT;
+        const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
+        try {
+            const res = await fetch(`/api/v1/gallery/images?limit=${LIMIT}&offset=${offset}${categoryParam}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setImages(data.items);
+                setTotalImages(data.total);
+            }
+        } catch (err) {
+            console.error("Failed to fetch images", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchVideos = async () => {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        const offset = (vidPage - 1) * LIMIT;
+        const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
+        try {
+            const res = await fetch(`/api/v1/gallery/videos?limit=${LIMIT}&offset=${offset}${categoryParam}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setVideos(data.items);
+                setTotalVideos(data.total);
+            }
+        } catch (err) {
+            console.error("Failed to fetch videos", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRefresh = async () => {
+        if (activeTab === 'images') await fetchImages();
+        else await fetchVideos();
+    };
+
+    // Toggle item selection
+    const toggleSelect = (id) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+        } else {
+            newSet.add(id);
+        }
+        setSelectedIds(newSet);
+    };
+
+    // Select/Deselect all
+    const toggleSelectAll = () => {
+        if (activeTab === 'images') {
+            if (selectedIds.size === images.length) {
+                setSelectedIds(new Set());
+            } else {
+                setSelectedIds(new Set(images.map(img => img.id)));
+            }
+        } else {
+            if (selectedIds.size === videos.length) {
+                setSelectedIds(new Set());
+            } else {
+                setSelectedIds(new Set(videos.map(vid => vid.id)));
+            }
+        }
+    };
+
+    // Batch delete (admin only)
+    const handleBatchDelete = async () => {
+        if (selectedIds.size === 0) return;
+        if (!window.confirm(`确定要删除选中的 ${selectedIds.size} 个项目吗？`)) return;
+        if (!window.confirm(`再次确认：删除后无法恢复，是否继续？`)) return;
+
+        const token = localStorage.getItem('token');
+        const endpoint = activeTab === 'images'
+            ? '/api/v1/gallery/images/batch-delete'
+            : '/api/v1/gallery/videos/batch-delete';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ids: Array.from(selectedIds) })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                alert(`成功删除 ${data.deleted} 个项目`);
+                setSelectedIds(new Set());
+                setSelectMode(false);
+                handleRefresh();
+            } else {
+                alert("批量删除失败");
+            }
+        } catch (err) {
+            console.error("Batch delete failed", err);
+            alert("批量删除失败: " + err.message);
+        }
+    };
+
+    const handleDelete = async (e, item, type) => {
+        e.stopPropagation(); // Prevent opening lightbox
+        if (!window.confirm("确定要删除吗？")) return;
+
+        const token = localStorage.getItem('token');
+        try {
+            const url = type === 'image'
+                ? `/api/v1/gallery/images/${item.id}`
+                : `/api/v1/queue/${item.id}`;
+
+            const res = await fetch(url, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                // Refresh list
+                if (type === 'image') fetchImages();
+                else fetchVideos();
+            } else {
+                alert("删除失败");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("删除请求错误");
+        }
+    };
+
+    const handleDownload = (e, url) => {
+        e.stopPropagation();
+        // Native browser behavior for download link, no special js needed other than stopping prop
+        // We use a helper here if we want to force simple window open, 
+        // but explicit <a> tag logic in render is better.
+        // Actually, we'll implement this directly in the JSX as an <a> tag to avoid messy JS clicks.
+    };
+
+    const handleTabChange = (tab) => {
+        setActiveTab(tab);
+        // Reset pages on tab switch if desired, or keep state
+    };
+
+    const totalPagesImg = Math.ceil(totalImages / LIMIT);
+    const totalPagesVid = Math.ceil(totalVideos / LIMIT);
+
+    return (
+        <div className="gallery-container">
+            {/* Header Section */}
+            <div className="gallery-header">
+                <div className="gallery-title">
+                    <h1>
+                        <span className="gallery-title-gradient">
+                            创意画廊
+                        </span>
+                    </h1>
+                    <p className="gallery-subtitle">
+                        Gallery & Creation History V2.1
+                    </p>
+                </div>
+
+                {/* Tab Switcher */}
+                <div className="gallery-tabs">
+                    <button
+                        onClick={() => handleTabChange('images')}
+                        className={`gallery-tab-btn ${activeTab === 'images' ? 'active' : ''}`}
+                    >
+                        <span>🎨</span>
+                        图片
+                    </button>
+                    <button
+                        onClick={() => handleTabChange('videos')}
+                        className={`gallery-tab-btn ${activeTab === 'videos' ? 'active' : ''}`}
+                    >
+                        <span>🎬</span>
+                        视频
+                    </button>
+                </div>
+
+                {/* Filter & Actions Row */}
+                <div className="gallery-toolbar">
+                    {/* Category Filter */}
+                    <select
+                        value={categoryFilter}
+                        onChange={(e) => { setCategoryFilter(e.target.value); setImgPage(1); setVidPage(1); }}
+                        className="gallery-filter-select"
+                    >
+                        {CATEGORIES.map(cat => (
+                            <option key={cat.value} value={cat.value}>
+                                {cat.icon} {cat.label}
+                            </option>
+                        ))}
+                    </select>
+
+                    {/* Admin Batch Actions & Refresh */}
+                    <div className="batch-actions">
+                        <button onClick={handleRefresh} className="batch-btn" title="刷新列表">
+                            🔄 刷新
+                        </button>
+                        {userRole === 'admin' && (
+                            <>
+                                <button
+                                    onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+                                    className={`batch-btn ${selectMode ? 'active' : ''}`}
+                                >
+                                    {selectMode ? '✕ 退出选择' : '☑️ 多选'}
+                                </button>
+                                {selectMode && (
+                                    <>
+                                        <button onClick={toggleSelectAll} className="batch-btn">
+                                            {selectedIds.size === (activeTab === 'images' ? images.length : videos.length) ? '取消全选' : '全选'}
+                                        </button>
+                                        <button
+                                            onClick={handleBatchDelete}
+                                            className="batch-btn delete"
+                                            disabled={selectedIds.size === 0}
+                                        >
+                                            🗑️ 删除 ({selectedIds.size})
+                                        </button>
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Content Area */}
+            <div className="gallery-content">
+                <div className="gallery-grid-wrapper">
+                    {activeTab === 'images' && (
+                        <div className="gallery-inner">
+                            {images.length === 0 && !loading ? (
+                                <div className="gallery-empty">
+                                    <div className="gallery-empty-icon">🖼️</div>
+                                    <h3 className="gallery-empty-text">暂无图片</h3>
+                                </div>
+                            ) : (
+                                <div className="gallery-grid">
+                                    {images.map((img) => (
+                                        <div
+                                            key={img.id}
+                                            className={`gallery-card ${selectMode ? 'selectable' : ''} ${selectedIds.has(img.id) ? 'selected' : ''}`}
+                                            onClick={() => selectMode ? toggleSelect(img.id) : setSelectedImage(img)}
+                                        >
+                                            {/* Selection Checkbox */}
+                                            {selectMode && (
+                                                <div
+                                                    className={`select-checkbox ${selectedIds.has(img.id) ? 'checked' : ''}`}
+                                                    onClick={(e) => { e.stopPropagation(); toggleSelect(img.id); }}
+                                                />
+                                            )}
+                                            <img
+                                                src={img.url}
+                                                alt="Generated"
+                                                className="gallery-card-img"
+                                                loading="lazy"
+                                            />
+                                            <div className="gallery-overlay">
+                                                {/* Creator Badge - Top Left */}
+                                                {img.username && !selectMode && (
+                                                    <div className="gallery-creator">
+                                                        👤 {img.username}
+                                                    </div>
+                                                )}
+
+                                                {/* Hover Actions - Top Right */}
+                                                <div className="gallery-actions">
+                                                    {onSelectForVideo && (
+                                                        <button
+                                                            className="action-btn video"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onSelectForVideo(img.url, img.prompt);
+                                                            }}
+                                                            title="转视频"
+                                                        >
+                                                            🎬
+                                                        </button>
+                                                    )}
+                                                    <a
+                                                        href={img.url}
+                                                        download
+                                                        target="_blank"
+                                                        className="action-btn"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        title="下载"
+                                                    >
+                                                        ⬇️
+                                                    </a>
+                                                    <button
+                                                        className="action-btn delete"
+                                                        onClick={(e) => handleDelete(e, img, 'image')}
+                                                        title="删除"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
+
+                                                <p className="gallery-prompt">
+                                                    {img.prompt}
+                                                </p>
+                                                <div className="gallery-hint">
+                                                    点击查看大图
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {/* Fillers */}
+                                    {[...Array(Math.max(0, LIMIT - images.length))].map((_, i) => (
+                                        <div key={`filler-${i}`} className="filler-card"></div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Pagination */}
+                            <div className="gallery-pagination">
+                                <button
+                                    onClick={() => setImgPage(p => Math.max(1, p - 1))}
+                                    disabled={imgPage === 1 || loading}
+                                    className="page-btn"
+                                >
+                                    <span>←</span> 上一页
+                                </button>
+                                <span className="page-info">
+                                    Page <span className="page-current">{imgPage}</span> {totalImages > 0 && `/ ${totalPagesImg || 1}`}
+                                </span>
+                                <button
+                                    onClick={() => setImgPage(p => p + 1)}
+                                    disabled={images.length < LIMIT || (totalPagesImg > 0 && imgPage >= totalPagesImg) || loading}
+                                    className="page-btn"
+                                >
+                                    下一页 <span>→</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'videos' && (
+                        <div className="gallery-inner">
+                            {videos.length === 0 && !loading ? (
+                                <div className="gallery-empty">
+                                    <div className="gallery-empty-icon">🎬</div>
+                                    <h3 className="gallery-empty-text">暂无视频</h3>
+                                </div>
+                            ) : (
+                                <div className="gallery-grid">
+                                    {videos.map((vid) => (
+                                        <div
+                                            key={vid.id}
+                                            className="gallery-card video-card"
+                                            onClick={() => setSelectedVideo(vid)}
+                                        >
+                                            <div className="w-full h-full relative overflow-hidden group-video-thumb">
+                                                <img
+                                                    src={vid.preview_url || "/placeholder-video.png"}
+                                                    alt="Video Thumbnail"
+                                                    className="gallery-card-img"
+                                                    onError={(e) => { e.target.style.display = 'none' }}
+                                                />
+                                                <div className="video-play-icon">
+                                                    <div className="play-button">
+                                                        <svg style={{ width: '32px', height: '32px', color: 'white', marginLeft: '4px', filter: 'drop-shadow(0 4px 3px rgb(0 0 0 / 0.07))' }} fill="currentColor" viewBox="0 0 24 24">
+                                                            <path d="M8 5v14l11-7z" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                                <div style={{ position: 'absolute', top: '12px', right: '12px', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', padding: '2px 8px', borderRadius: '9999px', fontSize: '10px', color: '#d1d5db', fontFamily: 'monospace', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                                    ID: {vid.id.slice(0, 4)}
+                                                </div>
+                                            </div>
+
+                                            <div className="gallery-overlay">
+                                                {/* Creator Badge - Top Left */}
+                                                {vid.username && (
+                                                    <div className="gallery-creator">
+                                                        👤 {vid.username}
+                                                    </div>
+                                                )}
+
+                                                {/* Hover Actions - Top Right */}
+                                                <div className="gallery-actions">
+                                                    <a
+                                                        href={vid.result_url}
+                                                        download
+                                                        target="_blank"
+                                                        className="action-btn"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        title="下载"
+                                                    >
+                                                        ⬇️
+                                                    </a>
+                                                    <button
+                                                        className="action-btn delete"
+                                                        onClick={(e) => handleDelete(e, vid, 'video')}
+                                                        title="删除"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                                <p className="gallery-prompt">
+                                                    {vid.prompt}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {/* Fillers */}
+                                    {[...Array(Math.max(0, LIMIT - videos.length))].map((_, i) => (
+                                        <div key={`filler-vid-${i}`} className="filler-card video-filler"></div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Pagination */}
+                            <div className="gallery-pagination">
+                                <button
+                                    onClick={() => setVidPage(p => Math.max(1, p - 1))}
+                                    disabled={vidPage === 1 || loading}
+                                    className="page-btn"
+                                >
+                                    <span>←</span> 上一页
+                                </button>
+                                <span className="page-info">
+                                    Page <span className="page-current">{vidPage}</span> {totalVideos > 0 && `/ ${totalPagesVid || 1}`}
+                                </span>
+                                <button
+                                    onClick={() => setVidPage(p => p + 1)}
+                                    disabled={videos.length < LIMIT || (totalPagesVid > 0 && vidPage >= totalPagesVid) || loading}
+                                    className="page-btn"
+                                >
+                                    下一页 <span>→</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Image Lightbox - Enhanced with Prompt Panel */}
+            {selectedImage && (
+                <div className="lightbox-overlay" onClick={() => setSelectedImage(null)}>
+                    <div className="lightbox-content lightbox-two-column" onClick={e => e.stopPropagation()}>
+                        {/* Left: Image */}
+                        <div className="lightbox-media-wrapper">
+                            <img
+                                src={selectedImage.url}
+                                alt="Full View"
+                                className="lightbox-img"
+                            />
+                        </div>
+
+                        {/* Right: Info Panel */}
+                        <div className="lightbox-info-panel">
+                            {/* Creator Info */}
+                            <div className="lightbox-creator">
+                                <span className="creator-icon">👤</span>
+                                <span className="creator-name">{selectedImage.username || '未知用户'}</span>
+                            </div>
+
+                            {/* Metadata Section */}
+                            <div className="lightbox-metadata">
+                                {selectedImage.width && selectedImage.height && (
+                                    <div className="metadata-item">
+                                        <span className="metadata-icon">📐</span>
+                                        <span className="metadata-label">分辨率</span>
+                                        <span className="metadata-value">{selectedImage.width} × {selectedImage.height}</span>
+                                    </div>
+                                )}
+                                <div className="metadata-item">
+                                    <span className="metadata-icon">{CATEGORIES.find(c => c.value === selectedImage.category)?.icon || '📦'}</span>
+                                    <span className="metadata-label">产品类目</span>
+                                    <span className="metadata-value">{CATEGORIES.find(c => c.value === selectedImage.category)?.label || '其他品类'}</span>
+                                </div>
+                                <div className="metadata-item">
+                                    <span className="metadata-icon">🕐</span>
+                                    <span className="metadata-label">创作时间</span>
+                                    <span className="metadata-value">{new Date(selectedImage.created_at).toLocaleString('zh-CN')}</span>
+                                </div>
+                            </div>
+
+                            {/* Prompt Section */}
+                            <div className="lightbox-prompt-section">
+                                <h4 className="prompt-title">生成提示词</h4>
+                                <div className="prompt-content">
+                                    {selectedImage.prompt || '无提示词信息'}
+                                </div>
+                                <button
+                                    className="copy-prompt-btn"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(selectedImage.prompt || '');
+                                        alert('提示词已复制到剪贴板！');
+                                    }}
+                                >
+                                    📋 复制提示词
+                                </button>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="lightbox-actions">
+                                <a
+                                    href={selectedImage.url}
+                                    download
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="action-button download"
+                                >
+                                    ⬇️ 下载原图
+                                </a>
+                                <button
+                                    onClick={() => setSelectedImage(null)}
+                                    className="action-button close"
+                                >
+                                    ✕ 关闭
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Video Lightbox - Enhanced with Info Panel */}
+            {selectedVideo && (
+                <div className="lightbox-overlay" onClick={() => setSelectedVideo(null)}>
+                    <div className="lightbox-content lightbox-two-column" onClick={e => e.stopPropagation()}>
+                        {/* Left: Video */}
+                        <div className="lightbox-media-wrapper video-card">
+                            <video
+                                src={selectedVideo.result_url}
+                                controls
+                                autoPlay
+                                className="lightbox-video"
+                            />
+                        </div>
+
+                        {/* Right: Info Panel */}
+                        <div className="lightbox-info-panel">
+                            {/* Creator Info */}
+                            <div className="lightbox-creator">
+                                <span className="creator-icon">👤</span>
+                                <span className="creator-name">{selectedVideo.username || '未知用户'}</span>
+                            </div>
+
+                            {/* Metadata Section */}
+                            <div className="lightbox-metadata">
+                                <div className="metadata-item">
+                                    <span className="metadata-icon">{CATEGORIES.find(c => c.value === selectedVideo.category)?.icon || '📦'}</span>
+                                    <span className="metadata-label">产品类目</span>
+                                    <span className="metadata-value">{CATEGORIES.find(c => c.value === selectedVideo.category)?.label || '其他品类'}</span>
+                                </div>
+                                <div className="metadata-item">
+                                    <span className="metadata-icon">🕐</span>
+                                    <span className="metadata-label">创作时间</span>
+                                    <span className="metadata-value">{new Date(selectedVideo.created_at).toLocaleString('zh-CN')}</span>
+                                </div>
+                            </div>
+
+                            {/* Prompt Section */}
+                            <div className="lightbox-prompt-section">
+                                <h4 className="prompt-title">生成提示词</h4>
+                                <div className="prompt-content">
+                                    {selectedVideo.prompt || '无提示词信息'}
+                                </div>
+                                <button
+                                    className="copy-prompt-btn"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(selectedVideo.prompt || '');
+                                        alert('提示词已复制到剪贴板！');
+                                    }}
+                                >
+                                    📋 复制提示词
+                                </button>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="lightbox-actions">
+                                <a
+                                    href={selectedVideo.result_url}
+                                    download
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="action-button primary"
+                                >
+                                    ⬇️ 下载视频
+                                </a>
+                                <button
+                                    onClick={() => setSelectedVideo(null)}
+                                    className="action-button secondary"
+                                >
+                                    ✕ 关闭
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default Gallery;

@@ -5,6 +5,9 @@ import Login from './Login'
 import Settings from './Settings';
 import StoryGenerator from './StoryGenerator';
 import UserManagement from './UserManagement';
+import Gallery from './Gallery';
+import AdminDashboard from './AdminDashboard';
+import { useWebSocket } from './hooks/useWebSocket';
 import './App.css';
 
 const BACKEND_URL = ''
@@ -20,8 +23,11 @@ function App() {
   }, []);
   const [isLoggedIn, setIsLoggedIn] = useState(false)
 
-  // Tabs: 'image', 'video', 'story', 'settings', 'users'
-  const [activeTab, setActiveTab] = useState('image')
+  // Tabs: 'image', 'video', 'story', 'gallery', 'settings', 'users'
+  const [activeTab, setActiveTab] = useState('gallery')
+
+  // Sidebar collapsed state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // Shared State
   const [config, setConfig] = useState({})
@@ -32,6 +38,24 @@ function App() {
   const [selectedImage, setSelectedImage] = useState(null)
   const [selectedVideoPrompt, setSelectedVideoPrompt] = useState('')
   const [selectionTimestamp, setSelectionTimestamp] = useState(0)
+
+  // WebSocket connection for real-time updates
+  const { isConnected, lastMessage, updateActivity } = useWebSocket(token, {
+    onMessage: (data) => {
+      // Handle real-time updates
+      if (data.type === 'queue_update') {
+        // Could trigger a refresh of queue data
+        console.log('Queue update received:', data);
+      }
+    }
+  });
+
+  // Update browser tab title when config changes
+  useEffect(() => {
+    if (config.site_title) {
+      document.title = config.site_title;
+    }
+  }, [config.site_title]);
 
   useEffect(() => {
     if (token) {
@@ -59,6 +83,7 @@ function App() {
     setUserRole(role)
     setUsername(user)
     setIsLoggedIn(true)
+    setActiveTab('gallery')  // Redirect to gallery after login for all users
     fetchConfig(t)
   }
 
@@ -117,94 +142,111 @@ function App() {
   }
 
   return (
-    <div className="app-container">
-      {/* Top Navigation */}
-      <nav className="top-nav">
-        <div className="nav-brand">
-          <div className="brand-icon">🍌</div>
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
-            <span style={{ fontWeight: 'bold' }}>Banana Product</span>
-            <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{username} ({userRole})</span>
+    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {/* Sidebar Navigation */}
+      <aside className="sidebar-nav">
+        <div className="sidebar-header">
+          <div className="nav-brand">
+            <div className="brand-icon">🍌</div>
+            {!sidebarCollapsed && (
+              <div className="brand-text">
+                <span className="brand-name">{config.site_title || 'Banana Product'}</span>
+                <span className="brand-user">{config.site_subtitle || `${username} (${userRole})`}</span>
+              </div>
+            )}
           </div>
+          <button
+            className="sidebar-toggle"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            title={sidebarCollapsed ? '展开菜单' : '收起菜单'}
+          >
+            {sidebarCollapsed ? '›' : '‹'}
+          </button>
         </div>
 
-        <div className="nav-center">
+        <div className="sidebar-menu">
           <button
-            className={`nav-tab ${activeTab === 'image' ? 'active' : ''}`}
-            onClick={() => setActiveTab('image')}
+            className={`sidebar-item ${activeTab === 'batch' ? 'active' : ''}`}
+            onClick={() => setActiveTab('batch')}
+            title="批量场景生成"
           >
             <span className="icon">🎨</span>
-            批量场景生成
+            {!sidebarCollapsed && <span className="label">批量场景生成</span>}
           </button>
           <button
-            className={`nav-tab ${activeTab === 'video' ? 'active' : ''}`}
+            className={`sidebar-item ${activeTab === 'video' ? 'active' : ''}`}
             onClick={() => setActiveTab('video')}
+            title="视频生成"
           >
             <span className="icon">📹</span>
-            视频生成
+            {!sidebarCollapsed && <span className="label">视频生成</span>}
           </button>
           <button
-            className={`nav-tab ${activeTab === 'story' ? 'active' : ''}`}
+            className={`sidebar-item ${activeTab === 'story' ? 'active' : ''}`}
             onClick={() => setActiveTab('story')}
+            title="故事模式"
           >
             <span className="icon">🎬</span>
-            一镜到底
+            {!sidebarCollapsed && <span className="label">故事模式</span>}
+          </button>
+          <button
+            className={`sidebar-item ${activeTab === 'gallery' ? 'active' : ''}`}
+            onClick={() => setActiveTab('gallery')}
+            title="画廊"
+          >
+            <span className="icon">🖼️</span>
+            {!sidebarCollapsed && <span className="label">画廊</span>}
           </button>
 
-          {/* Admin Only Tabs */}
+          {/* Admin Only */}
           {userRole === 'admin' && (
             <>
+              <div className="sidebar-divider"></div>
               <button
-                className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
-                onClick={() => setActiveTab('settings')}
+                className={`sidebar-item ${activeTab === 'monitor' ? 'active' : ''}`}
+                onClick={() => setActiveTab('monitor')}
+                title="实时监控"
               >
-                <span className="icon">⚙️</span>
-                系统设置
+                <span className="icon">📊</span>
+                {!sidebarCollapsed && <span className="label">实时监控</span>}
               </button>
               <button
-                className={`nav-tab ${activeTab === 'users' ? 'active' : ''}`}
+                className={`sidebar-item ${activeTab === 'settings' ? 'active' : ''}`}
+                onClick={() => setActiveTab('settings')}
+                title="系统设置"
+              >
+                <span className="icon">⚙️</span>
+                {!sidebarCollapsed && <span className="label">系统设置</span>}
+              </button>
+              <button
+                className={`sidebar-item ${activeTab === 'users' ? 'active' : ''}`}
                 onClick={() => setActiveTab('users')}
+                title="用户管理"
               >
                 <span className="icon">👥</span>
-                用户管理
+                {!sidebarCollapsed && <span className="label">用户管理</span>}
               </button>
             </>
           )}
         </div>
 
-        <div className="status-indicator" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div className="dot" style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: (config.api_key && config.api_key.length > 10) ? '#4ade80' : '#ef4444',
-              boxShadow: (config.api_key && config.api_key.length > 10) ? '0 0 8px #4ade80' : 'none'
-            }}></div>
-            <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-              {(config.api_key && config.api_key.length > 10) ? 'System Online' : 'Offline'}
-            </span>
+        <div className="sidebar-footer">
+          <div className="connection-status" title={isConnected ? '实时连接' : '离线'}>
+            <div className={`status-dot ${isConnected ? 'online' : 'offline'}`}></div>
+            {!sidebarCollapsed && <span>{isConnected ? '实时连接' : '离线'}</span>}
           </div>
-
           <button
+            className="logout-btn"
             onClick={handleLogout}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: 'none',
-              color: '#fff',
-              padding: '6px 12px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.9rem'
-            }}
+            title="登出"
           >
-            登出 🚪
+            {sidebarCollapsed ? '🚪' : '登出 🚪'}
           </button>
         </div>
-      </nav>
+      </aside>
 
       <main className="main-content">
-        <div style={{ display: activeTab === 'image' ? 'block' : 'none', height: '100%' }}>
+        <div style={{ display: activeTab === 'batch' ? 'block' : 'none', height: '100%' }}>
           <ImageGenerator
             token={token}
             config={config}
@@ -235,9 +277,16 @@ function App() {
           />
         </div>
 
+        <div style={{ display: activeTab === 'gallery' ? 'block' : 'none', height: '100%' }}>
+          <Gallery onSelectForVideo={handleSelectForVideo} />
+        </div>
+
         {/* Admin Tabs */}
         {userRole === 'admin' && (
           <>
+            <div style={{ display: activeTab === 'monitor' ? 'block' : 'none', height: '100%' }}>
+              <AdminDashboard token={token} isConnected={isConnected} lastMessage={lastMessage} />
+            </div>
             <div style={{ display: activeTab === 'settings' ? 'block' : 'none' }}>
               <Settings
                 token={token}
@@ -256,3 +305,4 @@ function App() {
 }
 
 export default App
+
