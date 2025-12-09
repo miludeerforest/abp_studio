@@ -11,9 +11,9 @@ services:
       - .env
     environment:
       # Redis 配置 - 使用主机名，代码会在运行时解析 IP
-      - REDIS_HOST=1Panel-redis-lBkM
+      - REDIS_HOST=
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=***REDACTED_REDIS_PASSWORD***
+      - REDIS_PASSWORD=
       - REDIS_DB=0
     volumes:
       - ./backend/uploads:/app/uploads
