@@ -9,7 +9,9 @@ function Settings({ token, config, onConfigChange }) {
         video_api_key: '',
         video_model_name: '',
         app_url: '',
-        analysis_model_name: ''
+        analysis_model_name: '',
+        site_title: '',
+        site_subtitle: ''
     })
     const [saving, setSaving] = useState(false)
     const [msg, setMsg] = useState(null)
@@ -25,7 +27,9 @@ function Settings({ token, config, onConfigChange }) {
                 video_api_key: config.video_api_key || '',
                 video_model_name: config.video_model_name || '',
                 app_url: config.app_url || '',
-                analysis_model_name: config.analysis_model_name || ''
+                analysis_model_name: config.analysis_model_name || '',
+                site_title: config.site_title || '',
+                site_subtitle: config.site_subtitle || ''
             })
         }
     }, [config])
@@ -135,6 +139,31 @@ function Settings({ token, config, onConfigChange }) {
 
                 {/* System Settings */}
                 <h3 style={{ marginBottom: '16px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>🖥️ 系统配置</h3>
+
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>网站标题 (Site Title)</label>
+                    <input
+                        type="text"
+                        value={localConfig.site_title || ''}
+                        onChange={(e) => handleChange('site_title', e.target.value)}
+                        placeholder="e.g. Banana Product"
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
+                    />
+                    <small style={{ color: 'var(--text-muted)' }}>显示在侧边栏顶部的主标题</small>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>网站副标题 (Site Subtitle)</label>
+                    <input
+                        type="text"
+                        value={localConfig.site_subtitle || ''}
+                        onChange={(e) => handleChange('site_subtitle', e.target.value)}
+                        placeholder="e.g. AI Product Design Studio"
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
+                    />
+                    <small style={{ color: 'var(--text-muted)' }}>显示在主标题下方的副标题</small>
+                </div>
+
                 <div className="form-group" style={{ marginBottom: '24px' }}>
                     <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>应用地址 (App URL)</label>
                     <input

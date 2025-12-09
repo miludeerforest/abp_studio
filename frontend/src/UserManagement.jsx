@@ -98,10 +98,33 @@ function UserManagement({ token }) {
         }
     }
 
+    const handleDeleteUser = async (uid, username) => {
+        // First confirmation
+        if (!window.confirm(`确定要删除用户 "${username}" 吗？`)) return
+        // Second confirmation
+        if (!window.confirm(`再次确认：删除用户 "${username}" 将无法恢复，是否继续？`)) return
+
+        try {
+            const res = await fetch(`/api/v1/users/${uid}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            if (res.ok) {
+                alert("用户已删除")
+                setLastRefreshed(Date.now())
+            } else {
+                const data = await res.json()
+                alert("删除失败: " + data.detail)
+            }
+        } catch (e) {
+            alert("Error: " + e.message)
+        }
+    }
+
     const getUserStats = (uid) => {
-        if (!stats || !stats.user_stats) return { total_images: 0, total_videos: 0 }
+        if (!stats || !stats.user_stats) return { image_count: 0, video_count: 0 }
         const s = stats.user_stats.find(u => u.id === uid)
-        return s || { total_images: 0, total_videos: 0 }
+        return s || { image_count: 0, video_count: 0 }
     }
 
     return (
@@ -113,21 +136,33 @@ function UserManagement({ token }) {
 
             {/* Stats Summary Panel */}
             {stats && stats.user_stats && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-                    <div className="glass-card" style={{ padding: '20px', textAlign: 'center' }}>
-                        <h3>总用户数</h3>
-                        <div style={{ fontSize: '2rem', color: 'var(--primary-color)' }}>{stats.user_stats.length}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', marginBottom: '30px' }}>
+                    <div className="glass-card" style={{ padding: '16px', textAlign: 'center' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#9ca3af' }}>总用户数</h4>
+                        <div style={{ fontSize: '1.8rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>{stats.user_stats.length}</div>
                     </div>
-                    <div className="glass-card" style={{ padding: '20px', textAlign: 'center' }}>
-                        <h3>累计生成图片</h3>
-                        <div style={{ fontSize: '2rem', color: '#a855f7' }}>
-                            {stats.user_stats.reduce((a, b) => a + (b.total_images || 0), 0)}
+                    <div className="glass-card" style={{ padding: '16px', textAlign: 'center' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#9ca3af' }}>累计生成图片</h4>
+                        <div style={{ fontSize: '1.8rem', color: '#a855f7', fontWeight: 'bold' }}>
+                            {stats.user_stats.reduce((a, b) => a + (b.image_count || 0), 0)}
                         </div>
                     </div>
-                    <div className="glass-card" style={{ padding: '20px', textAlign: 'center' }}>
-                        <h3>累计生成视频</h3>
-                        <div style={{ fontSize: '2rem', color: '#f59e0b' }}>
-                            {stats.user_stats.reduce((a, b) => a + (b.total_videos || 0), 0)}
+                    <div className="glass-card" style={{ padding: '16px', textAlign: 'center' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#9ca3af' }}>累计生成视频</h4>
+                        <div style={{ fontSize: '1.8rem', color: '#f59e0b', fontWeight: 'bold' }}>
+                            {stats.user_stats.reduce((a, b) => a + (b.video_count || 0), 0)}
+                        </div>
+                    </div>
+                    <div className="glass-card" style={{ padding: '16px', textAlign: 'center', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#22c55e' }}>📅 今日图片</h4>
+                        <div style={{ fontSize: '1.8rem', color: '#22c55e', fontWeight: 'bold' }}>
+                            {stats.user_stats.reduce((a, b) => a + (b.today_images || 0), 0)}
+                        </div>
+                    </div>
+                    <div className="glass-card" style={{ padding: '16px', textAlign: 'center', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#3b82f6' }}>📅 今日视频</h4>
+                        <div style={{ fontSize: '1.8rem', color: '#3b82f6', fontWeight: 'bold' }}>
+                            {stats.user_stats.reduce((a, b) => a + (b.today_videos || 0), 0)}
                         </div>
                     </div>
                 </div>
@@ -160,8 +195,8 @@ function UserManagement({ token }) {
                                             {u.role}
                                         </span>
                                     </td>
-                                    <td style={{ padding: '10px' }}>{uStats.total_images}</td>
-                                    <td style={{ padding: '10px' }}>{uStats.total_videos}</td>
+                                    <td style={{ padding: '10px' }}>{uStats.image_count}</td>
+                                    <td style={{ padding: '10px' }}>{uStats.video_count}</td>
                                     <td style={{ padding: '10px' }}>
                                         {editUserId === u.id ? (
                                             <div style={{ display: 'flex', gap: '5px' }}>
@@ -176,13 +211,24 @@ function UserManagement({ token }) {
                                                 <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={() => setEditUserId(null)}>取消</button>
                                             </div>
                                         ) : (
-                                            <button
-                                                className="btn-secondary"
-                                                style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                                                onClick={() => { setEditUserId(u.id); setNewPass(''); }}
-                                            >
-                                                修改密码
-                                            </button>
+                                            <div style={{ display: 'flex', gap: '5px' }}>
+                                                <button
+                                                    className="btn-secondary"
+                                                    style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                                    onClick={() => { setEditUserId(u.id); setNewPass(''); }}
+                                                >
+                                                    修改密码
+                                                </button>
+                                                {u.role !== 'admin' && (
+                                                    <button
+                                                        className="btn-secondary"
+                                                        style={{ padding: '4px 10px', fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}
+                                                        onClick={() => handleDeleteUser(u.id, u.username)}
+                                                    >
+                                                        删除
+                                                    </button>
+                                                )}
+                                            </div>
                                         )}
                                     </td>
                                 </tr>

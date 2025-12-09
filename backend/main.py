@@ -4,14 +4,46 @@ import httpx
 import os
 import json
 import logging
-from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends, status, BackgroundTasks
+import subprocess
+import uuid
+# Fix for Starlette/python-multipart strict limits
+try:
+    # Patch python-multipart (if applicable)
+    import multipart
+    # Try multiple paths for safety
+    try:
+        multipart.multipart.MAX_MEMORY_FILE_SIZE = 100 * 1024 * 1024
+        multipart.multipart.MAX_FILE_SIZE = 100 * 1024 * 1024
+    except:
+        pass
+
+    # Patch Starlette (Critical for "Part exceeded" error)
+    from starlette.formparsers import MultiPartParser
+    MultiPartParser.max_file_size = 100 * 1024 * 1024 # 100MB
+    MultiPartParser.max_part_size = 100 * 1024 * 1024 # 100MB
+except ImportError:
+    pass
+
+import logging
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends, status, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
-from sqlalchemy import create_engine, Column, String, Integer, DateTime
+from typing import List, Optional, Dict, Any
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+# Timezone: UTC+8 for China
+CHINA_TZ = timezone(timedelta(hours=8))
+
+def get_china_now():
+    """Get current time in China timezone (UTC+8)."""
+    return datetime.now(CHINA_TZ).replace(tzinfo=None)  # Remove tzinfo for DB compatibility
+
+# Import WebSocket and Queue managers
+from websocket_manager import connection_manager, init_websocket_manager, shutdown_websocket_manager
+from queue_manager import get_task_queue, get_concurrency_limiter
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -61,14 +93,14 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     role = Column(String, default="user") # 'admin', 'user'
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_china_now)
 
 class ImageGenerationLog(Base):
     __tablename__ = "image_logs"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer)
     count = Column(Integer, default=1)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_china_now)
 
 class SystemConfig(Base):
     __tablename__ = "system_config"
@@ -85,6 +117,7 @@ class VideoQueueItem(Base):
     result_url = Column(String, nullable=True)
     error_msg = Column(String, nullable=True)
     user_id = Column(Integer, nullable=True) # Linked to User
+    category = Column(String, nullable=True, default="other")  # Product category
     created_at = Column(DateTime, default=datetime.now)
 
     @property
@@ -97,13 +130,28 @@ class VideoQueueItem(Base):
                 return self.file_path.replace("/app/uploads", "/uploads")
         return None
 
+# --- NEW: Gallery Model ---
+class SavedImage(Base):
+    __tablename__ = "saved_images"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    filename = Column(String)
+    file_path = Column(String) # Local path /app/uploads/gallery/...
+    url = Column(String) # Web URL /uploads/gallery/...
+    prompt = Column(String)
+    width = Column(Integer, nullable=True)  # Image width in pixels
+    height = Column(Integer, nullable=True)  # Image height in pixels
+    category = Column(String, nullable=True, default="other")  # Product category
+    created_at = Column(DateTime, default=get_china_now)
+
 # Create tables
 try:
     Base.metadata.create_all(bind=engine)
 except Exception as e:
     logger.error(f"Database connection failed: {e}")
 
-# Dependency
+# ... (dependency omitted) ...
+# ... (dependency omitted) ...
 def get_db():
     db = SessionLocal()
     try:
@@ -127,6 +175,17 @@ class ConfigItem(BaseModel):
     video_model_name: Optional[str] = None
     app_url: Optional[str] = None
     analysis_model_name: Optional[str] = None
+    site_title: Optional[str] = None
+    site_subtitle: Optional[str] = None
+
+
+
+# --- Background Task for Video Generation ---
+async def process_video_background(item_id: str, video_api_url: str, video_api_key: str, video_model_name: str):
+    logger.info(f"Background Task: Starting Video Generation for {item_id}")
+    
+    # Create a fresh DB session for the background task
+    db = SessionLocal()
 # --- Prompt Matrix ---
 ANGLES_PROMPTS = {
     "01_Front_View": "Generate a photorealistic front-view product shot. The product should be centered, facing the camera directly. Lighting should highlight the main features.",
@@ -184,9 +243,32 @@ async def get_current_admin(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Not authorized")
     return current_user
 
-# Startup: Create Admin
+# --- User Activity Model ---
+class UserActivity(Base):
+    __tablename__ = "user_activities"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    action = Column(String)  # "image_gen_start", "video_gen_start", "login", etc.
+    details = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=get_china_now)
+
+# Startup: Create Admin and Init Services
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
+    # Initialize database tables
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        logger.warning(f"Table creation warning: {e}")
+    
+    # Initialize WebSocket manager with Redis (will resolve hostname automatically)
+    try:
+        await init_websocket_manager()
+        logger.info("WebSocket manager initialized")
+    except Exception as e:
+        logger.warning(f"WebSocket manager init failed (Redis may not be ready): {e}")
+    
+    # Create admin user
     db = SessionLocal()
     try:
 
@@ -213,6 +295,11 @@ def startup_event():
             db.commit()
     finally:
         db.close()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await shutdown_websocket_manager()
+    logger.info("Shutdown complete")
 
 # Login Endpoint
 class Token(BaseModel):
@@ -324,6 +411,24 @@ def update_user(user_id: int, user: UserUpdate, db: Session = Depends(get_db), a
     db.refresh(db_user)
     return db_user
 
+@app.delete("/api/v1/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
+    """Delete a user (admin only). Cannot delete self."""
+    if admin.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if db_user.role == "admin":
+        raise HTTPException(status_code=400, detail="Cannot delete admin users")
+    
+    # Delete user's data (optional: could keep data or cascade)
+    db.delete(db_user)
+    db.commit()
+    return {"message": "User deleted successfully"}
+
 from sqlalchemy import func
 
 @app.get("/api/v1/stats")
@@ -332,14 +437,38 @@ def get_stats(db: Session = Depends(get_db), admin: User = Depends(get_current_a
     users = db.query(User).all()
     user_stats = []
     
+    # Get today's start in China timezone (00:00)
+    now = get_china_now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
     for u in users:
-        img_count = db.query(ImageGenerationLog).filter(ImageGenerationLog.user_id == u.id).count()
-        vid_count = db.query(VideoQueueItem).filter(VideoQueueItem.user_id == u.id).count()
+        # Count actual saved images in gallery (not just generation attempts) - Total
+        img_count = db.query(SavedImage).filter(SavedImage.user_id == u.id).count()
+        # Count only completed videos - Total
+        vid_count = db.query(VideoQueueItem).filter(
+            VideoQueueItem.user_id == u.id,
+            VideoQueueItem.status.in_(["done", "archived"])
+        ).count()
+        
+        # Today's counts (since 00:00 China time)
+        today_img = db.query(SavedImage).filter(
+            SavedImage.user_id == u.id,
+            SavedImage.created_at >= today_start
+        ).count()
+        today_vid = db.query(VideoQueueItem).filter(
+            VideoQueueItem.user_id == u.id,
+            VideoQueueItem.status.in_(["done", "archived"]),
+            VideoQueueItem.created_at >= today_start
+        ).count()
+        
         user_stats.append({
+            "id": u.id,
             "username": u.username,
             "role": u.role,
             "image_count": img_count,
-            "video_count": vid_count
+            "video_count": vid_count,
+            "today_images": today_img,
+            "today_videos": today_vid
         })
 
     # 2. Daily Activity (Last 30 Days)
@@ -386,7 +515,9 @@ def get_config(db: Session = Depends(get_db), token: str = Depends(verify_token)
         "video_api_key": os.getenv("VIDEO_API_KEY", ""),
         "video_model_name": os.getenv("VIDEO_MODEL_NAME", "sora-video-portrait"),
         "app_url": os.getenv("APP_URL", "http://localhost:33012"),
-        "analysis_model_name": os.getenv("DEFAULT_ANALYSIS_MODEL_NAME", "gemini-3-pro-preview")
+        "analysis_model_name": os.getenv("DEFAULT_ANALYSIS_MODEL_NAME", "gemini-3-pro-preview"),
+        "site_title": os.getenv("SITE_TITLE", "Banana Product"),
+        "site_subtitle": os.getenv("SITE_SUBTITLE", "")
     }
     
     # Check if DB is empty for these keys, if so, seed them
@@ -609,7 +740,8 @@ async def analyze_product_scene(
         "3. Determine the best 'Placement Mode' (e.g., Wall-mounted, Tabletop, Floating, Floor-standing). "
         "   - Logic: If it's a CCTV camera and the background is a wall, use Wall-mounted. If it's a bottle, use Tabletop.\n"
         "4. Generate 9 distinct photography scripts (prompts) for generating this product in this style.\n"
-        "   - The scripts should vary in angle (Front, Side, Top, Hero, Close-up, Lifestyle, etc.) and lighting/composition details derived from the reference style.\n"
+        "   - The scripts must vary significantly in lighting (Natural, Studio, Neon, Sunset, etc.), environment (Indoor, Outdoor, Abstract, Texture), and composition.\n"
+        "   - Avoid repetitive backgrounds. Each script should feel like a distinct photoshoot.\n"
         "   - The scripts must strictly follow the 'Placement Mode' logic.\n"
         "Return JSON format ONLY: "
         "{ \"product_description\": \"...\", \"environment_analysis\": \"...\", \"placement_mode\": \"...\", \"scripts\": [ {\"angle_name\": \"...\", \"script\": \"...\"}, ... ] }"
@@ -714,6 +846,7 @@ async def batch_generate_workflow(
     gemini_api_key: str = Form(None),
     model_name: str = Form(None),
     aspect_ratio: str = Form("1:1"),
+    category: str = Form("other"),  # Product category
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
@@ -727,7 +860,21 @@ async def batch_generate_workflow(
         
         log = ImageGenerationLog(user_id=user.id, count=count)
         db.add(log)
+        
+        # Log activity for monitoring
+        activity = UserActivity(
+            user_id=user.id,
+            action="image_gen_start",
+            details=f"开始生成 {count} 张图片 | 类目: {category} | 比例: {aspect_ratio}"
+        )
+        db.add(activity)
         db.commit()
+        
+        # Update user's real-time status and broadcast to admins
+        try:
+            await connection_manager.update_user_activity(user.id, f"正在生成 {count} 张图片")
+        except Exception:
+            pass  # WebSocket not required
     except Exception as e:
         logger.error(f"Failed to log usage: {e}")
 
@@ -839,6 +986,91 @@ async def batch_generate_workflow(
     
     results = await asyncio.gather(*tasks)
     
+    # --- Persistence Logic for Gallery ---
+    gallery_dir = "/app/uploads/gallery"
+    os.makedirs(gallery_dir, exist_ok=True)
+    
+    saved_count = 0
+    async with httpx.AsyncClient() as download_client:
+        for r in results:
+            if r.image_base64 and not r.error:
+                try:
+                    img_data = None
+                    b64_data = r.image_base64
+                    
+                    # Check if it's a URL (API sometimes returns image URL instead of base64)
+                    if b64_data.startswith("http://") or b64_data.startswith("https://"):
+                        logger.info(f"Downloading image from URL: {b64_data[:100]}...")
+                        try:
+                            resp = await download_client.get(b64_data, timeout=60.0)
+                            if resp.status_code == 200:
+                                img_data = resp.content
+                                logger.info(f"Downloaded image: {len(img_data)} bytes")
+                            else:
+                                logger.error(f"Failed to download image: HTTP {resp.status_code}")
+                                continue
+                        except Exception as dl_err:
+                            logger.error(f"Image download error: {dl_err}")
+                            continue
+                    else:
+                        # Handle base64 data
+                        if "," in b64_data:
+                            b64_data = b64_data.split(",")[1]
+                        
+                        img_data = base64.b64decode(b64_data)
+                    
+                    if not img_data:
+                        logger.error("No image data to save")
+                        continue
+                    
+                    # Validate that we have valid image data (JPEG or PNG magic bytes)
+                    if not (img_data[:2] == b'\xff\xd8' or img_data[:8] == b'\x89PNG\r\n\x1a\n'):
+                        logger.error(f"Invalid image data (first bytes: {img_data[:10]})")
+                        continue
+                    
+                    # Determine extension based on magic bytes
+                    ext = ".jpg" if img_data[:2] == b'\xff\xd8' else ".png"
+                    
+                    # 2. Save to Disk
+                    filename = f"gen_{user.id}_{uuid.uuid4().hex}{ext}"
+                    file_path = os.path.join(gallery_dir, filename)
+                    
+                    with open(file_path, "wb") as f:
+                        f.write(img_data)
+                    
+                    logger.info(f"Saved gallery image: {filename} ({len(img_data)} bytes)")
+                    
+                    # Get image dimensions
+                    img_width, img_height = None, None
+                    try:
+                        from PIL import Image
+                        from io import BytesIO
+                        img_pil = Image.open(BytesIO(img_data))
+                        img_width, img_height = img_pil.size
+                    except Exception as dim_err:
+                        logger.warning(f"Could not get image dimensions: {dim_err}")
+                        
+                    # 3. Save to DB with category and dimensions
+                    # Note: r.video_prompt holds the prompt used for this image
+                    new_image = SavedImage(
+                        user_id=user.id,
+                        filename=filename,
+                        file_path=file_path,
+                        url=f"/uploads/gallery/{filename}",
+                        prompt=r.video_prompt or r.angle_name,  # Fallback
+                        width=img_width,
+                        height=img_height,
+                        category=category  # Use category from request
+                    )
+                    db.add(new_image)
+                    saved_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to save gallery image: {e}")
+    
+    if saved_count > 0:
+        db.commit()
+    # -------------------------------------
+
     # Debug results
     valid_results = []
     for r in results:
@@ -849,6 +1081,21 @@ async def batch_generate_workflow(
         valid_results.append(r_dict)
         
     logger.info(f"Final Batch Results Sample: {valid_results[0].keys()} has_prompt={'video_prompt' in valid_results[0]}")
+    
+    # Log completion activity and reset user status
+    try:
+        activity = UserActivity(
+            user_id=user.id,
+            action="image_gen_complete",
+            details=f"图片生成完成 | 生成 {len(valid_results)} 张 | 类目: {category}"
+        )
+        db.add(activity)
+        db.commit()
+        
+        # Reset user status to idle
+        await connection_manager.update_user_activity(user.id, "空闲")
+    except Exception as act_err:
+        logger.warning(f"Failed to log image completion: {act_err}")
     
     return {
         "status": "completed",
@@ -883,6 +1130,7 @@ class StoryAnalysisResponse(BaseModel):
 async def analyze_storyboard_endpoint(
     image: UploadFile = File(...),
     topic: str = Form("一个产品的故事"), # Default topic if missing
+    shot_count: int = Form(5), # Default 5 shots
     api_url: str = Form(None),
     gemini_api_key: str = Form(None),
     model_name: str = Form(None),
@@ -911,15 +1159,15 @@ IMPORTANT SAFETY GUIDELINES:
 - Prefer implication and atmosphere over explicit description
 - Use fictional characters/objects
 
-Goal: Create a continuous storyboard with EXACTLY 3 shots for the story: "{topic}".
+Goal: Create a continuous storyboard with EXACTLY {shot_count} shots for the story: "{topic}".
 
 Global visual style: Filmic realism, natural lighting, soft bokeh, 35mm lens, muted colors, subtle grain.
 
 *** CRITICAL NARRATIVE REQUIREMENTS ***
 1. **Continuous Story Arc**:
    - Begin (Shot 1): Set scene, introduce subject.
-   - Middle (Shot 2): Action, movement, conflict.
-   - End (Shot 3): Resolution.
+   - Middle (Shot 2-{shot_count-1}): Action, movement, conflict.
+   - End (Shot {shot_count}): Resolution.
 2. **Visual Consistency**: 
    - Define a "Hero Subject" in Shot 1 based on the provided image.
 3. **Seamless Flow**: 
@@ -932,9 +1180,9 @@ Global visual style: Filmic realism, natural lighting, soft bokeh, 35mm lens, mu
 Output format: ONLY a raw JSON array (no markdown code fences).
 
 Required fields per shot:
-- shot: integer (1..3)
+- shot: integer (1..{shot_count})
 - prompt: detailed safe image generation prompt (English).
-- duration: integer (4, 6, or 8).
+- duration: integer (always 15).
 - description: Concise Chinese action summary.
 - shotStory: Narrative description in Chinese (2-3 sentences) showing connection to previous shot.
 - heroSubject: (ONLY in shot 1) Detailed visual description of the subject in the provided image.
@@ -952,7 +1200,7 @@ Required fields per shot:
                 ]
             }
         ],
-        "max_tokens": 2000
+        "max_tokens": 8192
     }
     
     headers = {
@@ -974,12 +1222,20 @@ Required fields per shot:
                 content = data.get("choices", [])[0].get("message", {}).get("content", "").strip()
                 
                 # Clean markdown if present
-                if content.startswith("```json"):
-                    content = content[7:]
                 if content.startswith("```"):
-                     content = content[3:]
-                if content.endswith("```"):
-                     content = content[:-3]
+                    lines = content.splitlines()
+                    # Remove first line if it starts with ```
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    # Remove last line if it starts with ```
+                    if lines and lines[-1].strip().startswith("```"):
+                        lines = lines[:-1]
+                    content = "\n".join(lines).strip()
+                
+                # Fix trailing commas which cause json.loads to fail
+                import re
+                content = re.sub(r',\s*\}', '}', content)
+                content = re.sub(r',\s*\]', ']', content)
                 
                 try:
                     shots_data = json.loads(content)
@@ -1188,6 +1444,174 @@ class QueueItemResponse(BaseModel):
     class Config:
         orm_mode = True
 
+
+# --- Gallery Endpoints ---
+
+@app.get("/api/v1/gallery/images")
+def get_gallery_images(
+    limit: int = 50, 
+    offset: int = 0,
+    category: str = None,  # Filter by category
+    db: Session = Depends(get_db), 
+    user: User = Depends(get_current_user)
+):
+    """Get all images from all users (shared gallery) with metadata."""
+    # Shared gallery - query all images
+    query = db.query(SavedImage)
+    
+    # Apply category filter if provided
+    if category and category != "all":
+        query = query.filter(SavedImage.category == category)
+        
+    total = query.count()
+    images = query.order_by(SavedImage.created_at.desc()).limit(limit).offset(offset).all()
+    
+    # Add username and metadata to each image
+    result_items = []
+    for img in images:
+        creator = db.query(User).filter(User.id == img.user_id).first()
+        result_items.append({
+            "id": img.id,
+            "user_id": img.user_id,
+            "username": creator.username if creator else "Unknown",
+            "filename": img.filename,
+            "file_path": img.file_path,
+            "url": img.url,
+            "prompt": img.prompt,
+            "width": img.width,
+            "height": img.height,
+            "category": img.category or "other",
+            "created_at": img.created_at
+        })
+    
+    return {"total": total, "items": result_items}
+
+@app.delete("/api/v1/gallery/images/{image_id}")
+def delete_gallery_image(
+    image_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """Delete a single image. Users can delete their own, admins can delete any."""
+    if user.role == "admin":
+        image = db.query(SavedImage).filter(SavedImage.id == image_id).first()
+    else:
+        image = db.query(SavedImage).filter(SavedImage.id == image_id, SavedImage.user_id == user.id).first()
+    
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # Delete file from disk
+    if image.file_path and os.path.exists(image.file_path):
+        try:
+            os.remove(image.file_path)
+        except Exception as e:
+            logger.error(f"Failed to delete gallery image file: {e}")
+            
+    db.delete(image)
+    db.commit()
+    return {"status": "deleted"}
+
+class BatchDeleteRequest(BaseModel):
+    ids: List[int]
+
+@app.post("/api/v1/gallery/images/batch-delete")
+def batch_delete_images(
+    request: BatchDeleteRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Batch delete images (admin only)."""
+    deleted_count = 0
+    for image_id in request.ids:
+        image = db.query(SavedImage).filter(SavedImage.id == image_id).first()
+        if image:
+            if image.file_path and os.path.exists(image.file_path):
+                try:
+                    os.remove(image.file_path)
+                except Exception as e:
+                    logger.error(f"Failed to delete file: {e}")
+            db.delete(image)
+            deleted_count += 1
+    db.commit()
+    return {"deleted": deleted_count}
+
+class BatchDeleteVideoRequest(BaseModel):
+    ids: List[str]
+
+@app.post("/api/v1/gallery/videos/batch-delete")
+def batch_delete_videos(
+    request: BatchDeleteVideoRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Batch delete videos (admin only)."""
+    deleted_count = 0
+    for video_id in request.ids:
+        video = db.query(VideoQueueItem).filter(VideoQueueItem.id == video_id).first()
+        if video:
+            # Delete video file
+            if video.result_url:
+                video_path = video.result_url.replace("/uploads", "/app/uploads")
+                if os.path.exists(video_path):
+                    try:
+                        os.remove(video_path)
+                    except Exception as e:
+                        logger.error(f"Failed to delete video file: {e}")
+            # Delete source image
+            if video.file_path and os.path.exists(video.file_path):
+                try:
+                    os.remove(video.file_path)
+                except Exception as e:
+                    logger.error(f"Failed to delete source file: {e}")
+            db.delete(video)
+            deleted_count += 1
+    db.commit()
+    return {"deleted": deleted_count}
+
+
+@app.get("/api/v1/gallery/videos")
+def get_gallery_videos(
+    limit: int = 20,
+    offset: int = 0,
+    category: str = None,  # Filter by category
+    db: Session = Depends(get_db), 
+    user: User = Depends(get_current_user)
+):
+    """Get all completed videos from all users (shared gallery) with metadata."""
+    # Shared gallery - query all completed videos (done or archived)
+    query = db.query(VideoQueueItem).filter(
+        VideoQueueItem.status.in_(["done", "archived"])
+    )
+    
+    # Apply category filter if provided
+    if category and category != "all":
+        query = query.filter(VideoQueueItem.category == category)
+    
+    total = query.count()
+    videos = query.order_by(VideoQueueItem.created_at.desc()).limit(limit).offset(offset).all()
+    
+    # Build response with username and preview_url
+    result_items = []
+    for vid in videos:
+        creator = db.query(User).filter(User.id == vid.user_id).first()
+        result_items.append({
+            "id": vid.id,
+            "filename": vid.filename,
+            "file_path": vid.file_path,
+            "prompt": vid.prompt,
+            "status": vid.status,
+            "result_url": vid.result_url,
+            "error_msg": vid.error_msg,
+            "user_id": vid.user_id,
+            "username": creator.username if creator else "Unknown",
+            "preview_url": vid.preview_url,
+            "category": vid.category or "other",
+            "created_at": vid.created_at
+        })
+    
+    return {"total": total, "items": result_items}
+
 # --- Queue APIs ---
 
 @app.get("/api/v1/queue", response_model=List[QueueItemResponse])
@@ -1199,6 +1623,7 @@ async def add_to_queue(
     file: UploadFile = File(None),
     image_url: str = Form(None),
     prompt: str = Form(...),
+    category: str = Form("other"),  # Product category
     db: Session = Depends(get_db),
     token: str = Depends(verify_token), # Keep for backward compatibility if needed, or remove. 
     # Actually, we defined verify_token to return token string. 
@@ -1252,11 +1677,28 @@ async def add_to_queue(
         file_path=file_path,
         prompt=prompt,
         status="pending",
-        user_id=user.id
+        user_id=user.id,
+        category=category  # Product category
     )
     db.add(item)
+    
+    # Log activity for monitoring
+    activity = UserActivity(
+        user_id=user.id,
+        action="video_gen_start",
+        details=f"开始生成视频 | 类目: {category} | 提示词: {prompt[:50]}..."
+    )
+    db.add(activity)
+    
     db.commit()
     db.refresh(item)
+    
+    # Update user status to show video generation in progress
+    try:
+        await connection_manager.update_user_activity(user.id, "正在生成视频")
+    except Exception:
+        pass  # WebSocket not required
+    
     return item
 
 @app.put("/api/v1/queue/{item_id}")
@@ -1415,17 +1857,25 @@ def clear_queue(
         query = query.filter(VideoQueueItem.status == status)
     
     items = query.all()
+    count = len(items)
+    
     for item in items:
-        if item.file_path and os.path.exists(item.file_path):
-            try:
-                os.remove(item.file_path)
-            except Exception:
-                pass
-        db.delete(item)
+        if (item.status in ["done", "archived"]) and item.result_url:
+            # Archive completed/archived videos instead of deleting (preserve for gallery)
+            if item.status == "done":
+                item.status = "archived"
+            # Skip already archived items (no action needed)
+        else:
+            # Delete non-completed items (pending, error, processing, etc.) and their source files
+            if item.file_path and os.path.exists(item.file_path):
+                try:
+                    os.remove(item.file_path)
+                except Exception:
+                    pass
+            db.delete(item)
     
     db.commit()
-    db.commit()
-    return {"status": "cleared", "count": len(items)}
+    return {"status": "cleared", "count": count}
 
 # --- Background Task for Video Generation ---
 async def process_video_background(item_id: str, video_api_url: str, video_api_key: str, video_model_name: str):
@@ -1469,64 +1919,67 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
             "Content-Type": "application/json",
             "Authorization": f"Bearer {video_api_key}"
         }
+        
+        # Disable stream mode to avoid hanging connections
+        payload["stream"] = False 
 
-        logger.info(f"Posting to {target_url} (Stream Mode)")
+        logger.info(f"Posting to {target_url} (Non-Stream Mode)")
 
         async with httpx.AsyncClient() as client:
             try:
                 # 600s timeout for the generation process
-                async with client.stream("POST", target_url, json=payload, headers=headers, timeout=600.0) as resp:
-                    if resp.status_code != 200:
-                        error_text = await resp.aread()
-                        logger.error(f"Video API Error {resp.status_code}: {error_text}")
-                        item.error_msg = f"API Error {resp.status_code}: {error_text.decode('utf-8')[:200]}"
-                        item.status = "error"
+                resp = await client.post(target_url, json=payload, headers=headers, timeout=600.0)
+                
+                if resp.status_code != 200:
+                    logger.error(f"Video API Error {resp.status_code}: {resp.text}")
+                    item.error_msg = f"API Error {resp.status_code}: {resp.text[:200]}"
+                    item.status = "error"
+                else:
+                    data = resp.json()
+                    # Standard OpenAI format: choices[0].message.content
+                    full_content = data.get("choices", [])[0].get("message", {}).get("content", "")
+                        
+                    # Parse final result
+                    import re
+                    # 1. Markdown Image
+                    img_match = re.search(r'!\[.*?\]\((.*?)\)', full_content)
+                    # 2. Raw URL (http...) - Updated to exclude trailing ' and )
+                    url_match = re.search(r'https?://[^\s<>"\')]+|data:image/[^\s<>"\')]+', full_content)
+                    
+                    found_url = None
+                    if img_match:
+                        found_url = img_match.group(1)
+                    elif url_match:
+                        found_url = url_match.group(0)
+                        
+                    if found_url:
+                        # Cleanup trailing punctuation just in case
+                        found_url = found_url.strip("'\".,)>")
+                        # Paranoid cleanup for trailing quotes
+                        found_url = found_url.split("'")[0]
+                        found_url = found_url.split('"')[0]
+                        
+                        item.result_url = found_url
+                        item.status = "done"
+                        logger.info(f"Video Generated Successfully: {found_url}")
+                        
+                        # Log activity and update user status
+                        try:
+                            activity = UserActivity(
+                                user_id=item.user_id,
+                                action="video_gen_complete",
+                                details=f"视频生成完成 | 提示词: {item.prompt[:30]}..."
+                            )
+                            db.add(activity)
+                            
+                            # Update user status to idle and broadcast
+                            await connection_manager.update_user_activity(item.user_id, "空闲")
+                        except Exception as act_err:
+                            logger.warning(f"Failed to log video completion: {act_err}")
                     else:
-                        # Process Stream
-                        full_content = ""
-                        async for line in resp.aiter_lines():
-                            if line.startswith("data: "):
-                                if "[DONE]" in line: break
-                                try:
-                                    chunk = json.loads(line[6:])
-                                    delta = chunk.get("choices", [])[0].get("delta", {})
-                                    content_chunk = delta.get("content", "") or delta.get("reasoning_content", "")
-                                    if content_chunk:
-                                        full_content += content_chunk
-                                except:
-                                    pass
-                        
-                        # Parse final result
-                        import re
-                        # 1. Markdown Image
-                        img_match = re.search(r'!\[.*?\]\((.*?)\)', full_content)
-                        # 2. Raw URL (http...) - Updated to exclude trailing ' and )
-                        url_match = re.search(r'https?://[^\s<>"\')]+|data:image/[^\s<>"\')]+', full_content)
-                        
-                        found_url = None
-                        if img_match:
-                            found_url = img_match.group(1)
-                        elif url_match:
-                            found_url = url_match.group(0)
-                        
-                        if found_url:
-                            # Cleanup trailing punctuation just in case
-                            found_url = found_url.strip("'\".,)>")
-                            # Paranoid cleanup for trailing quotes
-                            found_url = found_url.split("'")[0]
-                            found_url = found_url.split('"')[0]
-                            
-                            # HTTP COMPATIBILITY: Do not force HTTPS as some file servers don't support it
-                            # if found_url.startswith("http://"):
-                            #    found_url = found_url.replace("http://", "https://", 1)
-                            
-                            item.result_url = found_url
-                            item.status = "done"
-                            logger.info(f"Video Generated Successfully: {found_url}")
-                        else:
-                             logger.warning(f"No URL found in video response: {full_content[:200]}")
-                             item.error_msg = "No video URL found in response."
-                             item.status = "error"
+                         logger.warning(f"No URL found in video response: {full_content[:200]}")
+                         item.error_msg = "No video URL found in response."
+                         item.status = "error"
                              
             except httpx.TimeoutException:
                 logger.error("Video Generation Timeout (600s)")
@@ -1618,3 +2071,486 @@ async def startup_event():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# --- Story Chain Implementation ---
+
+class StoryChainRequest(BaseModel):
+    initial_image_url: str # Base64 or URL
+    shots: List[dict] # From analyze step
+    api_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model_name: Optional[str] = None
+
+STORY_CHAIN_STATUS = {}
+
+def extract_last_frame(video_path: str) -> str:
+    """Extracts last frame from video and saves as temp image. Returns path."""
+    try:
+        # Resolve path
+        if video_path.startswith("/uploads"):
+            video_path = f"/app{video_path}"
+            
+        if not os.path.exists(video_path):
+            raise Exception(f"Video file not found: {video_path}")
+        
+        output_path = video_path.replace(".mp4", "_last.jpg")
+        # Ensure we overwrite
+        if os.path.exists(output_path):
+            os.remove(output_path)
+            
+        # ffmpeg command to extract last frame
+        # Use -0.5 instead of -0.1 to avoid seeking errors at very end of file
+        cmd = [
+            "ffmpeg", "-y", 
+            "-sseof", "-0.5", 
+            "-i", video_path, 
+            "-update", "1", 
+            "-q:v", "2", 
+            output_path
+        ]
+        # Allow stderr to show in logs for debugging
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
+        
+        if not os.path.exists(output_path):
+             raise Exception("Frame extraction failed: Output not created")
+             
+        return output_path
+    except Exception as e:
+        logging.error(f"Extract Frame Error: {e}")
+        return None
+
+async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: int):
+    status = {"status": "processing", "current_shot": 0, "total_shots": len(req.shots), "video_ids": [], "error": None, "merged_video_url": None}
+    STORY_CHAIN_STATUS[chain_id] = status
+    
+    # Config resolution
+    db = SessionLocal()
+    db_config_list = db.query(SystemConfig).all()
+    config_dict = {item.key: item.value for item in db_config_list}
+    db.close()
+    
+    final_api_url = req.api_url or config_dict.get("video_api_url", "")
+    final_api_key = req.api_key or config_dict.get("video_api_key", "")
+    final_model = req.model_name or config_dict.get("video_model_name", "sora-video-portrait")
+
+    try:
+        current_image_source = req.initial_image_url
+        
+        # Ensure queue dir exists
+        os.makedirs("/app/uploads/queue", exist_ok=True)
+        
+        for i, shot in enumerate(req.shots):
+            shot_num = i + 1
+            status["current_shot"] = shot_num
+            logging.info(f"Chain {chain_id}: Starting Shot {shot_num}")
+            
+            # Create Queue Item
+            db = SessionLocal()
+            try:
+                prompt_text = f"Shot {shot_num}: " + shot.get("prompt", "")
+                
+                queue_filename = f"chain_{chain_id}_shot_{shot_num}_input.jpg"
+                queue_file_path = os.path.join("/app/uploads/queue", queue_filename)
+                
+                # Check if current_image_source is a local path (from extraction) or URL
+                if current_image_source.startswith("/"):
+                    # Local path
+                    import shutil
+                    shutil.copy(current_image_source, queue_file_path)
+                elif current_image_source.startswith("data:"):
+                     # Base64
+                     header, encoded = current_image_source.split(",", 1)
+                     data = base64.b64decode(encoded)
+                     with open(queue_file_path, "wb") as f:
+                         f.write(data)
+                else:
+                     # URL
+                     async with httpx.AsyncClient() as client:
+                         resp = await client.get(current_image_source, timeout=30)
+                         with open(queue_file_path, "wb") as f:
+                             f.write(resp.content)
+                                 
+                new_item = VideoQueueItem(
+                    id=str(int(uuid.uuid4().int))[:18],
+                    filename=queue_filename,
+                    file_path=queue_file_path,
+                    prompt=prompt_text,
+                    status="pending",
+                    user_id=user_id
+                )
+                db.add(new_item)
+                db.commit()
+                db.refresh(new_item)
+                item_id = new_item.id
+                status["video_ids"].append(item_id)
+            finally:
+                db.close()
+            
+            # Trigger Generation (Await it!)
+            await process_video_background(item_id, final_api_url, final_api_key, final_model)
+            
+            # Check result
+            db = SessionLocal()
+            completed_item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+            if completed_item.status != "done":
+                error_msg = completed_item.error_msg or "Unknown error"
+                logging.error(f"Chain {chain_id} failed at shot {shot_num}: {error_msg}")
+                status["status"] = "failed"
+                status["error"] = f"Shot {shot_num} failed: {error_msg}"
+                db.close()
+                return
+            
+            result_url = completed_item.result_url
+            db.close()
+            
+            # Local path resolution and download if needed
+            if result_url.startswith("/uploads"):
+                local_video_path = f"/app{result_url}"
+            elif result_url.startswith("http"):
+                 # Download remote video
+                 async with httpx.AsyncClient() as client:
+                     resp = await client.get(result_url, timeout=300)
+                     if resp.status_code == 200:
+                         remote_filename = f"chain_{chain_id}_shot_{shot_num}_result.mp4"
+                         local_video_path = f"/app/uploads/queue/{remote_filename}"
+                         with open(local_video_path, "wb") as f:
+                             f.write(resp.content)
+                         # Update DB item to point to local path for consistency if needed, 
+                         # but here we just need local path for extraction and merge.
+                         # Better to keep original result_url in DB as "source of truth".
+                     else:
+                         status["status"] = "failed"
+                         status["error"] = f"Failed to download video from {result_url}"
+                         return
+            else:
+                local_video_path = result_url 
+            
+            if i < len(req.shots) - 1:
+                # Extract last frame for next shot
+                extracted_path = extract_last_frame(local_video_path)
+                if not extracted_path:
+                    status["status"] = "failed"
+                    status["error"] = f"Failed to extract frame from Shot {shot_num}"
+                    return
+                current_image_source = extracted_path
+        
+        # Merge Logic
+        logging.info(f"Chain {chain_id}: All shots done. Merging...")
+        status["status"] = "merging"
+        
+        inputs = []
+        db = SessionLocal()
+        for i, vid_id in enumerate(status["video_ids"]):
+             # We can't rely just on DB result_url because we might have downloaded it locally above.
+             # But we didn't store the local path in DB. 
+             # Re-construct the expected local path logic.
+             v = db.query(VideoQueueItem).filter(VideoQueueItem.id == vid_id).first()
+             if v and v.result_url:
+                 if v.result_url.startswith("/uploads"):
+                     inputs.append(f"/app{v.result_url}")
+                 elif v.result_url.startswith("http"):
+                     # Re-construct downloaded filename
+                     shot_n = i + 1
+                     inputs.append(f"/app/uploads/queue/chain_{chain_id}_shot_{shot_n}_result.mp4")
+                 else:
+                     inputs.append(v.result_url)
+        db.close()
+        
+        if len(inputs) > 0:
+            concat_list_path = f"/app/uploads/queue/chain_{chain_id}_concat.txt"
+            with open(concat_list_path, "w") as f:
+                for path in inputs:
+                    f.write(f"file '{path}'\n")
+            
+            output_filename = f"story_chain_{chain_id}.mp4"
+            output_path = f"/app/uploads/queue/{output_filename}"
+            
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_list_path,
+                "-c", "copy",
+                output_path
+            ]
+            subprocess.run(cmd, check=True)
+            
+            final_result_url = f"/uploads/queue/{output_filename}"
+            status["merged_video_url"] = final_result_url
+            status["status"] = "completed"
+            
+            # Add merged result to queue
+            db = SessionLocal()
+            merged_item = VideoQueueItem(
+                id=str(int(uuid.uuid4().int))[:18],
+                filename=output_filename,
+                file_path=output_path,
+                prompt=f"Story Chain {chain_id} Complete",
+                status="done",
+                result_url=final_result_url,
+                user_id=user_id
+            )
+            db.add(merged_item)
+            db.commit()
+            db.close()
+            
+    except Exception as e:
+        logging.error(f"Chain {chain_id} Critical Error: {e}")
+        status["status"] = "failed"
+        status["error"] = str(e)
+
+@app.post("/api/v1/story-chain")
+async def create_story_chain(
+    req: StoryChainRequest,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user)
+):
+    chain_id = str(uuid.uuid4())
+    background_tasks.add_task(process_story_chain, chain_id, req, user.id)
+    return {"chain_id": chain_id, "status": "started"}
+
+@app.get("/api/v1/story-chain/{chain_id}")
+async def get_story_chain_status(chain_id: str):
+    status = STORY_CHAIN_STATUS.get(chain_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Chain not found")
+    return status
+
+
+# =============================================================================
+# WebSocket Endpoint for Real-time Updates
+# =============================================================================
+
+def verify_ws_token(token: str, db: Session) -> Optional[User]:
+    """Verify JWT token for WebSocket connection."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        user = db.query(User).filter(User.username == username).first()
+        return user
+    except JWTError:
+        return None
+
+
+@app.websocket("/ws/{token}")
+async def websocket_endpoint(websocket: WebSocket, token: str):
+    """
+    WebSocket endpoint for real-time updates.
+    
+    Clients connect with their JWT token and receive:
+    - Task progress updates
+    - Queue status changes
+    - System notifications
+    """
+    db = SessionLocal()
+    try:
+        user = verify_ws_token(token, db)
+        if not user:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+        
+        # Connect the WebSocket
+        await connection_manager.connect(
+            websocket=websocket,
+            user_id=user.id,
+            username=user.username,
+            is_admin=(user.role == "admin")
+        )
+        
+        try:
+            # Keep connection alive and handle incoming messages
+            while True:
+                # Wait for messages (ping/pong or commands)
+                data = await websocket.receive_text()
+                
+                # Handle ping
+                if data == "ping":
+                    await websocket.send_text("pong")
+                
+                # Handle activity updates from client
+                elif data.startswith("activity:"):
+                    activity = data[9:]
+                    await connection_manager.update_user_activity(user.id, activity)
+                
+        except WebSocketDisconnect:
+            await connection_manager.disconnect(websocket, user.id)
+    finally:
+        db.close()
+
+
+# =============================================================================
+# Admin Monitoring API
+# =============================================================================
+
+@app.get("/api/v1/admin/live-status")
+async def get_admin_live_status(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Get real-time system status for admin dashboard.
+    
+    Returns:
+    - Online users
+    - Active tasks
+    - Queue statistics
+    - Recent activities
+    """
+    # Get online users from WebSocket manager
+    online_users = connection_manager.get_online_users()
+    
+    # Get queue stats from Redis
+    try:
+        task_queue = await get_task_queue()
+        queue_stats = await task_queue.get_queue_stats()
+    except Exception as e:
+        logger.warning(f"Failed to get queue stats: {e}")
+        queue_stats = {"error": str(e)}
+    
+    # Get recent activities from database (last 12 hours only)
+    twelve_hours_ago = get_china_now() - timedelta(hours=12)
+    recent_activities = db.query(UserActivity).filter(
+        UserActivity.created_at >= twelve_hours_ago
+    ).order_by(
+        UserActivity.created_at.desc()
+    ).limit(50).all()
+    
+    activities_list = [
+        {
+            "id": a.id,
+            "user_id": a.user_id,
+            "action": a.action,
+            "details": a.details,
+            "created_at": a.created_at.isoformat() if a.created_at else None
+        }
+        for a in recent_activities
+    ]
+    
+    # Get current processing counts
+    video_processing = db.query(VideoQueueItem).filter(
+        VideoQueueItem.status == "processing"
+    ).count()
+    
+    video_pending = db.query(VideoQueueItem).filter(
+        VideoQueueItem.status == "pending"
+    ).count()
+    
+    return {
+        "online_users": online_users,
+        "online_count": len(online_users),
+        "queue_stats": {
+            "video_processing": video_processing,
+            "video_pending": video_pending,
+            **queue_stats
+        },
+        "recent_activities": activities_list,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.delete("/api/v1/admin/activities")
+async def clear_activities(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Clear all activity logs (admin only)."""
+    try:
+        count = db.query(UserActivity).delete()
+        db.commit()
+        return {"status": "success", "deleted_count": count}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to clear activities: {str(e)}")
+
+
+@app.get("/api/v1/admin/user/{user_id}/tasks")
+async def get_user_tasks_admin(
+    user_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Get all tasks for a specific user (admin only)."""
+    # Get tasks from Redis queue
+    try:
+        task_queue = await get_task_queue()
+        redis_tasks = await task_queue.get_user_tasks(user_id)
+    except Exception:
+        redis_tasks = []
+    
+    # Get video queue items from database
+    video_tasks = db.query(VideoQueueItem).filter(
+        VideoQueueItem.user_id == user_id
+    ).order_by(VideoQueueItem.created_at.desc()).limit(50).all()
+    
+    return {
+        "user_id": user_id,
+        "redis_tasks": redis_tasks,
+        "video_tasks": [
+            {
+                "id": v.id,
+                "filename": v.filename,
+                "status": v.status,
+                "created_at": v.created_at.isoformat() if v.created_at else None
+            }
+            for v in video_tasks
+        ]
+    }
+
+
+@app.get("/api/v1/admin/activities")
+async def get_all_activities(
+    limit: int = 50,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Get all recent activities across all users."""
+    activities = db.query(UserActivity).order_by(
+        UserActivity.created_at.desc()
+    ).limit(limit).all()
+    
+    # Enrich with user info
+    user_ids = set(a.user_id for a in activities if a.user_id)
+    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    user_map = {u.id: u.username for u in users}
+    
+    return [
+        {
+            "id": a.id,
+            "user_id": a.user_id,
+            "username": user_map.get(a.user_id, "Unknown"),
+            "action": a.action,
+            "details": a.details,
+            "created_at": a.created_at.isoformat() if a.created_at else None
+        }
+        for a in activities
+    ]
+
+
+# Helper function to log user activity
+async def log_user_activity(
+    db: Session,
+    user_id: int,
+    action: str,
+    details: str = None
+):
+    """Log a user activity for monitoring."""
+    activity = UserActivity(
+        user_id=user_id,
+        action=action,
+        details=details
+    )
+    db.add(activity)
+    db.commit()
+    
+    # Also notify admins via WebSocket
+    await connection_manager.broadcast_to_admins({
+        "type": "user_activity",
+        "data": {
+            "user_id": user_id,
+            "action": action,
+            "details": details,
+            "timestamp": datetime.now().isoformat()
+        }
+    })

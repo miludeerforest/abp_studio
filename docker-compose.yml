@@ -9,6 +9,16 @@ services:
       - 1panel-network
     env_file:
       - .env
+    environment:
+      # Redis 配置 - 使用主机名，代码会在运行时解析 IP
+      - REDIS_HOST=1Panel-redis-lBkM
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=***REDACTED_REDIS_PASSWORD***
+      - REDIS_DB=0
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/data:/app/data
+      - ./backend:/app
 
   frontend:
     build: ./frontend
@@ -20,6 +30,9 @@ services:
       - .env
     environment:
       - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     restart: always
     networks:
       - default
@@ -28,3 +41,4 @@ services:
 networks:
   1panel-network:
     external: true
+

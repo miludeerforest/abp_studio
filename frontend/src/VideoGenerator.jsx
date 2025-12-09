@@ -235,18 +235,52 @@ function VideoGenerator({ token, initialImage, initialPrompt, requestTimestamp, 
         fetchQueue()
     }
 
+    // Helper: Convert Base64 Data URI to Blob
+    const dataURItoBlob = (dataURI) => {
+        try {
+            const byteString = atob(dataURI.split(',')[1]);
+            const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            return new Blob([ab], { type: mimeString });
+        } catch (e) {
+            console.error("Base64 conversion failed", e);
+            return null;
+        }
+    }
+
     const addToQueue = async (filesOrUrls, overridePrompt = null) => {
         const files = []
         for (const item of filesOrUrls) {
             if (item instanceof File) {
                 files.push(item)
             } else if (typeof item === 'string') {
-                // Use Backend Proxy instead of fetch
-                files.push({
-                    type: 'url_proxy',
-                    value: item,
-                    name: 'generated_image.png' // Dummy name for logic
-                })
+                if (item.startsWith('data:image')) {
+                    // Convert Base64 to Blob (File)
+                    const blob = dataURItoBlob(item)
+                    if (blob) {
+                        // Create a specific name to help processFiles identify it
+                        const file = new File([blob], "generated_image.png", { type: blob.type })
+                        files.push(file)
+                    }
+                } else {
+                    // Handle relative URLs (e.g., /uploads/...)
+                    let fullUrl = item;
+                    if (item.startsWith('/') && !item.startsWith('//')) {
+                        // Relative path - convert to absolute URL
+                        fullUrl = `${window.location.origin}${item}`;
+                    }
+
+                    // Use Backend Proxy for external URLs
+                    files.push({
+                        type: 'url_proxy',
+                        value: fullUrl,
+                        name: 'generated_image.png' // Dummy name for logic
+                    })
+                }
             }
         }
         processFiles(files, overridePrompt)

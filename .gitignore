@@ -20,11 +20,24 @@ backend/venv/
 backend/.venv/
 backend/env/
 backend/.env
+
+# Local test/dev scripts with hardcoded secrets
+backend/test_*.py
+backend/update_db_config.py
+backend/verify_*.py
+backend/check_*.py
+backend/cleanup_*.py
 # User generated content (Images/Videos)
 backend/uploads/
 # Local Database files (if any)
 *.sqlite3
 *.db
+
+# Redis data
+redis-data/
+
+# Data directories
+data/
 
 # Frontend (Node/React)
 frontend/node_modules/

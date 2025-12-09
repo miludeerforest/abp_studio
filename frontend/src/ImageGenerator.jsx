@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const BACKEND_URL = ''
 
@@ -55,8 +55,10 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
     const [videoPromptLoading, setVideoPromptLoading] = useState({})
 
     // Loading Messages
-    // Loading Messages
     const [loadingMessage, setLoadingMessage] = useState('')
+
+    // Abort Controller
+    const abortControllerRef = useRef(null);
 
     // AUTO MODE LOGIC
     useEffect(() => {
@@ -79,9 +81,17 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
         }
     }, [step, isAutoMode, analysisResult, loading, results]);
 
-    const autoSendToQueue = async () => {
-        // Stop Auto Mode to prevent loops
+    // Refactored Batch Video Function
+    const handleBatchVideo = async () => {
+        if (loading) return;
+
+        // Stop Auto Mode if active
         setIsAutoMode(false);
+
+        // Confirm
+        if (!window.confirm(`确定要将这 ${results.length} 张图片全部加入视频生成队列吗？`)) {
+            return;
+        }
 
         let sentCount = 0;
         for (const res of results) {
@@ -126,8 +136,13 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                 console.error("Auto Queue Failed", e);
             }
         }
-        alert(`全自动模式完成! 已将 ${sentCount} 个任务发送至视频生成队列。正在切换至视频界面...`);
+        alert(`已将 ${sentCount} 个任务发送至视频生成队列。正在切换至视频界面...`);
         if (onTabChange) onTabChange('video');
+    }
+
+    // Auto Mode Wrapper
+    const autoSendToQueue = () => {
+        handleBatchVideo();
     }
 
     const LOADING_MESSAGES = {
@@ -199,6 +214,10 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
         setError(null)
         setStep('analyzing')
 
+        // Init AbortController
+        if (abortControllerRef.current) abortControllerRef.current.abort();
+        abortControllerRef.current = new AbortController();
+
         const formData = new FormData()
         formData.append('product_img', productImg)
         formData.append('ref_img', refImg)
@@ -215,6 +234,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData,
+                signal: abortControllerRef.current.signal
             })
 
             if (!response.ok) {
@@ -228,10 +248,23 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
             setScripts(data.scripts)
             setStep('review')
         } catch (err) {
-            setError(err.message)
-            setStep('input')
+            if (err.name === 'AbortError') {
+                console.log("Analysis Aborted");
+                setStep('input'); // Reset to input
+            } else {
+                setError(err.message)
+                setStep('input')
+            }
         } finally {
             setLoading(false)
+        }
+    }
+
+    const stopAnalysis = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            setLoading(false);
+            setStep('input');
         }
     }
 
@@ -295,11 +328,17 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
         // BATCHING LOGIC: Parallel Concurrency of 3
         const CONCURRENT_LIMIT = 3;
         const allResults = [];
-        const controller = new AbortController();
+        // Init AbortController
+        if (abortControllerRef.current) abortControllerRef.current.abort();
+        abortControllerRef.current = new AbortController();
+        const signal = abortControllerRef.current.signal;
 
         try {
             // Process in blocks of 3
             for (let i = 0; i < activeScripts.length; i += CONCURRENT_LIMIT) {
+                // Check signal
+                if (signal.aborted) throw new Error('Aborted');
+
                 // Prepare up to 3 promises
                 const batchPromises = [];
                 for (let j = 0; j < CONCURRENT_LIMIT; j++) {
@@ -319,6 +358,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                         formData.append('gemini_api_key', config.api_key || '')
                         formData.append('model_name', config.model_name || '')
                         formData.append('aspect_ratio', aspectRatio)
+                        formData.append('category', category)  // Add product category
 
                         const targetUrl = `${BACKEND_URL || ''}/api/v1/batch-generate`;
 
@@ -326,7 +366,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                             method: 'POST',
                             headers: { 'Authorization': `Bearer ${token}` },
                             body: formData,
-                            signal: controller.signal
+                            signal: signal
                         });
 
                         if (!response.ok) {
@@ -355,13 +395,27 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
             setStep('done')
         } catch (err) {
-            console.error("Generation Error:", err)
-            // alert(`Gen Error: ${err.message}`); // Optional: don't annoy if partial failure? 
-            // User requested robust queue, if one fails effectively the whole batch might stop here.
-            setError(err.message)
-            // setStep('review') 
+            if (err.name === 'AbortError' || err.message === 'Aborted') {
+                console.log("Generation Aborted");
+                // If we have some results, maybe stay on done/review?
+                // For now, let's go to done if we have results, else stay/reset.
+                if (allResults.length > 0) {
+                    setStep('done');
+                } else {
+                    setStep('review'); // Go back to review so they can try again
+                }
+            } else {
+                console.error("Generation Error:", err)
+                setError(err.message)
+            }
         } finally {
             setLoading(false)
+        }
+    }
+
+    const stopGeneration = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
         }
     }
 
@@ -589,6 +643,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                     <div className="radar-spinner" style={{ marginBottom: '24px' }}></div>
                     <h2 className="loading-gradient" style={{ fontSize: '2rem', marginBottom: '12px' }}>正在分析视觉结构...</h2>
                     <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', minHeight: '1.5em' }}>{loadingMessage || "识别产品特征 • 解析空间几何 • 推理物理逻辑"}</p>
+                    <button className="btn-secondary" onClick={stopAnalysis} style={{ marginTop: '20px', borderColor: 'var(--error-color)', color: 'var(--error-color)' }}>⏹ 停止分析</button>
                 </div>
             )}
 
@@ -694,6 +749,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                             <h3 className="loading-gradient" style={{ fontSize: '1.8rem', marginBottom: '12px' }}>
                                 正在批量合成场景 ({results.length}/{genCount})...
                             </h3>
+                            <button className="btn-secondary" onClick={stopGeneration} style={{ marginTop: '10px', borderColor: 'var(--error-color)', color: 'var(--error-color)' }}>⏹ 停止生成</button>
                             <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', minHeight: '1.5em' }}>{loadingMessage || "主体抽离 • 风格迁移 • 物理约束渲染"}</p>
                         </div>
                     )}
@@ -701,7 +757,15 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                     {step === 'done' && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', padding: '0 20px' }}>
                             <h3>🎉 生成完成 (已自动清洗提示词)</h3>
-                            <button className="btn-secondary" onClick={resetFlow}>🔄 开始新任务</button>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button className="btn-primary"
+                                    style={{ background: 'linear-gradient(45deg, #8b5cf6, #ec4899)' }}
+                                    onClick={handleBatchVideo}
+                                >
+                                    🎬 一键批量转视频
+                                </button>
+                                <button className="btn-secondary" onClick={resetFlow}>🔄 开始新任务</button>
+                            </div>
                         </div>
                     )}
 
@@ -746,15 +810,41 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                     <button
                                         className="btn-secondary"
                                         style={{ fontSize: '0.8rem', padding: '4px 8px' }}
-                                        onClick={(e) => {
+                                        onClick={async (e) => {
                                             e.stopPropagation();
                                             // 1. Download Image
                                             const baseName = `${productFileName}_${res.angle_name.replace(/\s+/g, '_')}_${Math.floor(Math.random() * 10000)}`
 
-                                            const link = document.createElement('a');
-                                            link.href = res.image_base64.startsWith('http') || res.image_base64.startsWith('data:') ? res.image_base64 : `data:image/jpeg;base64,${res.image_base64}`;
-                                            link.download = `${baseName}.jpg`;
-                                            link.click();
+                                            const imageUrl = res.image_base64.startsWith('http') || res.image_base64.startsWith('data:')
+                                                ? res.image_base64
+                                                : `data:image/jpeg;base64,${res.image_base64}`;
+
+                                            // For remote URLs, fetch as blob to force download
+                                            if (imageUrl.startsWith('http')) {
+                                                try {
+                                                    const response = await fetch(imageUrl);
+                                                    const blob = await response.blob();
+                                                    const blobUrl = URL.createObjectURL(blob);
+                                                    const link = document.createElement('a');
+                                                    link.href = blobUrl;
+                                                    link.download = `${baseName}.jpg`;
+                                                    document.body.appendChild(link);
+                                                    link.click();
+                                                    document.body.removeChild(link);
+                                                    URL.revokeObjectURL(blobUrl);
+                                                } catch (error) {
+                                                    console.error('Download failed:', error);
+                                                    // Fallback: open in new tab
+                                                    window.open(imageUrl, '_blank');
+                                                }
+                                            } else {
+                                                const link = document.createElement('a');
+                                                link.href = imageUrl;
+                                                link.download = `${baseName}.jpg`;
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                document.body.removeChild(link);
+                                            }
 
                                             // 2. Download Text (if exists) - Add small delay
                                             if (res.video_prompt) {
@@ -763,7 +853,9 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                                     const txtLink = document.createElement('a');
                                                     txtLink.href = URL.createObjectURL(blob);
                                                     txtLink.download = `${baseName}.txt`;
+                                                    document.body.appendChild(txtLink);
                                                     txtLink.click();
+                                                    document.body.removeChild(txtLink);
                                                 }, 300);
                                             }
                                         }}
