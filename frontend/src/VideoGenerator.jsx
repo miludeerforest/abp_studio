@@ -3,7 +3,18 @@ import { useState, useEffect, useRef } from 'react'
 const BACKEND_URL = ''
 const CONCURRENT_LIMIT = 3;
 
-function VideoGenerator({ token, initialImage, initialPrompt, requestTimestamp, config, onConfigChange, isActive }) {
+const CATEGORIES = [
+    { value: 'daily', label: '日用百货', icon: '🧴' },
+    { value: 'beauty', label: '美妆个护', icon: '💄' },
+    { value: 'food', label: '食品饮料', icon: '🍔' },
+    { value: 'electronics', label: '数码电子', icon: '📱' },
+    { value: 'home', label: '家居家装', icon: '🏠' },
+    { value: 'fashion', label: '服饰鞋包', icon: '👗' },
+    { value: 'sports', label: '运动户外', icon: '⚽' },
+    { value: 'other', label: '其他品类', icon: '📦' }
+];
+
+function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, requestTimestamp, config, onConfigChange, isActive }) {
     const [videoApiUrl, setVideoApiUrl] = useState(config.video_api_url || '')
     const [videoApiKey, setVideoApiKey] = useState(config.video_api_key || '')
     const [videoModelName, setVideoModelName] = useState(config.video_model_name || 'sora-video-portrait')
@@ -17,6 +28,8 @@ function VideoGenerator({ token, initialImage, initialPrompt, requestTimestamp, 
     const [isDragging, setIsDragging] = useState(false)
     const [isQueueRunning, setIsQueueRunning] = useState(false)
     const [selectedVideo, setSelectedVideo] = useState(null)
+    const [category, setCategory] = useState('daily')  // Product category for videos
+    const [customProductName, setCustomProductName] = useState('')  // Custom product name for 'other' category
 
     // Merge State
     const [selectedVideoIds, setSelectedVideoIds] = useState(new Set())
@@ -125,11 +138,15 @@ function VideoGenerator({ token, initialImage, initialPrompt, requestTimestamp, 
     // Handle Initial Image Transfer
     useEffect(() => {
         if (initialImage && requestTimestamp > 0) {
-            console.log("VideoGenerator Triggered:", { requestTimestamp, prompt: initialPrompt });
+            console.log("VideoGenerator Triggered:", { requestTimestamp, prompt: initialPrompt, category: initialCategory });
+            // Sync category from ImageGenerator
+            if (initialCategory) {
+                setCategory(initialCategory);
+            }
             // Pass initialPrompt explicitly
             addToQueue([initialImage], initialPrompt)
         }
-    }, [requestTimestamp, initialImage, initialPrompt]) // Added initialPrompt to deps
+    }, [requestTimestamp, initialImage, initialPrompt, initialCategory]) // Added initialCategory to deps
 
     // Handle Initial Prompt from Image Gen Tab
     useEffect(() => {
@@ -215,6 +232,11 @@ function VideoGenerator({ token, initialImage, initialPrompt, requestTimestamp, 
                 formData.append('file', img)
             }
             formData.append('prompt', specificPrompt || "Default Prompt") // Ensure prompt is not empty
+            formData.append('category', category)  // Send product category
+            // Send custom product name if category is 'other'
+            if (category === 'other' && customProductName) {
+                formData.append('custom_product_name', customProductName)
+            }
 
             try {
                 const res = await fetch(`${BACKEND_URL}/api/v1/queue`, {
@@ -424,6 +446,47 @@ function VideoGenerator({ token, initialImage, initialPrompt, requestTimestamp, 
 
                 {/* Right: Controls */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* Category Selector */}
+                    <div>
+                        <span className="section-title" style={{ marginBottom: '8px', display: 'block' }}>产品类目</span>
+                        <select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '10px',
+                                borderRadius: '8px',
+                                background: 'rgba(0,0,0,0.8)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                color: '#fff'
+                            }}
+                        >
+                            {CATEGORIES.map(cat => (
+                                <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
+                            ))}
+                        </select>
+
+                        {/* Custom Product Name Input */}
+                        {category === 'other' && (
+                            <input
+                                type="text"
+                                placeholder="请输入产品名称 (如: 运动鞋, 陶瓷花瓶...)"
+                                value={customProductName}
+                                onChange={(e) => setCustomProductName(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px',
+                                    marginTop: '8px',
+                                    borderRadius: '8px',
+                                    background: 'transparent',
+                                    border: '1px solid var(--primary-color)',
+                                    color: '#fff',
+                                    outline: 'none'
+                                }}
+                            />
+                        )}
+                    </div>
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span className="section-title" style={{ marginBottom: 0 }}>默认提示词</span>
                     </div>

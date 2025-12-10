@@ -69,8 +69,8 @@ app.add_middleware(
 )
 
 # --- Database Setup ---
-# User provided: banana_db / banana_db / ***REDACTED_DB_PASSWORD*** / 1Panel-postgresql-SJJE:5432
-DATABASE_URL = "postgresql://banana_db:***REDACTED_DB_PASSWORD***@1Panel-postgresql-SJJE:5432/banana_db"
+# Read from environment variable (set in .env or docker-compose)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/db")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -80,7 +80,8 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 
 # --- Auth Config ---
-SECRET_KEY = "banana-product-secret-key-change-this-in-prod"
+# JWT secret key - MUST be set in .env for production
+SECRET_KEY = os.getenv("SECRET_KEY", "change-this-secret-key-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day
 
@@ -437,9 +438,12 @@ def get_stats(db: Session = Depends(get_db), admin: User = Depends(get_current_a
     users = db.query(User).all()
     user_stats = []
     
-    # Get today's start in China timezone (00:00)
+    # Get today's start in China timezone (00:00), then convert to UTC for comparison
+    # This handles both old UTC data and new China timezone data
     now = get_china_now()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start_china = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Convert China time 00:00 to UTC (subtract 8 hours): yesterday 16:00 UTC
+    today_start_utc = today_start_china - timedelta(hours=8)
     
     for u in users:
         # Count actual saved images in gallery (not just generation attempts) - Total
@@ -450,15 +454,16 @@ def get_stats(db: Session = Depends(get_db), admin: User = Depends(get_current_a
             VideoQueueItem.status.in_(["done", "archived"])
         ).count()
         
-        # Today's counts (since 00:00 China time)
+        # Today's counts - use UTC start time for comparison
+        # This counts items where created_at >= yesterday 16:00 UTC (= today 00:00 Beijing)
         today_img = db.query(SavedImage).filter(
             SavedImage.user_id == u.id,
-            SavedImage.created_at >= today_start
+            SavedImage.created_at >= today_start_utc
         ).count()
         today_vid = db.query(VideoQueueItem).filter(
             VideoQueueItem.user_id == u.id,
             VideoQueueItem.status.in_(["done", "archived"]),
-            VideoQueueItem.created_at >= today_start
+            VideoQueueItem.created_at >= today_start_utc
         ).count()
         
         user_stats.append({
@@ -1616,7 +1621,10 @@ def get_gallery_videos(
 
 @app.get("/api/v1/queue", response_model=List[QueueItemResponse])
 def get_queue(db: Session = Depends(get_db), token: str = Depends(verify_token)):
-    return db.query(VideoQueueItem).order_by(VideoQueueItem.created_at.asc()).all()
+    # Exclude archived items from queue list (they're preserved for gallery only)
+    return db.query(VideoQueueItem).filter(
+        VideoQueueItem.status != "archived"
+    ).order_by(VideoQueueItem.created_at.asc()).all()
 
 @app.post("/api/v1/queue")
 async def add_to_queue(

@@ -872,7 +872,8 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                             e.stopPropagation();
                                             onSelectForVideo(
                                                 res.image_base64.startsWith('http') || res.image_base64.startsWith('data:') ? res.image_base64 : `data:image/jpeg;base64,${res.image_base64}`,
-                                                res.video_prompt
+                                                res.video_prompt,
+                                                category  // Pass category to VideoGenerator
                                             )
                                         }}
                                     >
