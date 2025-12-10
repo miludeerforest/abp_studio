@@ -37,6 +37,7 @@ function App() {
   // Video Generation Transfer
   const [selectedImage, setSelectedImage] = useState(null)
   const [selectedVideoPrompt, setSelectedVideoPrompt] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('daily')
   const [selectionTimestamp, setSelectionTimestamp] = useState(0)
 
   // WebSocket connection for real-time updates
@@ -130,9 +131,10 @@ function App() {
     setGeneratedImages(results)
   }
 
-  const handleSelectForVideo = (imgUrl, prompt) => {
+  const handleSelectForVideo = (imgUrl, prompt, category) => {
     setSelectedImage(imgUrl)
     setSelectedVideoPrompt(prompt || '')
+    setSelectedCategory(category || 'daily')  // Pass category
     setSelectionTimestamp(Date.now())
     setActiveTab('video')
   }
@@ -270,6 +272,7 @@ function App() {
             token={token}
             initialImage={selectedImage}
             initialPrompt={selectedVideoPrompt}
+            initialCategory={selectedCategory}
             requestTimestamp={selectionTimestamp}
             config={config}
             onConfigChange={handleConfigChange}
