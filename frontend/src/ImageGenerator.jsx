@@ -31,6 +31,27 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
     const [genCount, setGenCount] = useState(9)
     const [aspectRatio, setAspectRatio] = useState('1:1')
     const [isAutoMode, setIsAutoMode] = useState(false) // New Auto Mode State
+    const [sceneStyle, setSceneStyle] = useState('') // Scene style for batch generation
+
+    // Visual Art Style Options (视觉艺术风格)
+    const SCENE_STYLES = [
+        { id: '', label: '不指定风格', prompt: '' },
+        { id: 'cyberpunk', label: '赛博朋克/霓虹', prompt: 'Cyberpunk neon style, vibrant neon lights, futuristic urban aesthetic, high contrast colors, glowing effects, sci-fi atmosphere.' },
+        { id: 'cinematic', label: '电影写实', prompt: 'Cinematic realistic style, professional film lighting, shallow depth of field, dramatic shadows, movie-quality composition.' },
+        { id: 'watercolor', label: '水彩画', prompt: 'Watercolor painting style, soft edges, flowing colors, artistic brush strokes, delicate washes, traditional art aesthetic.' },
+        { id: 'anime', label: '动漫风', prompt: 'Anime style, clean lines, vibrant colors, Japanese animation aesthetic, cel-shaded look, expressive highlights.' },
+        { id: 'bw_film', label: '黑白胶片', prompt: 'Black and white film photography style, classic noir aesthetic, high contrast, film grain, timeless elegance.' },
+        { id: 'ghibli', label: '吉卜力风', prompt: 'Studio Ghibli style, whimsical and dreamy, soft pastel colors, hand-painted look, magical realism, warm atmosphere.' },
+        { id: 'oil_painting', label: '油画风', prompt: 'Oil painting style, rich textures, visible brush strokes, classical art aesthetic, warm tones, museum-quality finish.' },
+        { id: 'pixar3d', label: '皮克斯3D', prompt: 'Pixar 3D animation style, smooth rendering, vibrant colors, friendly aesthetic, high-quality CGI, appealing character design.' },
+        { id: 'chinese_ink', label: '水墨国风', prompt: 'Chinese ink wash painting style, traditional brushwork, minimalist elegance, black ink on white, Eastern aesthetic.' },
+        { id: 'scifi_future', label: '科幻未来', prompt: 'Sci-fi futuristic style, sleek metallic surfaces, holographic elements, advanced technology aesthetic, clean lines.' },
+        { id: 'fantasy_magic', label: '奇幻魔法', prompt: 'Fantasy magical style, ethereal glow, mystical atmosphere, enchanted elements, sparkling effects, dreamlike quality.' },
+        { id: 'vintage_retro', label: '复古怀旧', prompt: 'Vintage retro style, nostalgic color grading, faded tones, classic aesthetic, 70s/80s vibe, warm sepia.' },
+        { id: 'american_comic', label: '美漫风', prompt: 'American comic book style, bold outlines, dynamic shading, halftone dots, superhero aesthetic, vibrant primary colors.' },
+        { id: 'minimalist', label: '极简主义', prompt: 'Minimalist style, clean composition, negative space, simple forms, monochromatic palette, modern design.' },
+        { id: 'steampunk', label: '蒸汽朋克', prompt: 'Steampunk style, Victorian industrial aesthetic, brass and copper tones, gears and clockwork, vintage machinery.' }
+    ]
 
     // Analysis State
     const [analysisResult, setAnalysisResult] = useState(null)
@@ -65,12 +86,12 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
         if (!isAutoMode) return;
 
         // Auto Step 1 -> 2 (Review) -> 3 (Generate)
-        // Add delay to ensure state confirms and user sees brief analysis success
+        // Reduced delay for faster auto mode
         if (step === 'review' && analysisResult && !loading) {
-            console.log("Auto Mode: Analysis success. Triggering Generation in 1.5s...");
+            console.log("Auto Mode: Analysis success. Triggering Generation in 0.5s...");
             const timer = setTimeout(() => {
                 handleGenerate();
-            }, 1500);
+            }, 500);  // Reduced from 1500ms to 500ms for speed
             return () => clearTimeout(timer);
         }
 
@@ -82,30 +103,23 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
     }, [step, isAutoMode, analysisResult, loading, results]);
 
     // Refactored Batch Video Function
-    const handleBatchVideo = async () => {
+    const handleBatchVideo = async (skipConfirm = false) => {
         if (loading) return;
 
-        // Stop Auto Mode if active
-        setIsAutoMode(false);
+        // Only show confirm and disable auto mode when NOT in auto mode
+        if (!skipConfirm) {
+            // Stop Auto Mode if active
+            setIsAutoMode(false);
 
-        // Confirm
-        if (!window.confirm(`确定要将这 ${results.length} 张图片全部加入视频生成队列吗？`)) {
-            return;
+            // Confirm
+            if (!window.confirm(`确定要将这 ${results.length} 张图片全部加入视频生成队列吗？`)) {
+                return;
+            }
         }
 
-        let sentCount = 0;
-        for (const res of results) {
-            // Wait a bit between requests
-            await new Promise(r => setTimeout(r, 200));
-
+        // Use parallel requests for speed optimization
+        const sendPromises = results.map(async (res, idx) => {
             const imgData = res.image_base64;
-            // Note: In results, image_base64 might be raw base64 string without prefix if it came from backend directly?
-            // Backend main.py lines 903: "image_base64": base64.b64encode(img_byte_arr).decode('utf-8')
-            // So it does NOT have data:image/jpeg;base64, prefix.
-            // But verify usage in lightbox:
-            // Line 721: res.image_base64.startsWith('http') || res.image_base64.startsWith('data:') ? ... : `data:image/jpeg;base64,...`
-            // So it needs prefix adding if converting to blob.
-
             const formData = new FormData();
 
             if (imgData.startsWith('http')) {
@@ -119,10 +133,9 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                 }
                 const byteArray = new Uint8Array(byteNumbers);
                 const blob = new Blob([byteArray], { type: 'image/jpeg' });
-                formData.append('file', blob, `auto_gen_${sentCount}.jpg`);
+                formData.append('file', blob, `auto_gen_${idx}.jpg`);
             }
 
-            // Use specific prompts if available, else simple default
             formData.append('prompt', res.video_prompt || "Product video");
 
             try {
@@ -131,18 +144,28 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                     headers: { 'Authorization': `Bearer ${token}` },
                     body: formData
                 });
-                sentCount++;
+                return true;
             } catch (e) {
                 console.error("Auto Queue Failed", e);
+                return false;
             }
+        });
+
+        const results_status = await Promise.all(sendPromises);
+        const sentCount = results_status.filter(Boolean).length;
+
+        // Only show alert in manual mode, not in auto mode
+        if (!skipConfirm) {
+            alert(`已将 ${sentCount} 个任务发送至视频生成队列。正在切换至视频界面...`);
+        } else {
+            console.log(`Auto Mode: ${sentCount} tasks sent to video queue.`);
         }
-        alert(`已将 ${sentCount} 个任务发送至视频生成队列。正在切换至视频界面...`);
         if (onTabChange) onTabChange('video');
     }
 
-    // Auto Mode Wrapper
+    // Auto Mode Wrapper - skip confirm dialog
     const autoSendToQueue = () => {
-        handleBatchVideo();
+        handleBatchVideo(true);  // Skip confirm in auto mode
     }
 
     const LOADING_MESSAGES = {
@@ -228,6 +251,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
         formData.append('api_url', config.api_url || '')
         formData.append('gemini_api_key', config.api_key || '')
         formData.append('model_name', config.analysis_model_name || 'gemini-3-pro-preview')
+        formData.append('gen_count', genCount)  // User-selected generation count
 
         try {
             const response = await fetch(`${BACKEND_URL}/api/v1/analyze`, {
@@ -245,7 +269,20 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
             const data = await response.json()
             setAnalysisResult(data)
             setPlacementMode(data.placement_mode)
-            setScripts(data.scripts)
+
+            // Integrate scene style prompt into each script's 'script' field if selected
+            // data.scripts is an array of objects: [{angle_name: "...", script: "..."}, ...]
+            let finalScripts = data.scripts || []
+            if (sceneStyle && finalScripts.length > 0) {
+                const stylePrompt = SCENE_STYLES.find(s => s.id === sceneStyle)?.prompt || ''
+                if (stylePrompt) {
+                    finalScripts = finalScripts.map(item => ({
+                        ...item,
+                        script: `[Scene Style: ${stylePrompt}] ${item.script}`
+                    }))
+                }
+            }
+            setScripts(finalScripts)
             setStep('review')
         } catch (err) {
             if (err.name === 'AbortError') {
@@ -359,6 +396,9 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                         formData.append('model_name', config.model_name || '')
                         formData.append('aspect_ratio', aspectRatio)
                         formData.append('category', category)  // Add product category
+                        // Add scene style prompt for image generation
+                        const stylePrompt = SCENE_STYLES.find(s => s.id === sceneStyle)?.prompt || ''
+                        formData.append('scene_style_prompt', stylePrompt)
 
                         const targetUrl = `${BACKEND_URL || ''}/api/v1/batch-generate`;
 
@@ -609,6 +649,35 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                             onChange={(e) => setGenCount(parseInt(e.target.value))}
                             style={{ width: '100%', accentColor: 'var(--primary-color)' }}
                         />
+                    </div>
+
+                    {/* Scene Style Selector */}
+                    <div style={{ marginTop: '20px' }}>
+                        <div className="section-title">场景风格 (批量统一)</div>
+                        <select
+                            value={sceneStyle}
+                            onChange={(e) => setSceneStyle(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '12px 16px',
+                                background: 'var(--card-bg)',
+                                border: '1px solid var(--card-border)',
+                                borderRadius: '8px',
+                                color: 'var(--text-color)',
+                                fontSize: '1rem',
+                                cursor: 'pointer',
+                                outline: 'none'
+                            }}
+                        >
+                            {SCENE_STYLES.map(style => (
+                                <option key={style.id} value={style.id}>{style.label}</option>
+                            ))}
+                        </select>
+                        {sceneStyle && (
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '8px', fontStyle: 'italic' }}>
+                                {SCENE_STYLES.find(s => s.id === sceneStyle)?.prompt.substring(0, 80)}...
+                            </p>
+                        )}
                     </div>
 
                     {/* Auto Mode Checkbox */}

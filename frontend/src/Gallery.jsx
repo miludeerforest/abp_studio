@@ -11,6 +11,14 @@ const CATEGORIES = [
     { value: 'other', label: '其他品类', icon: '📦' },
 ];
 
+// Format timestamp to Beijing time (UTC+8)
+const formatBeijingTime = (timestamp) => {
+    if (!timestamp) return '未知';
+    // Ensure timestamp is treated as UTC and convert to Beijing time
+    const utcTimestamp = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
+    return new Date(utcTimestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+};
+
 const Gallery = ({ onSelectForVideo }) => {
     const [activeTab, setActiveTab] = useState('images'); // 'images' or 'videos'
     const userRole = localStorage.getItem('role') || 'user';
@@ -31,6 +39,9 @@ const Gallery = ({ onSelectForVideo }) => {
     // Batch Selection State (admin only)
     const [selectMode, setSelectMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState(new Set());
+
+    // Portrait video tracking (for layout)
+    const [portraitVideos, setPortraitVideos] = useState(new Set());
 
     // Detailed items for lightbox
     const [selectedImage, setSelectedImage] = useState(null);
@@ -407,7 +418,7 @@ const Gallery = ({ onSelectForVideo }) => {
                                     {videos.map((vid) => (
                                         <div
                                             key={vid.id}
-                                            className="gallery-card video-card"
+                                            className={`gallery-card video-card ${portraitVideos.has(vid.id) ? 'portrait' : ''}`}
                                             onClick={() => setSelectedVideo(vid)}
                                         >
                                             <div className="w-full h-full relative overflow-hidden group-video-thumb">
@@ -415,6 +426,12 @@ const Gallery = ({ onSelectForVideo }) => {
                                                     src={vid.preview_url || "/placeholder-video.png"}
                                                     alt="Video Thumbnail"
                                                     className="gallery-card-img"
+                                                    onLoad={(e) => {
+                                                        // Detect portrait orientation (height > width)
+                                                        if (e.target.naturalHeight > e.target.naturalWidth) {
+                                                            setPortraitVideos(prev => new Set([...prev, vid.id]));
+                                                        }
+                                                    }}
                                                     onError={(e) => { e.target.style.display = 'none' }}
                                                 />
                                                 <div className="video-play-icon">
@@ -424,6 +441,24 @@ const Gallery = ({ onSelectForVideo }) => {
                                                         </svg>
                                                     </div>
                                                 </div>
+                                                {/* Merged/Composite Video Badge */}
+                                                {(vid.prompt?.includes('Story Chain') || vid.filename?.includes('story_chain')) && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '12px',
+                                                        left: '12px',
+                                                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                                        padding: '4px 10px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '11px',
+                                                        fontWeight: 'bold',
+                                                        color: '#fff',
+                                                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)',
+                                                        border: '1px solid rgba(255,255,255,0.2)'
+                                                    }}>
+                                                        ✨ 合成
+                                                    </div>
+                                                )}
                                                 <div style={{ position: 'absolute', top: '12px', right: '12px', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', padding: '2px 8px', borderRadius: '9999px', fontSize: '10px', color: '#d1d5db', fontFamily: 'monospace', border: '1px solid rgba(255,255,255,0.1)' }}>
                                                     ID: {vid.id.slice(0, 4)}
                                                 </div>
@@ -533,7 +568,7 @@ const Gallery = ({ onSelectForVideo }) => {
                                 <div className="metadata-item">
                                     <span className="metadata-icon">🕐</span>
                                     <span className="metadata-label">创作时间</span>
-                                    <span className="metadata-value">{new Date(selectedImage.created_at).toLocaleString('zh-CN')}</span>
+                                    <span className="metadata-value">{formatBeijingTime(selectedImage.created_at)}</span>
                                 </div>
                             </div>
 
@@ -609,7 +644,7 @@ const Gallery = ({ onSelectForVideo }) => {
                                 <div className="metadata-item">
                                     <span className="metadata-icon">🕐</span>
                                     <span className="metadata-label">创作时间</span>
-                                    <span className="metadata-value">{new Date(selectedVideo.created_at).toLocaleString('zh-CN')}</span>
+                                    <span className="metadata-value">{formatBeijingTime(selectedVideo.created_at)}</span>
                                 </div>
                             </div>
 
