@@ -120,16 +120,22 @@ class VideoQueueItem(Base):
     user_id = Column(Integer, nullable=True) # Linked to User
     category = Column(String, nullable=True, default="other")  # Product category
     created_at = Column(DateTime, default=datetime.now)
+    _preview_url = Column("preview_url", String, nullable=True)  # Custom preview URL
 
     @property
     def preview_url(self):
+        # Return custom preview_url if set, otherwise derive from file_path
+        if self._preview_url:
+            return self._preview_url
         if self.file_path:
             # /app/uploads/queue/xxx -> /uploads/queue/xxx
-            # Ensure we handle the path correctly. 
-            # If file_path is /app/uploads/queue/123.jpg, we want /uploads/queue/123.jpg
             if self.file_path.startswith("/app/uploads"):
                 return self.file_path.replace("/app/uploads", "/uploads")
         return None
+    
+    @preview_url.setter
+    def preview_url(self, value):
+        self._preview_url = value
 
 # --- NEW: Gallery Model ---
 class SavedImage(Base):
@@ -584,6 +590,7 @@ async def call_openai_compatible_api(
     model: str = "gemini-3-pro-image-preview" 
 ) -> ImageResult:
     print(f"DEBUG: Entering call_openai_compatible_api for {angle_name}. Model: {model}", flush=True)
+    logger.info(f"Image Generation Prompt for {angle_name}: {angle_prompt[:200]}...")  # Log first 200 chars
     
     system_instruction = (
         "You are a professional product photographer. "
@@ -726,7 +733,8 @@ async def analyze_product_scene(
     ref_b64: str,
     category: str,
     model: str = "gemini-3-pro-preview",
-    custom_product_name: Optional[str] = None
+    custom_product_name: Optional[str] = None,
+    gen_count: int = 9  # User-selected number of scripts
 ) -> AnalyzeResponse:
     
     system_instruction = (
@@ -744,7 +752,7 @@ async def analyze_product_scene(
         "2. Analyze the geometry and environment of the second image (style reference). Is it a wall, a table, outdoor, abstract?\n"
         "3. Determine the best 'Placement Mode' (e.g., Wall-mounted, Tabletop, Floating, Floor-standing). "
         "   - Logic: If it's a CCTV camera and the background is a wall, use Wall-mounted. If it's a bottle, use Tabletop.\n"
-        "4. Generate 9 distinct photography scripts (prompts) for generating this product in this style.\n"
+        f"4. Generate exactly {gen_count} distinct photography scripts (prompts) for generating this product in this style.\n"
         "   - The scripts must vary significantly in lighting (Natural, Studio, Neon, Sunset, etc.), environment (Indoor, Outdoor, Abstract, Texture), and composition.\n"
         "   - Avoid repetitive backgrounds. Each script should feel like a distinct photoshoot.\n"
         "   - The scripts must strictly follow the 'Placement Mode' logic.\n"
@@ -818,7 +826,8 @@ async def analyze_endpoint(
     custom_product_name: Optional[str] = Form(None),
     api_url: str = Form(None),
     gemini_api_key: str = Form(None),
-    model_name: str = Form(None), 
+    model_name: str = Form(None),
+    gen_count: int = Form(9),  # User-selected number of scripts to generate
     db: Session = Depends(get_db),
     token: str = Depends(verify_token)
 ):
@@ -838,7 +847,7 @@ async def analyze_endpoint(
     
     async with httpx.AsyncClient() as client:
         return await analyze_product_scene(
-            client, api_url, gemini_api_key, product_b64, ref_b64, category, model_name, custom_product_name
+            client, api_url, gemini_api_key, product_b64, ref_b64, category, model_name, custom_product_name, gen_count
         )
 
 # --- Main Endpoint ---
@@ -852,6 +861,7 @@ async def batch_generate_workflow(
     model_name: str = Form(None),
     aspect_ratio: str = Form("1:1"),
     category: str = Form("other"),  # Product category
+    scene_style_prompt: str = Form(""),  # Visual style prompt for scene generation
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
@@ -997,7 +1007,8 @@ async def batch_generate_workflow(
     
     saved_count = 0
     async with httpx.AsyncClient() as download_client:
-        for r in results:
+        for idx, r in enumerate(results):
+            logger.info(f"Gallery save check [{idx}]: has_base64={bool(r.image_base64)}, error={r.error}, base64_len={len(r.image_base64) if r.image_base64 else 0}")
             if r.image_base64 and not r.error:
                 try:
                     img_data = None
@@ -1155,15 +1166,65 @@ async def analyze_storyboard_endpoint(
     # Read Image
     image_bytes = await file_to_base64(image)
     
-    # Construct System Prompt
-    system_prompt = f"""Role: You are a film storyboard artist.
-Context: You are creating prompts for video generation.
+    # Construct System Prompt with VideoGenerationPromptGuide integration
+    system_prompt = f"""Role: You are a specialized assistant combining the skills of:
+- A film storyboard artist creating continuous visual narratives
+- A prompt engineer crafting clear, structured video generation prompts  
+- A creative director ensuring coherent storytelling and strong visuals
+- A safety reviewer ensuring strict policy compliance
 
-IMPORTANT SAFETY GUIDELINES:
-- Avoid explicit sexual content, graphic violence, hate speech
-- Prefer implication and atmosphere over explicit description
-- Use fictional characters/objects
+=== SAFETY CONSTRAINTS (HIGHEST PRIORITY) ===
+Prohibited content - NEVER include:
+- Explicit sexual content, sexual acts, or strong innuendo
+- Graphic violence, gore, blood, open wounds, or detailed injuries
+- Hate speech, harassment, or demeaning content toward protected groups
+- Praise of extremist organizations, symbols, or slogans
+- Instructions for dangerous or illegal activities (weapons, drugs, crimes)
+- Real-world personal data (PII), names with identifying information
+- Highly realistic depictions of specific real celebrities or public figures
+- Minors in any sexual, violent, exploitative, or unsafe context
 
+Safe substitutes:
+- "Sexy/seductive" → "stylish and confident", "elegant attire", "charismatic presence"
+- Violence → "tense atmosphere", "distant flashes suggesting conflict", focus on emotional stakes
+- Real celebrities → "a famous [role] archetype" (e.g., "a charismatic tech CEO archetype")
+
+=== VIDEO PROMPT STRUCTURE ===
+Each prompt must implicitly contain:
+1. Subject: Who/what is at center (person, object, environment, abstract)
+   - Use roles/archetypes over specific individuals
+   - Describe relevant visual traits (clothing, posture, age group)
+
+2. Action: What happens - use strong verbs
+   - "explaining", "demonstrating", "pointing", "walking", "assembling", "observing", "testing", "exploring"
+   - Avoid explicit, violent, or unsafe actions
+
+3. Scene/Context: Where/when/atmosphere
+   - Location (indoor/outdoor/virtual)
+   - Time of day (morning, sunset, night, golden hour)
+   - Environmental details (weather, textures, background elements)
+
+4. Camera: Angle and framing
+   - Eye-level medium shot, wide establishing shot, close-up, bird's-eye view
+   - Keep simple: 1-2 main angles per shot
+
+5. Camera Movement (optional):
+   - Stable shot for clarity, slow pan for scenery, gentle push-in for emphasis
+   - Limit to one primary movement per short clip
+
+6. DYNAMIC ELEMENTS (REQUIRED - not just camera movement!):
+   - Each shot MUST include real motion in the scene, not just camera panning
+   - Examples: particles floating, steam rising, reflections changing, hands interacting with product
+   - Environmental motion: leaves, wind effects, light rays, shadows shifting
+   - Avoid: static scenes where only the camera moves while everything else is frozen
+
+7. Visual Style:
+   - Lighting: natural/artificial, mood (soft, dramatic, moody)
+   - Tone: "warm and welcoming", "calm and meditative", "modern and energetic"
+   - Art style: "photorealistic cinematic", "2D animation", "hand-drawn illustration"
+   - Atmosphere: haze, dust particles, rain reflections, light beams
+
+=== STORYBOARD REQUIREMENTS ===
 Goal: Create a continuous storyboard with EXACTLY {shot_count} shots for the story: "{topic}".
 
 Global visual style: Filmic realism, natural lighting, soft bokeh, 35mm lens, muted colors, subtle grain.
@@ -1182,15 +1243,25 @@ Global visual style: Filmic realism, natural lighting, soft bokeh, 35mm lens, mu
 5. **Temporal Continuity**:
    - Strict chronological order.
 
-Output format: ONLY a raw JSON array (no markdown code fences).
+=== OUTPUT FORMAT ===
+Output: ONLY a raw JSON array (no markdown code fences).
 
 Required fields per shot:
 - shot: integer (1..{shot_count})
-- prompt: detailed safe image generation prompt (English).
-- duration: integer (always 15).
-- description: Concise Chinese action summary.
-- shotStory: Narrative description in Chinese (2-3 sentences) showing connection to previous shot.
-- heroSubject: (ONLY in shot 1) Detailed visual description of the subject in the provided image.
+- prompt: detailed safe video generation prompt (English), following the structure above
+- duration: integer (always 15)
+- description: Concise Chinese action summary
+- shotStory: Narrative description in Chinese (2-3 sentences) showing connection to previous shot
+- heroSubject: (Required in ALL shots) Detailed visual description of the main product/subject from the image - must be IDENTICAL across all shots for consistency
+
+=== SELF-CHECK BEFORE OUTPUT ===
+✔ No explicit sexual content or innuendo
+✔ No graphic violence, gore, or injuries
+✔ No hate speech or extremist content
+✔ No real celebrities or PII
+✔ No minors in unsafe scenarios
+✔ Each prompt has: subject, action, scene, camera, style
+✔ Story flows continuously between shots
 """
 
     payload = {
@@ -1854,6 +1925,42 @@ def delete_queue_item(
     db.commit()
     return {"status": "deleted"}
 
+@app.post("/api/v1/queue/{item_id}/retry")
+async def retry_queue_item(
+    item_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    """Retry a failed video generation task."""
+    item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    if item.status != "error":
+        raise HTTPException(status_code=400, detail="Only failed items can be retried")
+    
+    # Reset status and error message
+    item.status = "pending"
+    item.error_msg = None
+    db.commit()
+    
+    # Get config and trigger background task
+    db_config_list = db.query(SystemConfig).all()
+    config_dict = {conf.key: conf.value for conf in db_config_list}
+    
+    video_api_url = config_dict.get("video_api_url")
+    video_api_key = config_dict.get("video_api_key")
+    video_model_name = config_dict.get("video_model_name", "sora-video-portrait")
+    
+    if not video_api_url or not video_api_key:
+        raise HTTPException(status_code=400, detail="Video API not configured")
+    
+    # Trigger background generation
+    background_tasks.add_task(process_video_background, item_id, video_api_url, video_api_key, video_model_name)
+    
+    return {"status": "retrying", "item_id": item_id}
+
 @app.delete("/api/v1/queue")
 def clear_queue(
     status: Optional[str] = None,
@@ -1886,6 +1993,53 @@ def clear_queue(
     return {"status": "cleared", "count": count}
 
 # --- Background Task for Video Generation ---
+
+async def convert_sora_to_watermark_free(sora_url: str) -> str:
+    """
+    Convert Sora official URL to watermark-free version using third-party service.
+    If the URL is from sora.chatgpt.com, try to get watermark-free version.
+    Returns original URL if conversion fails or URL is not a Sora URL.
+    """
+    # Only process sora.chatgpt.com URLs
+    if "sora.chatgpt.com" not in sora_url:
+        return sora_url
+    
+    try:
+        import urllib.parse
+        # Third-party service to remove Sora watermark
+        encoded_url = urllib.parse.quote(sora_url, safe='')
+        api_url = f"https://dyysy.com/?url={encoded_url}"
+        
+        logger.info(f"Converting Sora URL to watermark-free: {sora_url}")
+        
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.get(api_url, follow_redirects=True)
+            
+            if resp.status_code == 200:
+                # Check if response contains a video URL
+                content = resp.text
+                
+                # Look for mp4 URL in response
+                import re
+                video_match = re.search(r'https?://[^\s"\'<>]+\.mp4[^\s"\'<>]*', content)
+                if video_match:
+                    watermark_free_url = video_match.group(0)
+                    logger.info(f"Watermark-free URL obtained: {watermark_free_url}")
+                    return watermark_free_url
+                
+                # If the response itself is a redirect to video
+                final_url = str(resp.url)
+                if ".mp4" in final_url:
+                    logger.info(f"Watermark-free URL (redirect): {final_url}")
+                    return final_url
+                    
+        logger.warning(f"Could not get watermark-free URL, using original")
+        return sora_url
+        
+    except Exception as e:
+        logger.warning(f"Sora URL conversion failed: {e}, using original URL")
+        return sora_url
+
 async def process_video_background(item_id: str, video_api_url: str, video_api_key: str, video_model_name: str):
     logger.info(f"Background Task: Starting Video Generation for {item_id}")
     
@@ -1896,6 +2050,10 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
         if not item:
             logger.error(f"Background Task: Item {item_id} not found")
             return
+
+        # Update status to processing immediately
+        item.status = "processing"
+        db.commit()
 
         # Read file and encode
         if not os.path.exists(item.file_path):
@@ -1935,8 +2093,8 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
 
         async with httpx.AsyncClient() as client:
             try:
-                # 600s timeout for the generation process
-                resp = await client.post(target_url, json=payload, headers=headers, timeout=600.0)
+                # 900s (15 min) timeout for the generation process - increased for longer videos
+                resp = await client.post(target_url, json=payload, headers=headers, timeout=900.0)
                 
                 if resp.status_code != 200:
                     logger.error(f"Video API Error {resp.status_code}: {resp.text}")
@@ -1967,9 +2125,52 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
                         found_url = found_url.split("'")[0]
                         found_url = found_url.split('"')[0]
                         
-                        item.result_url = found_url
+                        # Try to convert Sora URL to watermark-free version
+                        found_url = await convert_sora_to_watermark_free(found_url)
+                        
+                        # Download video to local storage if it's an external URL
+                        final_url = found_url
+                        preview_url = None
+                        
+                        if found_url.startswith("http"):
+                            try:
+                                local_filename = f"video_{item_id}.mp4"
+                                local_path = f"/app/uploads/queue/{local_filename}"
+                                
+                                async with httpx.AsyncClient() as download_client:
+                                    video_resp = await download_client.get(found_url, timeout=300.0)
+                                    if video_resp.status_code == 200:
+                                        with open(local_path, "wb") as f:
+                                            f.write(video_resp.content)
+                                        final_url = f"/uploads/queue/{local_filename}"
+                                        logger.info(f"Video downloaded to local: {final_url}")
+                                        
+                                        # Generate thumbnail from first frame
+                                        thumb_filename = f"video_{item_id}_thumb.jpg"
+                                        thumb_path = f"/app/uploads/queue/{thumb_filename}"
+                                        try:
+                                            thumb_cmd = [
+                                                "ffmpeg", "-y",
+                                                "-i", local_path,
+                                                "-ss", "00:00:00.500",
+                                                "-vframes", "1",
+                                                "-q:v", "2",
+                                                thumb_path
+                                            ]
+                                            subprocess.run(thumb_cmd, check=True, capture_output=True)
+                                            preview_url = f"/uploads/queue/{thumb_filename}"
+                                        except Exception as thumb_err:
+                                            logger.warning(f"Failed to generate thumbnail: {thumb_err}")
+                                    else:
+                                        logger.warning(f"Failed to download video: HTTP {video_resp.status_code}")
+                            except Exception as dl_err:
+                                logger.warning(f"Video download failed, keeping remote URL: {dl_err}")
+                        
+                        item.result_url = final_url
+                        if preview_url:
+                            item.preview_url = preview_url
                         item.status = "done"
-                        logger.info(f"Video Generated Successfully: {found_url}")
+                        logger.info(f"Video Generated Successfully: {final_url}")
                         
                         # Log activity and update user status
                         try:
@@ -2020,7 +2221,7 @@ async def generate_queue_item_endpoint(
     
     # 2. Get Config
     db_config_list = db.query(SystemConfig).all()
-    config_dict = {item.key: item.value for item in db_config_list}
+    config_dict = {conf.key: conf.value for conf in db_config_list}
     
     video_api_url = config_dict.get("video_api_url")
     video_api_key = config_dict.get("video_api_key")
@@ -2034,7 +2235,21 @@ async def generate_queue_item_endpoint(
 
     # 3. Start Processing (Set status and trigger background task)
     item.status = "processing"
+    
+    # 4. Log activity for monitoring
+    activity = UserActivity(
+        user_id=item.user_id,
+        action="video_gen_processing",
+        details=f"视频生成中 | 提示词: {item.prompt[:50] if item.prompt else '无'}..."
+    )
+    db.add(activity)
     db.commit()
+    
+    # 5. Update user status via WebSocket
+    try:
+        await connection_manager.update_user_activity(item.user_id, "正在生成视频")
+    except Exception:
+        pass  # WebSocket not required
 
     logger.info(f"Triggering Background Generation for {item_id}")
     background_tasks.add_task(process_video_background, item_id, video_api_url, video_api_key, video_model_name)
@@ -2088,6 +2303,8 @@ class StoryChainRequest(BaseModel):
     api_url: Optional[str] = None
     api_key: Optional[str] = None
     model_name: Optional[str] = None
+    visual_style: Optional[str] = None  # Visual style ID
+    visual_style_prompt: Optional[str] = None  # Visual style prompt text
 
 STORY_CHAIN_STATUS = {}
 
@@ -2140,12 +2357,96 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
     final_api_url = req.api_url or config_dict.get("video_api_url", "")
     final_api_key = req.api_key or config_dict.get("video_api_key", "")
     final_model = req.model_name or config_dict.get("video_model_name", "sora-video-portrait")
+    
+    # Get image generation API config for pre-processing
+    image_api_url = config_dict.get("api_url", "")
+    image_api_key = config_dict.get("api_key", "")
+    image_model = config_dict.get("image_model_portrait", "gemini-2.5-flash-preview-05-20")  # Portrait image model
 
     try:
         current_image_source = req.initial_image_url
         
         # Ensure queue dir exists
         os.makedirs("/app/uploads/queue", exist_ok=True)
+        
+        # === STEP 0: Pre-process original image with image generation model ===
+        # This "washes" the original image to create a stylized version before video generation
+        logging.info(f"Chain {chain_id}: Preprocessing check - image_api_url={bool(image_api_url)}, image_api_key={bool(image_api_key)}, shots={len(req.shots)}, visual_style={req.visual_style_prompt[:50] if req.visual_style_prompt else 'None'}...")
+        
+        if image_api_url and image_api_key and len(req.shots) > 0:
+            logging.info(f"Chain {chain_id}: Pre-processing original image with {image_model}")
+            status["current_shot"] = 0
+            status["status"] = "preprocessing"
+            
+            try:
+                # Get the first shot's prompt and heroSubject for context
+                first_shot = req.shots[0]
+                hero_subject = first_shot.get("heroSubject", "")
+                first_prompt = first_shot.get("prompt", "")
+                
+                # Prepare the original image as base64
+                if current_image_source.startswith("data:"):
+                    header, encoded = current_image_source.split(",", 1)
+                    original_b64 = encoded
+                elif current_image_source.startswith("/"):
+                    with open(current_image_source, "rb") as f:
+                        original_b64 = base64.b64encode(f.read()).decode('utf-8')
+                else:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(current_image_source, timeout=30)
+                        original_b64 = base64.b64encode(resp.content).decode('utf-8')
+                
+                # Construct preprocessing prompt with visual style
+                visual_style = req.visual_style_prompt or "Filmic realism, natural lighting, soft bokeh, 35mm lens, muted colors, subtle grain."
+                
+                preprocess_prompt = (
+                    f"Role: Cinematic frame artist establishing the visual style.\n"
+                    f"Goal: Transform this product image into a stylized opening frame.\n"
+                    f"CRITICAL Main Subject: {hero_subject}\n"
+                    f"Scene Setup: {first_prompt}\n"
+                    f"Visual Style: {visual_style}\n"
+                    f"Constraints: no text, 9:16 portrait aspect ratio, high fidelity, maintain product identity.\n"
+                    f"Output: A stylized version of the product image with the specified visual style, ready for video generation."
+                )
+                
+                # Call image generation API
+                async with httpx.AsyncClient(timeout=120) as client:
+                    result = await call_openai_compatible_api(
+                        client, image_api_url, image_api_key,
+                        original_b64,  # Input image
+                        original_b64,  # Reference image (same for first frame)
+                        "Preprocessing",
+                        preprocess_prompt,
+                        image_model
+                    )
+                    
+                    if result and result.image_base64:
+                        # Save preprocessed image
+                        preprocessed_filename = f"chain_{chain_id}_preprocessed.jpg"
+                        preprocessed_path = os.path.join("/app/uploads/queue", preprocessed_filename)
+                        
+                        preprocessed_data = base64.b64decode(result.image_base64)
+                        with open(preprocessed_path, "wb") as f:
+                            f.write(preprocessed_data)
+                        
+                        # Update image source to use preprocessed image
+                        current_image_source = preprocessed_path
+                        logging.info(f"Chain {chain_id}: Preprocessing complete, saved to {preprocessed_path}")
+                    else:
+                        logging.warning(f"Chain {chain_id}: Preprocessing returned no image, using original")
+                        
+            except Exception as preprocess_err:
+                logging.warning(f"Chain {chain_id}: Preprocessing failed ({preprocess_err}), using original image")
+            
+            status["status"] = "processing"
+        
+        # Extract heroSubject from first shot for product consistency
+        hero_subject = ""
+        if len(req.shots) > 0:
+            hero_subject = req.shots[0].get("heroSubject", "")
+        
+        # Log hero subject for debugging
+        logging.info(f"Chain {chain_id}: heroSubject = '{hero_subject[:100]}...' " if hero_subject else f"Chain {chain_id}: heroSubject is empty - product consistency may be affected")
         
         for i, shot in enumerate(req.shots):
             shot_num = i + 1
@@ -2155,7 +2456,27 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
             # Create Queue Item
             db = SessionLocal()
             try:
-                prompt_text = f"Shot {shot_num}: " + shot.get("prompt", "")
+                # Build prompt with strong product consistency enforcement
+                base_prompt = shot.get("prompt", "")
+                
+                # Get product description - try current shot's heroSubject first, then global hero_subject, then description
+                product_desc = shot.get("heroSubject", "") or hero_subject
+                if not product_desc:
+                    # Try to extract from shot description or use generic fallback
+                    product_desc = shot.get("description", "the product shown in the image")
+                
+                # Enhanced prompt with product consistency AND dynamic scene requirements
+                # Prevent "camera only" movement - scene elements should have actual motion/changes
+                prompt_text = (
+                    f"IMPORTANT REQUIREMENTS:\n"
+                    f"1. PRODUCT CONSISTENCY: The main product ({product_desc}) must remain clearly visible throughout.\n"
+                    f"2. DYNAMIC SCENE: The video must show REAL MOTION - not just camera movement. "
+                    f"Include: environmental changes (lighting shifts, particles, leaves, steam, reflections), "
+                    f"subtle product interactions (gentle rotations, approaching hands, usage demonstrations), "
+                    f"or atmospheric effects (wind, shadows moving, bokeh changes). "
+                    f"AVOID static scenes with only camera panning.\n"
+                    f"3. SCENE DESCRIPTION: {base_prompt}"
+                )
                 
                 queue_filename = f"chain_{chain_id}_shot_{shot_num}_input.jpg"
                 queue_file_path = os.path.join("/app/uploads/queue", queue_filename)
@@ -2194,20 +2515,49 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
             finally:
                 db.close()
             
-            # Trigger Generation (Await it!)
-            await process_video_background(item_id, final_api_url, final_api_key, final_model)
+            # Trigger Generation with retry mechanism (max 3 attempts)
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                logging.info(f"Chain {chain_id}: Shot {shot_num} attempt {attempt}/{max_retries}")
+                
+                # Reset status for retry
+                if attempt > 1:
+                    db = SessionLocal()
+                    retry_item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+                    if retry_item:
+                        retry_item.status = "pending"
+                        retry_item.error_msg = None
+                        db.commit()
+                    db.close()
+                
+                await process_video_background(item_id, final_api_url, final_api_key, final_model)
+                
+                # Check result
+                db = SessionLocal()
+                completed_item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+                
+                if completed_item.status == "done":
+                    logging.info(f"Chain {chain_id}: Shot {shot_num} completed successfully on attempt {attempt}")
+                    result_url = completed_item.result_url
+                    db.close()
+                    break
+                else:
+                    error_msg = completed_item.error_msg or "Unknown error"
+                    logging.warning(f"Chain {chain_id}: Shot {shot_num} attempt {attempt} failed: {error_msg}")
+                    db.close()
+                    
+                    if attempt == max_retries:
+                        logging.error(f"Chain {chain_id}: Shot {shot_num} failed after {max_retries} attempts")
+                        status["status"] = "failed"
+                        status["error"] = f"Shot {shot_num} failed after {max_retries} attempts: {error_msg}"
+                        return
+                    
+                    # Wait before retry
+                    await asyncio.sleep(5)
             
-            # Check result
+            # Get result_url after successful generation
             db = SessionLocal()
             completed_item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
-            if completed_item.status != "done":
-                error_msg = completed_item.error_msg or "Unknown error"
-                logging.error(f"Chain {chain_id} failed at shot {shot_num}: {error_msg}")
-                status["status"] = "failed"
-                status["error"] = f"Shot {shot_num} failed: {error_msg}"
-                db.close()
-                return
-            
             result_url = completed_item.result_url
             db.close()
             
@@ -2215,6 +2565,15 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
             if result_url.startswith("/uploads"):
                 local_video_path = f"/app{result_url}"
             elif result_url.startswith("http"):
+                 # Convert to watermark-free URL if it's a Sora video
+                 try:
+                     converted_url = await convert_sora_to_watermark_free(result_url)
+                     if converted_url and converted_url != result_url:
+                         logging.info(f"Chain {chain_id}: Converted to watermark-free URL for shot {shot_num}")
+                         result_url = converted_url
+                 except Exception as wm_err:
+                     logging.warning(f"Chain {chain_id}: Watermark removal failed for shot {shot_num}: {wm_err}")
+                 
                  # Download remote video
                  async with httpx.AsyncClient() as client:
                      resp = await client.get(result_url, timeout=300)
@@ -2287,7 +2646,26 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
             status["merged_video_url"] = final_result_url
             status["status"] = "completed"
             
-            # Add merged result to queue
+            # Generate thumbnail from first frame
+            thumbnail_filename = f"story_chain_{chain_id}_thumb.jpg"
+            thumbnail_path = f"/app/uploads/queue/{thumbnail_filename}"
+            try:
+                thumb_cmd = [
+                    "ffmpeg", "-y",
+                    "-i", output_path,
+                    "-ss", "00:00:00.500",  # 0.5 second into video
+                    "-vframes", "1",
+                    "-q:v", "2",  # High quality
+                    thumbnail_path
+                ]
+                subprocess.run(thumb_cmd, check=True, capture_output=True)
+                preview_url = f"/uploads/queue/{thumbnail_filename}"
+                logging.info(f"Chain {chain_id}: Thumbnail generated at {preview_url}")
+            except Exception as thumb_err:
+                logging.warning(f"Chain {chain_id}: Failed to generate thumbnail: {thumb_err}")
+                preview_url = None
+            
+            # Add merged result to queue with preview
             db = SessionLocal()
             merged_item = VideoQueueItem(
                 id=str(int(uuid.uuid4().int))[:18],
@@ -2298,6 +2676,9 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                 result_url=final_result_url,
                 user_id=user_id
             )
+            # Set preview_url if thumbnail was generated
+            if preview_url:
+                merged_item.preview_url = preview_url
             db.add(merged_item)
             db.commit()
             db.close()
