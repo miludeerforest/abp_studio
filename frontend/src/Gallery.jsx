@@ -11,12 +11,16 @@ const CATEGORIES = [
     { value: 'other', label: '其他品类', icon: '📦' },
 ];
 
-// Format timestamp to Beijing time (UTC+8)
+// Format timestamp from backend (already in Beijing time UTC+8)
 const formatBeijingTime = (timestamp) => {
     if (!timestamp) return '未知';
-    // Ensure timestamp is treated as UTC and convert to Beijing time
-    const utcTimestamp = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
-    return new Date(utcTimestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    // Backend stores time in China timezone (UTC+8) directly
+    // Add +08:00 suffix if no timezone info to prevent browser treating as UTC
+    let dateStr = timestamp;
+    if (!timestamp.includes('+') && !timestamp.includes('Z')) {
+        dateStr = timestamp + '+08:00';
+    }
+    return new Date(dateStr).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
 };
 
 const Gallery = ({ onSelectForVideo }) => {
@@ -442,7 +446,7 @@ const Gallery = ({ onSelectForVideo }) => {
                                                     </div>
                                                 </div>
                                                 {/* Merged/Composite Video Badge */}
-                                                {(vid.prompt?.includes('Story Chain') || vid.filename?.includes('story_chain')) && (
+                                                {(vid.is_merged || vid.prompt?.includes('Story Chain') || vid.prompt?.includes('Story Fission') || vid.filename?.includes('story_chain') || vid.filename?.includes('story_fission')) && (
                                                     <div style={{
                                                         position: 'absolute',
                                                         top: '12px',
