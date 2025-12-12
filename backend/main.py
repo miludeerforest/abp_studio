@@ -29,7 +29,7 @@ from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depe
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, Text
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, Text, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime, timedelta, timezone
@@ -50,14 +50,27 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from fastapi.staticfiles import StaticFiles
+from starlette.staticfiles import StaticFiles as StarletteStaticFiles
+from starlette.responses import Response
 from PIL import Image
 import io
 
+# Custom StaticFiles with 7-day cache for videos and images
+class CachedStaticFiles(StarletteStaticFiles):
+    """StaticFiles with Cache-Control header for media files."""
+    
+    async def get_response(self, path: str, scope) -> Response:
+        response = await super().get_response(path, scope)
+        # Set 7-day cache for media files
+        if path.endswith(('.mp4', '.webm', '.mov', '.avi', '.jpg', '.jpeg', '.png', '.gif', '.webp')):
+            response.headers["Cache-Control"] = "public, max-age=604800"  # 7 days
+        return response
+
 app = FastAPI(title="Product Scene Generator API")
 
-# Mount uploads directory
+# Mount uploads directory with 7-day cache
 os.makedirs("/app/uploads", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="/app/uploads"), name="uploads")
+app.mount("/uploads", CachedStaticFiles(directory="/app/uploads"), name="uploads")
 
 # CORS Configuration
 app.add_middleware(
@@ -72,7 +85,15 @@ app.add_middleware(
 # Read from environment variable (set in .env or docker-compose)
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/db")
 
-engine = create_engine(DATABASE_URL)
+# Increase connection pool size to handle concurrent requests
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=20,           # Increased from default 5
+    max_overflow=30,        # Increased from default 10
+    pool_timeout=60,        # Increased timeout
+    pool_recycle=1800,      # Recycle connections after 30 minutes
+    pool_pre_ping=True      # Test connection health before use
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -119,7 +140,8 @@ class VideoQueueItem(Base):
     error_msg = Column(String, nullable=True)
     user_id = Column(Integer, nullable=True) # Linked to User
     category = Column(String, nullable=True, default="other")  # Product category
-    created_at = Column(DateTime, default=datetime.now)
+    is_merged = Column(Boolean, nullable=True, default=False)  # Flag for merged/composite videos
+    created_at = Column(DateTime, default=get_china_now)  # Use China timezone
     _preview_url = Column("preview_url", String, nullable=True)  # Custom preview URL
 
     @property
@@ -1683,6 +1705,7 @@ def get_gallery_videos(
             "username": creator.username if creator else "Unknown",
             "preview_url": vid.preview_url,
             "category": vid.category or "other",
+            "is_merged": vid.is_merged or False,  # Merged/composite video flag
             "created_at": vid.created_at
         })
     
@@ -1996,49 +2019,12 @@ def clear_queue(
 
 async def convert_sora_to_watermark_free(sora_url: str) -> str:
     """
-    Convert Sora official URL to watermark-free version using third-party service.
-    If the URL is from sora.chatgpt.com, try to get watermark-free version.
-    Returns original URL if conversion fails or URL is not a Sora URL.
+    Placeholder for watermark removal - currently disabled.
+    The dyysy.com service was removed as it returns HTML instead of video for sora.codeedu.de URLs.
+    Watermark removal needs to be handled at the API provider level (74.48.17.33).
     """
-    # Only process sora.chatgpt.com URLs
-    if "sora.chatgpt.com" not in sora_url:
-        return sora_url
-    
-    try:
-        import urllib.parse
-        # Third-party service to remove Sora watermark
-        encoded_url = urllib.parse.quote(sora_url, safe='')
-        api_url = f"https://dyysy.com/?url={encoded_url}"
-        
-        logger.info(f"Converting Sora URL to watermark-free: {sora_url}")
-        
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.get(api_url, follow_redirects=True)
-            
-            if resp.status_code == 200:
-                # Check if response contains a video URL
-                content = resp.text
-                
-                # Look for mp4 URL in response
-                import re
-                video_match = re.search(r'https?://[^\s"\'<>]+\.mp4[^\s"\'<>]*', content)
-                if video_match:
-                    watermark_free_url = video_match.group(0)
-                    logger.info(f"Watermark-free URL obtained: {watermark_free_url}")
-                    return watermark_free_url
-                
-                # If the response itself is a redirect to video
-                final_url = str(resp.url)
-                if ".mp4" in final_url:
-                    logger.info(f"Watermark-free URL (redirect): {final_url}")
-                    return final_url
-                    
-        logger.warning(f"Could not get watermark-free URL, using original")
-        return sora_url
-        
-    except Exception as e:
-        logger.warning(f"Sora URL conversion failed: {e}, using original URL")
-        return sora_url
+    # Watermark removal disabled - return original URL
+    return sora_url
 
 async def process_video_background(item_id: str, video_api_url: str, video_api_key: str, video_model_name: str):
     logger.info(f"Background Task: Starting Video Generation for {item_id}")
@@ -2258,7 +2244,7 @@ async def generate_queue_item_endpoint(
 
 
 # --- Background Cleanup Task ---
-CLEANUP_HOURS = int(os.getenv("CLEANUP_HOURS", "24"))
+CLEANUP_HOURS = int(os.getenv("CLEANUP_HOURS", "168"))  # Default 7 days (168 hours)
 
 async def cleanup_task():
     while True:
@@ -2267,11 +2253,16 @@ async def cleanup_task():
             db = SessionLocal()
             cutoff = datetime.now() - timedelta(hours=CLEANUP_HOURS)
             
-            # Find old items
-            old_items = db.query(VideoQueueItem).filter(VideoQueueItem.created_at < cutoff).all()
+            # Find old items, EXCLUDE completed/archived videos and merged story videos
+            old_items = db.query(VideoQueueItem).filter(
+                VideoQueueItem.created_at < cutoff,
+                VideoQueueItem.status.notin_(["done", "archived"]),  # Keep completed videos
+                ~VideoQueueItem.filename.like("story_chain%"),  # Keep merged chain videos
+                ~VideoQueueItem.filename.like("story_fission%")  # Keep merged fission videos
+            ).all()
             
             for item in old_items:
-                logger.info(f"Cleaning up old item: {item.id}")
+                logger.info(f"Cleaning up old item: {item.id} ({item.filename})")
                 if item.file_path and os.path.exists(item.file_path):
                     try:
                         os.remove(item.file_path)
@@ -2281,6 +2272,7 @@ async def cleanup_task():
             
             db.commit()
             db.close()
+            logger.info(f"Cleanup task completed. Removed {len(old_items)} old items.")
         except Exception as e:
             logger.error(f"Cleanup task failed: {e}")
             
@@ -2305,6 +2297,8 @@ class StoryChainRequest(BaseModel):
     model_name: Optional[str] = None
     visual_style: Optional[str] = None  # Visual style ID
     visual_style_prompt: Optional[str] = None  # Visual style prompt text
+    camera_movement: Optional[str] = None  # Camera movement ID
+    camera_movement_prompt: Optional[str] = None  # Camera movement prompt text
 
 STORY_CHAIN_STATUS = {}
 
@@ -2362,6 +2356,10 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
     image_api_url = config_dict.get("api_url", "")
     image_api_key = config_dict.get("api_key", "")
     image_model = config_dict.get("image_model_portrait", "gemini-2.5-flash-preview-05-20")  # Portrait image model
+    analysis_model = config_dict.get("analysis_model_name", "gemini-3-pro-preview")  # 尾帧分析模型
+    
+    # 存储从尾帧分析生成的下一镜头 prompt（用于替换原始脚本）
+    next_shot_prompt_override = None
 
     try:
         current_image_source = req.initial_image_url
@@ -2439,6 +2437,114 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                 logging.warning(f"Chain {chain_id}: Preprocessing failed ({preprocess_err}), using original image")
             
             status["status"] = "processing"
+            
+            # === STEP 0.5: 分析预处理后的首帧，生成第一镜头的 prompt ===
+            if image_api_url and image_api_key and len(req.shots) > 0:
+                try:
+                    logging.info(f"Chain {chain_id}: Analyzing preprocessed first frame...")
+                    
+                    # 读取预处理后的图片（或原始图片如果预处理失败）
+                    if current_image_source.startswith("data:"):
+                        header, encoded = current_image_source.split(",", 1)
+                        first_frame_b64 = encoded
+                    elif current_image_source.startswith("/"):
+                        with open(current_image_source, "rb") as f:
+                            first_frame_b64 = base64.b64encode(f.read()).decode('utf-8')
+                    else:
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.get(current_image_source, timeout=30)
+                            first_frame_b64 = base64.b64encode(resp.content).decode('utf-8')
+                    
+                    # 获取第一镜头的场景信息
+                    first_shot = req.shots[0]
+                    first_description = first_shot.get("description", "")
+                    first_story = first_shot.get("shotStory", "")
+                    
+                    # 运镜选项列表
+                    camera_movements = [
+                        "slow push-in (推进)",
+                        "gentle pull-back (拉远)",
+                        "smooth pan left/right (横摇)",
+                        "subtle tilt up/down (俯仰)",
+                        "orbit around subject (环绕)",
+                        "static with subject motion (静态+主体运动)"
+                    ]
+                    
+                    # 获取视觉风格
+                    visual_style = req.visual_style_prompt or "Filmic realism, natural lighting, soft bokeh, 35mm lens, muted colors, subtle grain."
+                    
+                    # 获取运镜风格（用户指定或自动选择）
+                    camera_instruction = ""
+                    if req.camera_movement_prompt:
+                        camera_instruction = f"   - CAMERA MOVEMENT: {req.camera_movement_prompt}\n"
+                    else:
+                        camera_instruction = f"   - CAMERA MOVEMENT: Choose one from: {', '.join(camera_movements)}\n"
+                    
+                    # 动态动作关键词列表
+                    dynamic_actions = [
+                        "rotating slowly", "floating gently", "rising/falling",
+                        "rippling", "shimmering", "flowing", "drifting",
+                        "particles floating in the air", "light beams shifting",
+                        "steam/mist moving", "leaves drifting", "water flowing"
+                    ]
+                    
+                    first_frame_analysis_prompt = (
+                        f"You are a professional video director. Analyze this image and generate a DYNAMIC video prompt for the OPENING SHOT.\n\n"
+                        f"SCENE CONTEXT:\n"
+                        f"- Description: {first_description}\n"
+                        f"- Story: {first_story}\n"
+                        f"- VISUAL STYLE: {visual_style}\n\n"
+                        f"⚠️ MANDATORY PRODUCT VISIBILITY RULES:\n"
+                        f"1. The ENTIRE product must be FULLY VISIBLE in frame at ALL times\n"
+                        f"2. NO extreme close-ups or macro shots that crop the product\n"
+                        f"3. Use MEDIUM or WIDE shots only - keep product occupying 30-70% of frame\n"
+                        f"4. Camera movement must be GENTLE - no aggressive push-ins\n"
+                        f"5. Product must remain the HERO of every frame\n\n"
+                        f"DYNAMIC REQUIREMENTS:\n"
+                        f"1. Include REAL MOTION - NOT just static image with camera movement\n"
+                        f"2. DYNAMIC ELEMENTS: {', '.join(dynamic_actions[:5])}\n"
+                        f"3. Product can have subtle movements but must stay fully visible\n\n"
+                        f"GENERATE A PROMPT WITH:\n"
+                        f"   - Subject: Full product description, ALWAYS FULLY VISIBLE in frame\n"
+                        f"   - Framing: Medium or wide shot, product centered, complete view\n"
+                        f"{camera_instruction}"
+                        f"   - Motion: Environmental dynamics (particles, light shifts) around the product\n"
+                        f"   - Style: {visual_style}\n\n"
+                        f"FORBIDDEN: extreme close-up, macro, tight crop, partial product view\n"
+                        f"OUTPUT: A single paragraph prompt. Product must be FULLY VISIBLE throughout."
+                    )
+                    
+                    async with httpx.AsyncClient(timeout=60) as client:
+                        target_url = image_api_url
+                        if not target_url.endswith("/chat/completions"):
+                            target_url = f"{target_url.rstrip('/')}/chat/completions"
+                        
+                        payload = {
+                            "model": analysis_model,
+                            "messages": [
+                                {"role": "user", "content": [
+                                    {"type": "text", "text": first_frame_analysis_prompt},
+                                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{first_frame_b64}"}}
+                                ]}
+                            ]
+                        }
+                        headers = {
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {image_api_key}"
+                        }
+                        
+                        resp = await client.post(target_url, json=payload, headers=headers, timeout=60.0)
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            new_prompt = data.get("choices", [])[0].get("message", {}).get("content", "").strip()
+                            if new_prompt:
+                                # 设置 next_shot_prompt_override，这样第一镜头也会使用分析生成的 prompt
+                                next_shot_prompt_override = new_prompt
+                                logging.info(f"Chain {chain_id}: Generated first shot prompt: {new_prompt[:100]}...")
+                        else:
+                            logging.warning(f"Chain {chain_id}: First frame analysis API error: {resp.status_code}")
+                except Exception as first_analysis_err:
+                    logging.warning(f"Chain {chain_id}: First frame analysis failed: {first_analysis_err}, using original prompt")
         
         # Extract heroSubject from first shot for product consistency
         hero_subject = ""
@@ -2465,18 +2571,16 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                     # Try to extract from shot description or use generic fallback
                     product_desc = shot.get("description", "the product shown in the image")
                 
-                # Enhanced prompt with product consistency AND dynamic scene requirements
-                # Prevent "camera only" movement - scene elements should have actual motion/changes
-                prompt_text = (
-                    f"IMPORTANT REQUIREMENTS:\n"
-                    f"1. PRODUCT CONSISTENCY: The main product ({product_desc}) must remain clearly visible throughout.\n"
-                    f"2. DYNAMIC SCENE: The video must show REAL MOTION - not just camera movement. "
-                    f"Include: environmental changes (lighting shifts, particles, leaves, steam, reflections), "
-                    f"subtle product interactions (gentle rotations, approaching hands, usage demonstrations), "
-                    f"or atmospheric effects (wind, shadows moving, bokeh changes). "
-                    f"AVOID static scenes with only camera panning.\n"
-                    f"3. SCENE DESCRIPTION: {base_prompt}"
-                )
+                # 如果上一镜头的尾帧分析生成了新的 prompt，则使用它替换原始脚本
+                # 这确保产品一致性和视觉延续性
+                if next_shot_prompt_override:
+                    prompt_text = next_shot_prompt_override
+                    logging.info(f"Chain {chain_id}: Using override prompt for shot {shot_num}")
+                    # 重置，避免影响后续镜头
+                    next_shot_prompt_override = None
+                else:
+                    # 第一个镜头或分析失败时使用原始 prompt
+                    prompt_text = base_prompt
                 
                 queue_filename = f"chain_{chain_id}_shot_{shot_num}_input.jpg"
                 queue_file_path = os.path.join("/app/uploads/queue", queue_filename)
@@ -2562,35 +2666,79 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
             db.close()
             
             # Local path resolution and download if needed
-            if result_url.startswith("/uploads"):
-                local_video_path = f"/app{result_url}"
-            elif result_url.startswith("http"):
-                 # Convert to watermark-free URL if it's a Sora video
-                 try:
-                     converted_url = await convert_sora_to_watermark_free(result_url)
-                     if converted_url and converted_url != result_url:
-                         logging.info(f"Chain {chain_id}: Converted to watermark-free URL for shot {shot_num}")
-                         result_url = converted_url
-                 except Exception as wm_err:
-                     logging.warning(f"Chain {chain_id}: Watermark removal failed for shot {shot_num}: {wm_err}")
-                 
-                 # Download remote video
-                 async with httpx.AsyncClient() as client:
-                     resp = await client.get(result_url, timeout=300)
-                     if resp.status_code == 200:
-                         remote_filename = f"chain_{chain_id}_shot_{shot_num}_result.mp4"
-                         local_video_path = f"/app/uploads/queue/{remote_filename}"
-                         with open(local_video_path, "wb") as f:
-                             f.write(resp.content)
-                         # Update DB item to point to local path for consistency if needed, 
-                         # but here we just need local path for extraction and merge.
-                         # Better to keep original result_url in DB as "source of truth".
-                     else:
-                         status["status"] = "failed"
-                         status["error"] = f"Failed to download video from {result_url}"
-                         return
-            else:
-                local_video_path = result_url 
+            # Wrap in a retry loop for download failures
+            download_success = False
+            download_retries = 3
+            
+            for download_attempt in range(1, download_retries + 1):
+                if result_url.startswith("/uploads"):
+                    local_video_path = f"/app{result_url}"
+                    download_success = True
+                    break
+                elif result_url.startswith("http"):
+                    # Convert to watermark-free URL if it's a Sora video
+                    try:
+                        converted_url = await convert_sora_to_watermark_free(result_url)
+                        if converted_url and converted_url != result_url:
+                            logging.info(f"Chain {chain_id}: Converted to watermark-free URL for shot {shot_num}")
+                            result_url = converted_url
+                    except Exception as wm_err:
+                        logging.warning(f"Chain {chain_id}: Watermark removal failed for shot {shot_num}: {wm_err}")
+                    
+                    # Download remote video
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.get(result_url, timeout=300)
+                            if resp.status_code == 200:
+                                remote_filename = f"chain_{chain_id}_shot_{shot_num}_result.mp4"
+                                local_video_path = f"/app/uploads/queue/{remote_filename}"
+                                with open(local_video_path, "wb") as f:
+                                    f.write(resp.content)
+                                download_success = True
+                                break
+                            else:
+                                logging.warning(f"Chain {chain_id}: Download failed for shot {shot_num} (attempt {download_attempt}/{download_retries}): HTTP {resp.status_code}")
+                    except Exception as dl_err:
+                        logging.warning(f"Chain {chain_id}: Download error for shot {shot_num} (attempt {download_attempt}/{download_retries}): {dl_err}")
+                    
+                    # If download failed and we have retries left, regenerate the video
+                    if download_attempt < download_retries:
+                        logging.info(f"Chain {chain_id}: Regenerating shot {shot_num} due to download failure...")
+                        
+                        # Reset the queue item status for regeneration
+                        db = SessionLocal()
+                        retry_item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+                        if retry_item:
+                            retry_item.status = "pending"
+                            retry_item.result_url = None
+                            retry_item.error_msg = None
+                            db.commit()
+                        db.close()
+                        
+                        # Wait before retry
+                        await asyncio.sleep(5)
+                        
+                        # Regenerate video
+                        await process_video_background(item_id, final_api_url, final_api_key, final_model)
+                        
+                        # Get new result_url
+                        db = SessionLocal()
+                        completed_item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+                        if completed_item and completed_item.status == "done":
+                            result_url = completed_item.result_url
+                        else:
+                            logging.warning(f"Chain {chain_id}: Regeneration failed for shot {shot_num}")
+                            result_url = ""
+                        db.close()
+                else:
+                    local_video_path = result_url
+                    download_success = True
+                    break
+            
+            if not download_success:
+                status["status"] = "failed"
+                status["error"] = f"Failed to download video for shot {shot_num} after {download_retries} attempts"
+                return
             
             if i < len(req.shots) - 1:
                 # Extract last frame for next shot
@@ -2600,6 +2748,103 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                     status["error"] = f"Failed to extract frame from Shot {shot_num}"
                     return
                 current_image_source = extracted_path
+                
+                # === 尾帧分析：保持产品一致性和延续性 ===
+                next_shot_prompt_override = None
+                if image_api_url and image_api_key:
+                    try:
+                        logging.info(f"Chain {chain_id}: Analyzing last frame for shot {shot_num + 1} continuity...")
+                        with open(extracted_path, "rb") as f:
+                            frame_b64 = base64.b64encode(f.read()).decode('utf-8')
+                        
+                        # 获取下一镜头的原始场景描述作为参考
+                        next_shot = req.shots[i + 1]
+                        next_shot_description = next_shot.get("description", "")
+                        next_shot_story = next_shot.get("shotStory", "")
+                        
+                        # 运镜选项列表
+                        camera_movements = [
+                            "slow push-in (推进)",
+                            "gentle pull-back (拉远)",
+                            "smooth pan left/right (横摇)",
+                            "subtle tilt up/down (俯仰)",
+                            "orbit around subject (环绕)",
+                            "dolly tracking (跟踪)",
+                            "static with subject motion (静态+主体运动)"
+                        ]
+                        
+                        # 获取视觉风格
+                        visual_style = req.visual_style_prompt or "Filmic realism, natural lighting, soft bokeh, 35mm lens, muted colors, subtle grain."
+                        
+                        # 获取运镜风格（用户指定或自动选择）
+                        camera_instruction = ""
+                        if req.camera_movement_prompt:
+                            camera_instruction = f"   - CAMERA MOVEMENT: {req.camera_movement_prompt}\n"
+                        else:
+                            camera_instruction = f"   - CAMERA MOVEMENT: Choose one from: {', '.join(camera_movements)}\n"
+                        
+                        # 动态动作关键词
+                        dynamic_actions = [
+                            "rotating", "floating", "rising", "falling", "rippling",
+                            "shimmering", "flowing", "drifting", "swaying", "pulsing"
+                        ]
+                        
+                        analysis_prompt = (
+                            f"You are a professional video director ensuring continuity. Analyze this frame and generate a DYNAMIC video prompt.\n\n"
+                            f"NEXT SHOT CONTEXT:\n"
+                            f"- Scene: {next_shot_description}\n"
+                            f"- Story: {next_shot_story}\n"
+                            f"- Style: {visual_style}\n\n"
+                            f"⚠️ MANDATORY PRODUCT VISIBILITY RULES:\n"
+                            f"1. The ENTIRE product must be FULLY VISIBLE in frame at ALL times\n"
+                            f"2. NO extreme close-ups or macro shots - product must NOT be cropped\n"
+                            f"3. Use MEDIUM or WIDE shots only - product occupies 30-70% of frame\n"
+                            f"4. Camera movement must be GENTLE - no aggressive push-ins\n"
+                            f"5. Product appearance must MATCH the previous frame exactly\n\n"
+                            f"DYNAMIC REQUIREMENTS:\n"
+                            f"1. Include REAL MOTION - NOT just static image with camera movement\n"
+                            f"2. DYNAMIC ELEMENTS: {', '.join(dynamic_actions[:6])}\n"
+                            f"3. Background can evolve but product stays fully visible\n\n"
+                            f"GENERATE A PROMPT WITH:\n"
+                            f"   - Subject: COMPLETE product view, matching previous frame exactly\n"
+                            f"   - Framing: Medium/wide shot, product centered and FULLY VISIBLE\n"
+                            f"{camera_instruction}"
+                            f"   - Environment: Evolving background (light shifts, particles) around product\n"
+                            f"   - Continuity: Seamless transition, same product appearance\n\n"
+                            f"FORBIDDEN: extreme close-up, macro, tight crop, partial product view\n"
+                            f"OUTPUT: A single paragraph prompt. Product must be FULLY VISIBLE throughout."
+                        )
+                        
+                        async with httpx.AsyncClient(timeout=60) as client:
+                            target_url = image_api_url
+                            if not target_url.endswith("/chat/completions"):
+                                target_url = f"{target_url.rstrip('/')}/chat/completions"
+                            
+                            payload = {
+                                "model": analysis_model,
+                                "messages": [
+                                    {"role": "user", "content": [
+                                        {"type": "text", "text": analysis_prompt},
+                                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{frame_b64}"}}
+                                    ]}
+                                ]
+                            }
+                            headers = {
+                                "Content-Type": "application/json",
+                                "Authorization": f"Bearer {image_api_key}"
+                            }
+                            
+                            resp = await client.post(target_url, json=payload, headers=headers, timeout=60.0)
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                new_prompt = data.get("choices", [])[0].get("message", {}).get("content", "").strip()
+                                if new_prompt:
+                                    next_shot_prompt_override = new_prompt
+                                    logging.info(f"Chain {chain_id}: Generated continuity prompt for shot {shot_num + 1}: {new_prompt[:100]}...")
+                            else:
+                                logging.warning(f"Chain {chain_id}: Frame analysis API error: {resp.status_code}")
+                    except Exception as analysis_err:
+                        logging.warning(f"Chain {chain_id}: Frame analysis failed: {analysis_err}, using original prompt")
         
         # Merge Logic
         logging.info(f"Chain {chain_id}: All shots done. Merging...")
@@ -2674,7 +2919,8 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                 prompt=f"Story Chain {chain_id} Complete",
                 status="done",
                 result_url=final_result_url,
-                user_id=user_id
+                user_id=user_id,
+                is_merged=True  # Mark as merged/composite video
             )
             # Set preview_url if thumbnail was generated
             if preview_url:
@@ -2683,10 +2929,22 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
             db.commit()
             db.close()
             
+        # Clear user activity status
+        try:
+            await connection_manager.update_user_activity(user_id, "")
+        except Exception:
+            pass
+            
     except Exception as e:
         logging.error(f"Chain {chain_id} Critical Error: {e}")
         status["status"] = "failed"
         status["error"] = str(e)
+        
+        # Clear user activity on error too
+        try:
+            await connection_manager.update_user_activity(user_id, "")
+        except Exception:
+            pass
 
 @app.post("/api/v1/story-chain")
 async def create_story_chain(
@@ -2695,6 +2953,13 @@ async def create_story_chain(
     user: User = Depends(get_current_user)
 ):
     chain_id = str(uuid.uuid4())
+    
+    # Update user activity status
+    try:
+        await connection_manager.update_user_activity(user.id, f"故事链生成中 ({len(req.shots)}镜头)")
+    except Exception:
+        pass  # WebSocket not required
+    
     background_tasks.add_task(process_story_chain, chain_id, req, user.id)
     return {"chain_id": chain_id, "status": "started"}
 
@@ -2703,6 +2968,730 @@ async def get_story_chain_status(chain_id: str):
     status = STORY_CHAIN_STATUS.get(chain_id)
     if not status:
         raise HTTPException(status_code=404, detail="Chain not found")
+    return status
+
+
+# =============================================================================
+# Story Fission Implementation (裂变式故事生成)
+# =============================================================================
+
+class StoryFissionRequest(BaseModel):
+    initial_image_url: str  # Base64 or URL
+    topic: str = "产品多角度展示"
+    branch_count: int = 3  # Number of branches to generate
+    visual_style: Optional[str] = None
+    visual_style_prompt: Optional[str] = None
+    camera_movement: Optional[str] = None
+    camera_movement_prompt: Optional[str] = None
+    api_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model_name: Optional[str] = None
+
+class FissionBranch(BaseModel):
+    branch_id: int
+    scene_name: str
+    theme: str
+    image_prompt: str
+    video_prompt: str
+    camera_movement: str
+
+STORY_FISSION_STATUS = {}
+FISSION_CONCURRENT_LIMIT = 3  # 3 branches at a time
+
+async def analyze_fission_branches(
+    image_b64: str,
+    topic: str,
+    branch_count: int,
+    visual_style_prompt: str,
+    api_url: str,
+    api_key: str,
+    model_name: str
+) -> List[dict]:
+    """Analyze image and generate multiple story branches."""
+    
+    fission_prompt = f"""Role: 你是一位资深创意总监 + 产品摄影专家，负责将一张产品图片裂变成多个灵动、有表现力的故事分支。
+
+=== 第一步：产品深度分析 ===
+首先，仔细观察图片中的产品，识别并分析：
+1. **产品类型与用途**：这是什么产品？主要功能是什么？解决什么问题？
+2. **核心特写卖点**：材质质感、工艺细节、按钮/接口、品牌标识、独特设计元素
+3. **使用场景联想**：谁会使用？在哪里使用？什么时间使用？
+4. **情感价值**：传达什么情绪？科技感？温馨？专业？时尚？
+
+=== 第二步：生成 {branch_count} 个裂变分支 ===
+基于以上分析，创作 {branch_count} 个不同的剧情场景分支：
+
+=== 分支创作要求 ===
+1. 每个分支必须**突出产品的一个独特卖点或使用场景**
+2. **灵动镜头**：避免静态呆板，加入动态元素：
+   - 手部交互（触摸、按压、滑动）
+   - 环境动态（光线变化、烟雾、水流、粒子）
+   - 产品自身动态（旋转、展开、发光、工作状态）
+3. **特写与全景结合**：每个分支中既有产品全貌，也有局部特写细节
+4. **感官描述**：描述材质触感、光泽反射、声音暗示（如按键声、流水声）
+5. 产品始终作为**视觉焦点**，占画面30-70%
+
+=== 视觉风格 ===
+{visual_style_prompt or 'Cinematic realism, natural lighting, soft bokeh, 35mm lens, rich textures.'}
+
+=== 运镜选项（选择最能展现该场景特点的运镜）===
+- slow push-in (推进) - 适合强调细节
+- gentle pull-back (拉远) - 适合展示使用场景
+- smooth orbit (环绕) - 适合展示产品全貌
+- dolly tracking (跟踪) - 适合跟随手部交互
+- macro focus shift (焦点转移) - 适合特写局部
+- static with motion (静态+元素运动) - 适合产品工作状态
+
+=== 动态元素关键词库（每个分支至少用2-3个）===
+floating particles, light rays shifting, steam rising, water droplets, 
+gentle rotation, finger touching, hand interacting, unboxing reveal,
+product powering on, LED glowing, screen displaying, texture close-up,
+material reflection, smooth sliding, button pressing, liquid pouring
+
+=== 输出格式 ===
+输出 JSON 数组，每个分支包含：
+[
+  {{
+    "branch_id": 1,
+    "scene_name": "场景名称（中文，如：晨光中的唤醒仪式）",
+    "theme": "主题描述（中文，2-3句话，描述这个场景要传达的产品卖点和情感）",
+    "product_focus": "该分支突出的产品特点（中文，如：按键触感、材质光泽、使用便捷性）",
+    "image_prompt": "详细的图片生成 prompt（英文），包含：主体描述、特写细节、光影氛围、动态元素暗示",
+    "video_prompt": "详细的视频生成 prompt（英文），必须包含：具体的动态动作、运动元素、光影变化、情绪氛围",
+    "camera_movement": "推荐运镜（从上述选项中选择）"
+  }},
+  ...
+]
+
+=== 故事主题 ===
+{topic}
+
+只输出 JSON 数组，不要包含 markdown 代码块或其他说明文字。
+"""
+
+    target_url = api_url
+    if not target_url.endswith("/chat/completions"):
+        target_url = f"{target_url.rstrip('/')}/chat/completions"
+    
+    payload = {
+        "model": model_name,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": fission_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+                ]
+            }
+        ],
+        "max_tokens": 4096
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    
+    max_retries = 3
+    retry_delay = 5
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:  # Increased timeout
+                resp = await client.post(target_url, json=payload, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = data.get("choices", [])[0].get("message", {}).get("content", "").strip()
+                    
+                    # Clean markdown if present
+                    if content.startswith("```"):
+                        lines = content.splitlines()
+                        if lines[0].startswith("```"):
+                            lines = lines[1:]
+                        if lines and lines[-1].strip().startswith("```"):
+                            lines = lines[:-1]
+                        content = "\n".join(lines).strip()
+                    
+                    import re
+                    content = re.sub(r',\s*\}', '}', content)
+                    content = re.sub(r',\s*\]', ']', content)
+                    
+                    branches = json.loads(content)
+                    return branches
+                    
+                elif resp.status_code in [502, 503, 504, 429]:
+                    logging.warning(f"Fission analysis attempt {attempt}: HTTP {resp.status_code}, retrying...")
+                    if attempt < max_retries:
+                        await asyncio.sleep(retry_delay * attempt)
+                        continue
+                    raise Exception(f"Fission analysis API error after {max_retries} attempts: {resp.status_code}")
+                else:
+                    raise Exception(f"Fission analysis API error: {resp.status_code} - {resp.text[:200]}")
+                    
+        except httpx.TimeoutException:
+            logging.warning(f"Fission analysis timeout on attempt {attempt}")
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
+                continue
+            raise Exception(f"Fission analysis timed out after {max_retries} attempts")
+        except json.JSONDecodeError as e:
+            logging.warning(f"Fission analysis JSON parse error on attempt {attempt}: {e}")
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
+                continue
+            raise
+
+
+async def generate_branch_image(
+    branch: dict,
+    original_b64: str,
+    fission_id: str,
+    image_api_url: str,
+    image_api_key: str,
+    image_model: str,
+    user_id: int = None  # NEW: for gallery save
+) -> str:
+    """Generate a stylized image for a branch with retry mechanism. Returns local file path."""
+    branch_id = branch.get("branch_id", 0)
+    image_prompt = branch.get("image_prompt", "")
+    scene_name = branch.get("scene_name", f"分支{branch_id}")
+    
+    max_retries = 3
+    retry_delay = 5  # seconds between retries
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            logging.info(f"Fission {fission_id}: Generating image for branch {branch_id} (attempt {attempt}/{max_retries})")
+            
+            async with httpx.AsyncClient(timeout=300) as client:  # Increased timeout to 5 min
+                result = await call_openai_compatible_api(
+                    client, image_api_url, image_api_key,
+                    original_b64,  # Input image
+                    original_b64,  # Reference image
+                    f"Branch_{branch_id}",
+                    image_prompt,
+                    image_model
+                )
+                
+                if result and result.image_base64:
+                    raw_content = result.image_base64.strip()
+                    image_data = None
+                    
+                    # Check if API returned a URL (common for some image generation APIs)
+                    if raw_content.startswith("http://") or raw_content.startswith("https://"):
+                        logging.info(f"Fission {fission_id}: Branch {branch_id} - downloading image from URL")
+                        try:
+                            async with httpx.AsyncClient(timeout=120) as dl_client:
+                                img_resp = await dl_client.get(raw_content)
+                                if img_resp.status_code == 200:
+                                    image_data = img_resp.content
+                                else:
+                                    raise Exception(f"Failed to download image: HTTP {img_resp.status_code}")
+                        except Exception as dl_err:
+                            logging.warning(f"Fission {fission_id}: Branch {branch_id} URL download failed: {dl_err}")
+                            raise Exception(f"Branch {branch_id}: Failed to download image from URL")
+                    
+                    # Check for data:image prefix
+                    elif raw_content.startswith("data:"):
+                        # Extract base64 part: data:image/jpeg;base64,XXXXX
+                        if ",base64," in raw_content:
+                            b64_data = raw_content.split(",base64,", 1)[1]
+                        elif "," in raw_content:
+                            b64_data = raw_content.split(",", 1)[1]
+                        else:
+                            b64_data = raw_content
+                        
+                        # Fix padding if needed
+                        missing_padding = len(b64_data) % 4
+                        if missing_padding:
+                            b64_data += '=' * (4 - missing_padding)
+                        
+                        try:
+                            image_data = base64.b64decode(b64_data)
+                        except Exception as decode_err:
+                            logging.warning(f"Fission {fission_id}: Branch {branch_id} base64 decode failed: {decode_err}")
+                            raise Exception(f"Branch {branch_id}: Invalid base64 image data")
+                    
+                    # Assume raw base64 content
+                    else:
+                        b64_data = raw_content
+                        
+                        # Check if content looks like base64 (not text description)
+                        if len(b64_data) < 1000:
+                            logging.warning(f"Fission {fission_id}: Branch {branch_id} returned short content: {b64_data[:200]}")
+                            raise Exception(f"Branch {branch_id}: API returned text description instead of image")
+                        
+                        # Fix padding if needed
+                        missing_padding = len(b64_data) % 4
+                        if missing_padding:
+                            b64_data += '=' * (4 - missing_padding)
+                        
+                        try:
+                            image_data = base64.b64decode(b64_data)
+                        except Exception as decode_err:
+                            logging.warning(f"Fission {fission_id}: Branch {branch_id} base64 decode failed: {decode_err}")
+                            raise Exception(f"Branch {branch_id}: Invalid base64 image data")
+                    
+                    if not image_data:
+                        raise Exception(f"Branch {branch_id}: No image data obtained")
+                    
+                    # Convert to standard JPEG using PIL for video API compatibility
+                    from PIL import Image
+                    from io import BytesIO
+                    
+                    try:
+                        img = Image.open(BytesIO(image_data))
+                    except Exception as pil_err:
+                        logging.warning(f"Fission {fission_id}: Branch {branch_id} PIL cannot open: {pil_err}")
+                        raise Exception(f"Branch {branch_id}: Cannot parse image data")
+                    
+                    # Convert to RGB if necessary (handles RGBA, P mode etc)
+                    if img.mode in ('RGBA', 'P', 'LA'):
+                        img = img.convert('RGB')
+                    
+                    img_width, img_height = img.size
+                    
+                    # Save to queue folder (for video generation input)
+                    queue_filename = f"fission_{fission_id}_branch_{branch_id}.jpg"
+                    queue_filepath = f"/app/uploads/queue/{queue_filename}"
+                    img.save(queue_filepath, 'JPEG', quality=95)
+                    logging.info(f"Fission {fission_id}: Branch {branch_id} image saved to {queue_filepath}")
+                    
+                    # Also save to gallery
+                    gallery_dir = "/app/uploads/gallery"
+                    os.makedirs(gallery_dir, exist_ok=True)
+                    gallery_filename = f"fission_{fission_id}_{branch_id}_{scene_name[:20]}.jpg"
+                    # Sanitize filename
+                    gallery_filename = "".join(c if c.isalnum() or c in '._-' else '_' for c in gallery_filename)
+                    gallery_filepath = os.path.join(gallery_dir, gallery_filename)
+                    img.save(gallery_filepath, 'JPEG', quality=95)
+                    
+                    # Create gallery database record
+                    if user_id:
+                        try:
+                            db = SessionLocal()
+                            gallery_item = SavedImage(
+                                user_id=user_id,
+                                filename=gallery_filename,
+                                file_path=gallery_filepath,
+                                url=f"/uploads/gallery/{gallery_filename}",
+                                prompt=f"[Fission] {scene_name}: {image_prompt[:200]}",
+                                width=img_width,
+                                height=img_height,
+                                category="fission"
+                            )
+                            db.add(gallery_item)
+                            db.commit()
+                            db.close()
+                            logging.info(f"Fission {fission_id}: Branch {branch_id} image saved to gallery")
+                        except Exception as gallery_err:
+                            logging.warning(f"Fission {fission_id}: Gallery save error: {gallery_err}")
+                    
+                    return queue_filepath
+                else:
+                    raise Exception(f"Branch {branch_id} image generation returned no result")
+                    
+        except httpx.TimeoutException as e:
+            logging.warning(f"Fission {fission_id}: Branch {branch_id} timeout on attempt {attempt}: {e}")
+            if attempt < max_retries:
+                await asyncio.sleep(retry_delay)
+                continue
+            raise Exception(f"Branch {branch_id} timed out after {max_retries} attempts")
+            
+        except httpx.HTTPStatusError as e:
+            logging.warning(f"Fission {fission_id}: Branch {branch_id} HTTP error on attempt {attempt}: {e.response.status_code}")
+            if attempt < max_retries and e.response.status_code in [502, 503, 504, 429]:
+                await asyncio.sleep(retry_delay * attempt)  # Exponential backoff
+                continue
+            raise
+            
+        except Exception as e:
+            error_msg = str(e)
+            logging.warning(f"Fission {fission_id}: Branch {branch_id} error on attempt {attempt}: {error_msg}")
+            if attempt < max_retries and ("timeout" in error_msg.lower() or "504" in error_msg or "503" in error_msg):
+                await asyncio.sleep(retry_delay)
+                continue
+            raise
+    
+    raise Exception(f"Branch {branch_id} failed after {max_retries} attempts")
+
+
+async def generate_branch_video(
+    branch: dict,
+    image_path: str,
+    fission_id: str,
+    video_api_url: str,
+    video_api_key: str,
+    video_model: str,
+    user_id: int
+) -> dict:
+    """Generate video for a branch. Returns result dict."""
+    branch_id = branch.get("branch_id", 0)
+    video_prompt = branch.get("video_prompt", "")
+    camera = branch.get("camera_movement", "")
+    
+    full_prompt = f"{video_prompt} Camera: {camera}"
+    
+    logging.info(f"Fission {fission_id}: Generating video for branch {branch_id}")
+    
+    # Create queue item
+    db = SessionLocal()
+    try:
+        queue_filename = f"fission_{fission_id}_branch_{branch_id}_input.jpg"
+        queue_file_path = f"/app/uploads/queue/{queue_filename}"
+        
+        import shutil
+        shutil.copy(image_path, queue_file_path)
+        
+        new_item = VideoQueueItem(
+            id=str(int(uuid.uuid4().int))[:18],
+            filename=queue_filename,
+            file_path=queue_file_path,
+            prompt=full_prompt,
+            status="pending",
+            user_id=user_id
+        )
+        db.add(new_item)
+        db.commit()
+        db.refresh(new_item)
+        item_id = new_item.id
+    finally:
+        db.close()
+    
+    # Generate video with retry
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        if attempt > 1:
+            db = SessionLocal()
+            retry_item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+            if retry_item:
+                retry_item.status = "pending"
+                retry_item.error_msg = None
+                db.commit()
+            db.close()
+        
+        await process_video_background(item_id, video_api_url, video_api_key, video_model)
+        
+        db = SessionLocal()
+        completed_item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+        
+        if completed_item.status == "done":
+            result_url = completed_item.result_url
+            db.close()
+            
+            # Download if remote
+            local_video_path = None
+            if result_url.startswith("/uploads"):
+                local_video_path = f"/app{result_url}"
+            elif result_url.startswith("http"):
+                try:
+                    result_url = await convert_sora_to_watermark_free(result_url)
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(result_url, timeout=300)
+                        if resp.status_code == 200:
+                            local_filename = f"fission_{fission_id}_branch_{branch_id}_result.mp4"
+                            local_video_path = f"/app/uploads/queue/{local_filename}"
+                            with open(local_video_path, "wb") as f:
+                                f.write(resp.content)
+                except Exception as dl_err:
+                    logging.warning(f"Fission {fission_id}: Branch {branch_id} download error: {dl_err}")
+            
+            return {
+                "branch_id": branch_id,
+                "scene_name": branch.get("scene_name", ""),
+                "theme": branch.get("theme", ""),
+                "video_url": f"/uploads/queue/fission_{fission_id}_branch_{branch_id}_result.mp4" if (local_video_path and os.path.exists(local_video_path)) else result_url,
+                "local_video_path": local_video_path if (local_video_path and os.path.exists(local_video_path)) else None,
+                "image_url": f"/uploads/queue/fission_{fission_id}_branch_{branch_id}.jpg",
+                "status": "done"
+            }
+        else:
+            error_msg = completed_item.error_msg or "Unknown error"
+            db.close()
+            if attempt == max_retries:
+                return {
+                    "branch_id": branch_id,
+                    "status": "error",
+                    "error": error_msg
+                }
+            await asyncio.sleep(5)
+    
+    return {"branch_id": branch_id, "status": "error", "error": "Max retries exceeded"}
+
+
+async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_id: int):
+    """Main fission processing function with 3-concurrent batching."""
+    status = {
+        "status": "processing",
+        "phase": "analyzing",
+        "total_branches": req.branch_count,
+        "completed_branches": 0,
+        "branches": [],
+        "error": None
+    }
+    STORY_FISSION_STATUS[fission_id] = status
+    
+    # Config resolution
+    db = SessionLocal()
+    db_config_list = db.query(SystemConfig).all()
+    config_dict = {item.key: item.value for item in db_config_list}
+    db.close()
+    
+    image_api_url = req.api_url or config_dict.get("api_url", "")
+    image_api_key = req.api_key or config_dict.get("api_key", "")
+    image_model = config_dict.get("model_name", "gemini-3-pro-image-preview")  # Use same as settings
+    analysis_model = config_dict.get("analysis_model_name", "gemini-3-pro-preview")
+    
+    video_api_url = config_dict.get("video_api_url", "")
+    video_api_key = config_dict.get("video_api_key", "")
+    video_model = req.model_name or config_dict.get("video_model_name", "sora-video-portrait")
+    
+    try:
+        # Step 1: Decode original image
+        logging.info(f"Fission {fission_id}: Starting with {req.branch_count} branches")
+        
+        if req.initial_image_url.startswith("data:"):
+            header, encoded = req.initial_image_url.split(",", 1)
+            original_b64 = encoded
+        else:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(req.initial_image_url, timeout=30)
+                original_b64 = base64.b64encode(resp.content).decode('utf-8')
+        
+        # Step 2: Analyze and generate branches
+        status["phase"] = "analyzing"
+        logging.info(f"Fission {fission_id}: Analyzing image to generate {req.branch_count} branches")
+        
+        branches = await analyze_fission_branches(
+            original_b64,
+            req.topic,
+            req.branch_count,
+            req.visual_style_prompt or "",
+            image_api_url,
+            image_api_key,
+            analysis_model
+        )
+        
+        logging.info(f"Fission {fission_id}: Generated {len(branches)} branch scripts")
+        status["branches"] = [{"branch_id": b.get("branch_id"), "scene_name": b.get("scene_name"), "status": "pending"} for b in branches]
+        
+        # Step 3: Generate images in batches of 3
+        status["phase"] = "generating_images"
+        os.makedirs("/app/uploads/queue", exist_ok=True)
+        
+        image_paths = {}
+        for i in range(0, len(branches), FISSION_CONCURRENT_LIMIT):
+            batch = branches[i:i + FISSION_CONCURRENT_LIMIT]
+            logging.info(f"Fission {fission_id}: Image batch {i//FISSION_CONCURRENT_LIMIT + 1}, {len(batch)} branches")
+            
+            tasks = [
+                generate_branch_image(b, original_b64, fission_id, image_api_url, image_api_key, image_model, user_id)
+                for b in batch
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for j, result in enumerate(results):
+                branch_id = batch[j].get("branch_id", i + j + 1)
+                if isinstance(result, Exception):
+                    logging.error(f"Fission {fission_id}: Branch {branch_id} image error: {result}")
+                    status["branches"][i + j]["status"] = "image_error"
+                else:
+                    image_paths[branch_id] = result
+                    status["branches"][i + j]["status"] = "image_done"
+                    status["branches"][i + j]["image_url"] = f"/uploads/queue/fission_{fission_id}_branch_{branch_id}.jpg"
+        
+        # Step 4: Generate videos in batches of 3
+        status["phase"] = "generating_videos"
+        
+        for i in range(0, len(branches), FISSION_CONCURRENT_LIMIT):
+            batch = branches[i:i + FISSION_CONCURRENT_LIMIT]
+            logging.info(f"Fission {fission_id}: Video batch {i//FISSION_CONCURRENT_LIMIT + 1}, {len(batch)} branches")
+            
+            tasks = []
+            for b in batch:
+                branch_id = b.get("branch_id", 0)
+                if branch_id in image_paths:
+                    tasks.append(generate_branch_video(
+                        b, image_paths[branch_id], fission_id,
+                        video_api_url, video_api_key, video_model, user_id
+                    ))
+            
+            if tasks:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                for j, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        logging.error(f"Fission {fission_id}: Video error: {result}")
+                    elif isinstance(result, dict):
+                        branch_id = result.get("branch_id", 0)
+                        # Find and update the branch status
+                        for bi, bs in enumerate(status["branches"]):
+                            if bs.get("branch_id") == branch_id:
+                                status["branches"][bi].update(result)
+                                if result.get("status") == "done":
+                                    status["completed_branches"] += 1
+                                break
+        
+        # Step 5: Merge all successful videos into one
+        status["phase"] = "merging"
+        logging.info(f"Fission {fission_id}: Merging {status['completed_branches']} videos...")
+        
+        # Collect successful video paths (validate existence)
+        video_inputs = []
+        for branch in status["branches"]:
+            if branch.get("status") == "done":
+                # Prefer local video path
+                local_path = branch.get("local_video_path")
+                if local_path and os.path.exists(local_path):
+                    video_inputs.append(local_path)
+                else:
+                    # Try to construct path from video_url
+                    video_url = branch.get("video_url", "")
+                    if video_url.startswith("/uploads"):
+                        full_path = f"/app{video_url}"
+                        if os.path.exists(full_path):
+                            video_inputs.append(full_path)
+                        else:
+                            logging.warning(f"Fission {fission_id}: Video file not found: {full_path}")
+                    # Skip remote URLs for now (not downloaded)
+        
+        logging.info(f"Fission {fission_id}: Found {len(video_inputs)} local videos to merge")
+        
+        if len(video_inputs) > 0:
+            # Create concat list file
+            concat_list_path = f"/app/uploads/queue/fission_{fission_id}_concat.txt"
+            with open(concat_list_path, "w") as f:
+                for path in video_inputs:
+                    f.write(f"file '{path}'\n")
+            
+            # Merge videos using ffmpeg
+            output_filename = f"story_fission_{fission_id}.mp4"
+            output_path = f"/app/uploads/queue/{output_filename}"
+            
+            try:
+                # Try fast copy first
+                merge_cmd = [
+                    "ffmpeg", "-y",
+                    "-f", "concat",
+                    "-safe", "0",
+                    "-i", concat_list_path,
+                    "-c", "copy",
+                    output_path
+                ]
+                result = subprocess.run(merge_cmd, capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    logging.warning(f"Fission {fission_id}: Fast merge failed ({result.returncode}), trying re-encode...")
+                    # Fallback: re-encode for compatibility
+                    merge_cmd_reencode = [
+                        "ffmpeg", "-y",
+                        "-f", "concat",
+                        "-safe", "0",
+                        "-i", concat_list_path,
+                        "-c:v", "libx264",
+                        "-c:a", "aac",
+                        "-preset", "fast",
+                        output_path
+                    ]
+                    subprocess.run(merge_cmd_reencode, check=True, capture_output=True)
+                
+                if os.path.exists(output_path):
+                    final_result_url = f"/uploads/queue/{output_filename}"
+                    status["merged_video_url"] = final_result_url
+                else:
+                    raise Exception("Merged video file not created")
+                    
+            except subprocess.CalledProcessError as ffmpeg_err:
+                logging.error(f"Fission {fission_id}: FFmpeg merge failed: {ffmpeg_err}")
+                status["error"] = f"Video merge failed: {ffmpeg_err}"
+                status["status"] = "failed"
+                return
+            
+            # Generate thumbnail
+            thumbnail_filename = f"story_fission_{fission_id}_thumb.jpg"
+            thumbnail_path = f"/app/uploads/queue/{thumbnail_filename}"
+            try:
+                thumb_cmd = [
+                    "ffmpeg", "-y",
+                    "-i", output_path,
+                    "-ss", "00:00:00.500",
+                    "-vframes", "1",
+                    "-q:v", "2",
+                    thumbnail_path
+                ]
+                subprocess.run(thumb_cmd, check=True, capture_output=True)
+                status["thumbnail_url"] = f"/uploads/queue/{thumbnail_filename}"
+            except Exception as thumb_err:
+                logging.warning(f"Fission {fission_id}: Thumbnail generation failed: {thumb_err}")
+            
+            # Add merged result to queue
+            db = SessionLocal()
+            merged_item = VideoQueueItem(
+                id=str(int(uuid.uuid4().int))[:18],
+                filename=output_filename,
+                file_path=output_path,
+                prompt=f"Story Fission {fission_id} - {req.topic}",
+                status="done",
+                result_url=final_result_url,
+                user_id=user_id,
+                is_merged=True  # Mark as merged/composite video
+            )
+            if status.get("thumbnail_url"):
+                merged_item.preview_url = status["thumbnail_url"]
+            db.add(merged_item)
+            db.commit()
+            db.close()
+            
+            logging.info(f"Fission {fission_id}: Merged video saved to {final_result_url}")
+        
+        status["status"] = "completed"
+        status["phase"] = "done"
+        logging.info(f"Fission {fission_id}: Completed with {status['completed_branches']}/{len(branches)} successful branches")
+        
+        # Clear user activity status
+        try:
+            await connection_manager.update_user_activity(user_id, "")
+        except Exception:
+            pass
+        
+    except Exception as e:
+        logging.error(f"Fission {fission_id} Critical Error: {e}")
+        import traceback
+        traceback.print_exc()
+        status["status"] = "failed"
+        status["error"] = str(e)
+        
+        # Clear user activity on error too
+        try:
+            await connection_manager.update_user_activity(user_id, "")
+        except Exception:
+            pass
+
+
+@app.post("/api/v1/story-fission")
+async def create_story_fission(
+    req: StoryFissionRequest,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user)
+):
+    """Start a fission-style story generation (parallel branches)."""
+    fission_id = str(uuid.uuid4())
+    
+    # Update user activity status
+    try:
+        await connection_manager.update_user_activity(user.id, f"裂变生成中 ({req.branch_count}分支)")
+    except Exception:
+        pass  # WebSocket not required
+    
+    background_tasks.add_task(process_story_fission, fission_id, req, user.id)
+    return {"fission_id": fission_id, "status": "started", "branch_count": req.branch_count}
+
+
+@app.get("/api/v1/story-fission/{fission_id}")
+async def get_story_fission_status(fission_id: str):
+    """Get the status of a fission generation."""
+    status = STORY_FISSION_STATUS.get(fission_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Fission not found")
     return status
 
 
@@ -2826,12 +3815,30 @@ async def get_admin_live_status(
         VideoQueueItem.status == "pending"
     ).count()
     
+    # Count active fission tasks
+    active_fission_tasks = sum(
+        1 for s in STORY_FISSION_STATUS.values() 
+        if s.get("status") == "processing"
+    )
+    
+    # Count active story chain tasks
+    active_chain_tasks = sum(
+        1 for s in STORY_CHAIN_STATUS.values() 
+        if s.get("status") in ["processing", "merging"]
+    )
+    
+    # Total active tasks
+    total_active_tasks = video_processing + active_fission_tasks + active_chain_tasks
+    
     return {
         "online_users": online_users,
         "online_count": len(online_users),
         "queue_stats": {
             "video_processing": video_processing,
             "video_pending": video_pending,
+            "fission_active": active_fission_tasks,
+            "chain_active": active_chain_tasks,
+            "total_active": total_active_tasks,
             **queue_stats
         },
         "recent_activities": activities_list,

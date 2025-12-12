@@ -127,9 +127,16 @@ function AdminDashboard({ token, isConnected = false, lastMessage = null }) {
                     <div className="stat-icon">⚙️</div>
                     <div className="stat-content">
                         <div className="stat-value">
-                            {liveStatus?.queue_stats?.video_processing || 0}
+                            {liveStatus?.queue_stats?.total_active || liveStatus?.queue_stats?.video_processing || 0}
                         </div>
                         <div className="stat-label">处理中任务</div>
+                        {(liveStatus?.queue_stats?.fission_active > 0 || liveStatus?.queue_stats?.chain_active > 0) && (
+                            <div className="stat-detail">
+                                {liveStatus?.queue_stats?.video_processing > 0 && `视频: ${liveStatus?.queue_stats?.video_processing}`}
+                                {liveStatus?.queue_stats?.fission_active > 0 && ` 裂变: ${liveStatus?.queue_stats?.fission_active}`}
+                                {liveStatus?.queue_stats?.chain_active > 0 && ` 故事: ${liveStatus?.queue_stats?.chain_active}`}
+                            </div>
+                        )}
                     </div>
                 </div>
 
