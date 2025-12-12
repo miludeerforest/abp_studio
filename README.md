@@ -31,26 +31,42 @@ cd auto_banana_product
 ### 3. 配置环境变量
 复制示例配置文件并修改：
 ```bash
-cp .env.example .env  # 如果没有example文件，请直接创建 .env
+cp .env.example .env
 ```
-编辑 `.env` 文件，填入必要的 API Key：
-```ini
-# .env 示例
 
-# 核心绘图模型配置 (OpenAI 兼容接口)
-DEFAULT_API_URL=https://your-api-provider.com/v1
-DEFAULT_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
-DEFAULT_MODEL_NAME=gemini-3-pro-image-preview
+编辑 `.env` 文件，根据下表填入必要的配置：
 
-# 视频生成模型配置
-VIDEO_API_URL=http://your-video-api.com/v1
-VIDEO_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
-VIDEO_MODEL_NAME=sora-video-portrait
+#### 必填配置
 
-# 初始管理员账号 (系统首次启动时创建/重置)
-ADMIN_USER=admin
-ADMIN_PASSWORD=your_secure_password
-```
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| `DATABASE_URL` | PostgreSQL 连接字符串 | `postgresql://user:pass@postgres:5432/banana` |
+| `SECRET_KEY` | JWT 签名密钥，**生产环境必须修改** | `openssl rand -hex 32` 生成 |
+| `ADMIN_USER` | 初始管理员用户名 | `admin` |
+| `ADMIN_PASSWORD` | 初始管理员密码 | `your_secure_password` |
+| `REDIS_HOST` | Redis 主机名或容器名 | `redis` 或 `1panel-redis` |
+| `REDIS_PORT` | Redis 端口 | `6379` |
+| `REDIS_PASSWORD` | Redis 密码 | `your_redis_password` |
+
+#### API 配置（可在 UI 中设置）
+
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| `DEFAULT_API_URL` | 图片生成 API 地址（OpenAI 兼容） | `https://api.openai.com/v1` |
+| `DEFAULT_API_KEY` | 图片生成 API 密钥 | `sk-xxxxxxxx` |
+| `DEFAULT_MODEL_NAME` | 图片生成模型名 | `gemini-2.0-flash-exp` |
+| `VIDEO_API_URL` | 视频生成 API 地址 | `https://your-video-api.com/v1` |
+| `VIDEO_API_KEY` | 视频生成 API 密钥 | `sk-xxxxxxxx` |
+| `VIDEO_MODEL_NAME` | 视频生成模型名 | `veo-2.0-generate-001` |
+
+#### 可选配置
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `CLEANUP_HOURS` | 临时文件保留时间（小时） | `168`（7天） |
+| `REDIS_DB` | Redis 数据库编号 | `0` |
+
+> **提示**：API 配置也可以在登录后通过「系统设置」页面进行配置，会覆盖环境变量。
 
 ### 4. 启动服务
 执行标准 Docker Compose 命令启动：
