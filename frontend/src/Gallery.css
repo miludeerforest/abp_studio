@@ -169,6 +169,26 @@
   cursor: not-allowed;
 }
 
+.batch-btn.share {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+.batch-btn.share:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.4);
+}
+
+.batch-btn.unshare {
+  background: rgba(107, 114, 128, 0.2);
+  border-color: rgba(107, 114, 128, 0.3);
+  color: #9ca3af;
+}
+
+.batch-btn.unshare:hover:not(:disabled) {
+  background: rgba(107, 114, 128, 0.4);
+}
+
 /* Selection Checkbox on Cards */
 .gallery-card.selectable {
   cursor: pointer;
@@ -211,6 +231,38 @@
   color: white;
   font-size: 14px;
   font-weight: bold;
+}
+
+/* Select checkbox - bottom right corner for videos */
+.select-checkbox-corner {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 40;
+  transition: all 0.2s ease;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.select-checkbox-corner:hover {
+  background: rgba(99, 102, 241, 0.7);
+  border-color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.select-checkbox-corner.checked {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
 }
 
 /* Content Area */
@@ -479,11 +531,13 @@
   animation: scaleIn 0.3s ease-out;
 }
 
-/* Two-column layout for image lightbox */
+/* Two-column layout for image/video lightbox */
 .lightbox-two-column {
-  flex-direction: row;
-  align-items: stretch;
+  flex-direction: row !important;
+  align-items: flex-start;
+  justify-content: center;
   gap: 1.5rem;
+  max-width: 95vw;
 }
 
 /* Info Panel - Right Side */
@@ -851,6 +905,22 @@
   background: #8b5cf6;
   /* Purple */
   color: white;
+}
+
+/* Share button styles */
+.action-btn.share {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.action-btn.share:hover {
+  background: #3b82f6;
+  /* Blue */
+  color: white;
+}
+
+.action-btn.share.active {
+  background: rgba(59, 130, 246, 0.6);
+  /* Blue with transparency */
 }
 
 /* Refresh Button in Header */

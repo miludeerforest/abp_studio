@@ -29,6 +29,19 @@ function AdminDashboard({ token, isConnected = false, lastMessage = null }) {
         } else if (lastMessage.type === 'user_activity') {
             // Add new activity to the list
             setActivities(prev => [lastMessage.data, ...prev.slice(0, 49)]);
+        } else if (lastMessage.type === 'user_activity_update') {
+            // Update user's current activity in real-time
+            setLiveStatus(prev => {
+                if (!prev?.online_users) return prev;
+                return {
+                    ...prev,
+                    online_users: prev.online_users.map(user =>
+                        user.user_id === lastMessage.data.user_id
+                            ? { ...user, current_activity: lastMessage.data.current_activity }
+                            : user
+                    )
+                };
+            });
         } else if (lastMessage.type === 'task_progress' || lastMessage.type === 'task_completed') {
             // Refresh stats on task updates
             fetchLiveStatus();

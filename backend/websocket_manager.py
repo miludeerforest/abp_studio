@@ -188,19 +188,24 @@ class ConnectionManager:
             user_id: User's ID
             activity: Description of current activity
         """
+        logger.info(f"Updating user {user_id} activity to: '{activity}'")
+        
         if user_id in self.connection_info:
             self.connection_info[user_id]["current_activity"] = activity
             self.connection_info[user_id]["last_activity"] = datetime.now().isoformat()
+            logger.info(f"User {user_id} activity updated successfully")
             
             # Notify admins
             await self.broadcast_to_admins({
-                "type": "user_activity",
+                "type": "user_activity_update",
                 "data": {
                     "user_id": user_id,
-                    "activity": activity,
+                    "current_activity": activity,
                     "timestamp": datetime.now().isoformat()
                 }
             })
+        else:
+            logger.warning(f"User {user_id} not in connection_info, cannot update activity")
 
 
 class RedisPubSubManager:

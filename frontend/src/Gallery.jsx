@@ -26,6 +26,10 @@ const formatBeijingTime = (timestamp) => {
 const Gallery = ({ onSelectForVideo }) => {
     const [activeTab, setActiveTab] = useState('images'); // 'images' or 'videos'
     const userRole = localStorage.getItem('role') || 'user';
+    const currentUserId = parseInt(localStorage.getItem('userId') || '0', 10);
+
+    // View Mode for admin: 'own' (only own content) or 'all' (all users)
+    const [viewMode, setViewMode] = useState('own');
 
     // Pagination State
     const [imgPage, setImgPage] = useState(1);
@@ -55,21 +59,26 @@ const Gallery = ({ onSelectForVideo }) => {
     const [totalImages, setTotalImages] = useState(0);
     const [totalVideos, setTotalVideos] = useState(0);
 
+    // Fetch data when page/filter/viewMode changes
     useEffect(() => {
         if (activeTab === 'images') fetchImages();
         else fetchVideos();
-        // Reset selection when switching tabs or filters
+    }, [activeTab, imgPage, vidPage, categoryFilter, viewMode]);
+
+    // Reset selection only when switching tabs or category (not when changing pages)
+    useEffect(() => {
         setSelectedIds(new Set());
         setSelectMode(false);
-    }, [activeTab, imgPage, vidPage, categoryFilter]);
+    }, [activeTab, categoryFilter]);
 
     const fetchImages = async () => {
         setLoading(true);
         const token = localStorage.getItem('token');
         const offset = (imgPage - 1) * LIMIT;
         const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
+        const viewParam = userRole === 'admin' ? `&view_mode=${viewMode}` : '';
         try {
-            const res = await fetch(`/api/v1/gallery/images?limit=${LIMIT}&offset=${offset}${categoryParam}`, {
+            const res = await fetch(`/api/v1/gallery/images?limit=${LIMIT}&offset=${offset}${categoryParam}${viewParam}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -89,8 +98,9 @@ const Gallery = ({ onSelectForVideo }) => {
         const token = localStorage.getItem('token');
         const offset = (vidPage - 1) * LIMIT;
         const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
+        const viewParam = userRole === 'admin' ? `&view_mode=${viewMode}` : '';
         try {
-            const res = await fetch(`/api/v1/gallery/videos?limit=${LIMIT}&offset=${offset}${categoryParam}`, {
+            const res = await fetch(`/api/v1/gallery/videos?limit=${LIMIT}&offset=${offset}${categoryParam}${viewParam}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -174,6 +184,39 @@ const Gallery = ({ onSelectForVideo }) => {
         }
     };
 
+    // Batch share (admin only)
+    const handleBatchShare = async (isShared) => {
+        if (selectedIds.size === 0) return;
+        const action = isShared ? "分享" : "取消分享";
+
+        const token = localStorage.getItem('token');
+        const endpoint = activeTab === 'images'
+            ? '/api/v1/gallery/images/batch-share'
+            : '/api/v1/gallery/videos/batch-share';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ids: Array.from(selectedIds), is_shared: isShared })
+            });
+
+            if (res.ok) {
+                setSelectedIds(new Set());
+                setSelectMode(false);
+                handleRefresh();
+            } else {
+                alert(`批量${action}失败`);
+            }
+        } catch (err) {
+            console.error("Batch share failed", err);
+            alert(`批量${action}失败: ` + err.message);
+        }
+    };
+
     const handleDelete = async (e, item, type) => {
         e.stopPropagation(); // Prevent opening lightbox
         if (!window.confirm("确定要删除吗？")) return;
@@ -208,6 +251,33 @@ const Gallery = ({ onSelectForVideo }) => {
         // We use a helper here if we want to force simple window open, 
         // but explicit <a> tag logic in render is better.
         // Actually, we'll implement this directly in the JSX as an <a> tag to avoid messy JS clicks.
+    };
+
+    // Toggle share status (admin only)
+    const handleToggleShare = async (e, item, type) => {
+        e.stopPropagation();
+        const token = localStorage.getItem('token');
+        try {
+            const url = type === 'image'
+                ? `/api/v1/gallery/images/${item.id}/share`
+                : `/api/v1/gallery/videos/${item.id}/share`;
+
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                // Refresh list to show updated share status
+                if (type === 'image') fetchImages();
+                else fetchVideos();
+            } else {
+                alert("分享状态切换失败");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("分享请求错误");
+        }
     };
 
     const handleTabChange = (tab) => {
@@ -266,6 +336,19 @@ const Gallery = ({ onSelectForVideo }) => {
                         ))}
                     </select>
 
+                    {/* Admin View Mode Selector */}
+                    {userRole === 'admin' && (
+                        <select
+                            value={viewMode}
+                            onChange={(e) => { setViewMode(e.target.value); setImgPage(1); setVidPage(1); }}
+                            className="gallery-filter-select"
+                            style={{ marginLeft: '8px' }}
+                        >
+                            <option value="own">📁 仅自己的</option>
+                            <option value="all">🌐 所有内容</option>
+                        </select>
+                    )}
+
                     {/* Admin Batch Actions & Refresh */}
                     <div className="batch-actions">
                         <button onClick={handleRefresh} className="batch-btn" title="刷新列表">
@@ -283,6 +366,20 @@ const Gallery = ({ onSelectForVideo }) => {
                                     <>
                                         <button onClick={toggleSelectAll} className="batch-btn">
                                             {selectedIds.size === (activeTab === 'images' ? images.length : videos.length) ? '取消全选' : '全选'}
+                                        </button>
+                                        <button
+                                            onClick={() => handleBatchShare(true)}
+                                            className="batch-btn share"
+                                            disabled={selectedIds.size === 0}
+                                        >
+                                            🔗 分享 ({selectedIds.size})
+                                        </button>
+                                        <button
+                                            onClick={() => handleBatchShare(false)}
+                                            className="batch-btn unshare"
+                                            disabled={selectedIds.size === 0}
+                                        >
+                                            🔒 取消分享 ({selectedIds.size})
                                         </button>
                                         <button
                                             onClick={handleBatchDelete}
@@ -352,6 +449,16 @@ const Gallery = ({ onSelectForVideo }) => {
                                                             🎬
                                                         </button>
                                                     )}
+                                                    {/* Share button - admin only */}
+                                                    {userRole === 'admin' && (
+                                                        <button
+                                                            className={`action-btn share ${img.is_shared ? 'active' : ''}`}
+                                                            onClick={(e) => handleToggleShare(e, img, 'image')}
+                                                            title={img.is_shared ? "取消分享" : "分享给普通用户"}
+                                                        >
+                                                            {img.is_shared ? '🔗' : '🔒'}
+                                                        </button>
+                                                    )}
                                                     <a
                                                         href={img.url}
                                                         download
@@ -362,13 +469,16 @@ const Gallery = ({ onSelectForVideo }) => {
                                                     >
                                                         ⬇️
                                                     </a>
-                                                    <button
-                                                        className="action-btn delete"
-                                                        onClick={(e) => handleDelete(e, img, 'image')}
-                                                        title="删除"
-                                                    >
-                                                        🗑️
-                                                    </button>
+                                                    {/* Delete button - only for own content or admin */}
+                                                    {(userRole === 'admin' || img.user_id === currentUserId) && (
+                                                        <button
+                                                            className="action-btn delete"
+                                                            onClick={(e) => handleDelete(e, img, 'image')}
+                                                            title="删除"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    )}
                                                 </div>
 
                                                 <p className="gallery-prompt">
@@ -422,9 +532,21 @@ const Gallery = ({ onSelectForVideo }) => {
                                     {videos.map((vid) => (
                                         <div
                                             key={vid.id}
-                                            className={`gallery-card video-card ${portraitVideos.has(vid.id) ? 'portrait' : ''}`}
+                                            className={`gallery-card video-card ${portraitVideos.has(vid.id) ? 'portrait' : ''} ${selectMode && selectedIds.has(vid.id) ? 'selected' : ''}`}
                                             onClick={() => setSelectedVideo(vid)}
                                         >
+                                            {/* Select checkbox - bottom right, only in select mode */}
+                                            {selectMode && (
+                                                <div
+                                                    className={`select-checkbox-corner ${selectedIds.has(vid.id) ? 'checked' : ''}`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleSelect(vid.id);
+                                                    }}
+                                                >
+                                                    {selectedIds.has(vid.id) && '✓'}
+                                                </div>
+                                            )}
                                             <div className="w-full h-full relative overflow-hidden group-video-thumb">
                                                 <img
                                                     src={vid.preview_url || "/placeholder-video.png"}
@@ -478,6 +600,16 @@ const Gallery = ({ onSelectForVideo }) => {
 
                                                 {/* Hover Actions - Top Right */}
                                                 <div className="gallery-actions">
+                                                    {/* Share button - admin only */}
+                                                    {userRole === 'admin' && (
+                                                        <button
+                                                            className={`action-btn share ${vid.is_shared ? 'active' : ''}`}
+                                                            onClick={(e) => handleToggleShare(e, vid, 'video')}
+                                                            title={vid.is_shared ? "取消分享" : "分享给普通用户"}
+                                                        >
+                                                            {vid.is_shared ? '🔗' : '🔒'}
+                                                        </button>
+                                                    )}
                                                     <a
                                                         href={vid.result_url}
                                                         download
@@ -488,13 +620,16 @@ const Gallery = ({ onSelectForVideo }) => {
                                                     >
                                                         ⬇️
                                                     </a>
-                                                    <button
-                                                        className="action-btn delete"
-                                                        onClick={(e) => handleDelete(e, vid, 'video')}
-                                                        title="删除"
-                                                    >
-                                                        🗑️
-                                                    </button>
+                                                    {/* Delete button - only for own content or admin */}
+                                                    {(userRole === 'admin' || vid.user_id === currentUserId) && (
+                                                        <button
+                                                            className="action-btn delete"
+                                                            onClick={(e) => handleDelete(e, vid, 'video')}
+                                                            title="删除"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 <p className="gallery-prompt">
                                                     {vid.prompt}

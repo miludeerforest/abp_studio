@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 import logging
-from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends, status, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends, status, BackgroundTasks, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -112,7 +112,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
+    username = Column(String, unique=True, index=True)  # Login name (cannot change)
+    nickname = Column(String, nullable=True)  # Display name (can change)
+    avatar = Column(String, nullable=True)  # Avatar URL path
+    default_share = Column(Boolean, default=False)  # Default share status for new content
     hashed_password = Column(String)
     role = Column(String, default="user") # 'admin', 'user'
     created_at = Column(DateTime, default=get_china_now)
@@ -141,6 +144,7 @@ class VideoQueueItem(Base):
     user_id = Column(Integer, nullable=True) # Linked to User
     category = Column(String, nullable=True, default="other")  # Product category
     is_merged = Column(Boolean, nullable=True, default=False)  # Flag for merged/composite videos
+    is_shared = Column(Boolean, nullable=False, default=False)  # 是否分享给普通用户预览
     created_at = Column(DateTime, default=get_china_now)  # Use China timezone
     _preview_url = Column("preview_url", String, nullable=True)  # Custom preview URL
 
@@ -171,6 +175,7 @@ class SavedImage(Base):
     width = Column(Integer, nullable=True)  # Image width in pixels
     height = Column(Integer, nullable=True)  # Image height in pixels
     category = Column(String, nullable=True, default="other")  # Product category
+    is_shared = Column(Boolean, nullable=False, default=False)  # 是否分享给普通用户预览
     created_at = Column(DateTime, default=get_china_now)
 
 # Create tables
@@ -330,20 +335,106 @@ async def shutdown_event():
     await shutdown_websocket_manager()
     logger.info("Shutdown complete")
 
+# --- Public APIs (No Auth Required) ---
+
+@app.get("/api/v1/public/videos")
+def get_public_videos(
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """Get shared videos for public display (no auth required)."""
+    query = db.query(VideoQueueItem).filter(
+        VideoQueueItem.status.in_(["done", "archived"]),
+        VideoQueueItem.is_shared == True
+    )
+    
+    total = query.count()
+    videos = query.order_by(VideoQueueItem.created_at.desc()).limit(limit).offset(offset).all()
+    
+    result_items = []
+    for vid in videos:
+        creator = db.query(User).filter(User.id == vid.user_id).first()
+        result_items.append({
+            "id": vid.id,
+            "prompt": vid.prompt,
+            "result_url": vid.result_url,
+            "preview_url": vid.preview_url,
+            "username": (creator.nickname or creator.username) if creator else "Creator",
+            "avatar": creator.avatar if creator else None,
+            "category": vid.category or "other",
+            "is_merged": vid.is_merged or False,
+            "created_at": vid.created_at
+        })
+    
+    return {"total": total, "items": result_items}
+
+@app.get("/api/v1/public/config")
+def get_public_config(db: Session = Depends(get_db)):
+    """Get public site configuration (no auth required)."""
+    site_title = db.query(SystemConfig).filter(SystemConfig.key == "site_title").first()
+    site_subtitle = db.query(SystemConfig).filter(SystemConfig.key == "site_subtitle").first()
+    return {
+        "site_title": site_title.value if site_title else os.getenv("SITE_TITLE", "BNP Studio"),
+        "site_subtitle": site_subtitle.value if site_subtitle else os.getenv("SITE_SUBTITLE", "AI Video Gallery")
+    }
+
 # Login Endpoint
 class Token(BaseModel):
     access_token: str
     token_type: str
     username: str
     role: str
+    user_id: int
+
+# Cloudflare Turnstile Secret Key (from .env)
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
+
+async def verify_turnstile(token: str, ip: str = None) -> bool:
+    """Verify Cloudflare Turnstile token."""
+    if not token:
+        return False
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                data={
+                    "secret": TURNSTILE_SECRET_KEY,
+                    "response": token,
+                    "remoteip": ip
+                },
+                timeout=10.0
+            )
+            result = response.json()
+            return result.get("success", False)
+    except Exception as e:
+        logger.error(f"Turnstile verification failed: {e}")
+        return False
 
 @app.post("/api/v1/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+async def login(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    turnstile_token: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    # Verify Turnstile if token provided and secret key is configured
+    if turnstile_token and TURNSTILE_SECRET_KEY:
+        client_ip = request.client.host if request.client else None
+        is_valid = await verify_turnstile(turnstile_token, client_ip)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="人机验证失败，请重试"
+            )
+    
+    user = db.query(User).filter(User.username == username).first()
+    if not user or not verify_password(password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="用户名或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -355,7 +446,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         "access_token": access_token, 
         "token_type": "bearer",
         "username": user.username,
-        "role": user.role
+        "role": user.role,
+        "user_id": user.id
     }
 
 # Backward compatibility alias for dependency injection
@@ -379,6 +471,83 @@ def verify_token(token: str = Depends(oauth2_scheme)):
              headers={"WWW-Authenticate": "Bearer"},
         )
 
+# --- User Profile APIs ---
+
+class UserProfileResponse(BaseModel):
+    id: int
+    username: str
+    nickname: Optional[str] = None
+    avatar: Optional[str] = None
+    role: str
+    created_at: datetime
+
+class UpdateProfileRequest(BaseModel):
+    nickname: Optional[str] = None
+    password: Optional[str] = None
+    default_share: Optional[bool] = None
+
+@app.get("/api/v1/user/profile")
+def get_user_profile(user: User = Depends(get_current_user)):
+    """Get current user's profile."""
+    return {
+        "id": user.id,
+        "username": user.username,
+        "nickname": user.nickname or user.username,
+        "avatar": user.avatar,
+        "role": user.role,
+        "default_share": user.default_share or False,
+        "created_at": user.created_at
+    }
+
+@app.put("/api/v1/user/profile")
+def update_user_profile(
+    request: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """Update current user's profile (nickname, password, default_share)."""
+    if request.nickname is not None:
+        user.nickname = request.nickname
+    if request.password is not None and request.password.strip():
+        user.hashed_password = get_password_hash(request.password)
+    if request.default_share is not None:
+        user.default_share = request.default_share
+    db.commit()
+    return {"message": "Profile updated successfully", "nickname": user.nickname, "default_share": user.default_share}
+
+@app.post("/api/v1/user/avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """Upload user avatar image."""
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG, PNG, GIF, WebP allowed.")
+    
+    # Create avatars directory if not exists
+    avatar_dir = "/app/uploads/avatars"
+    os.makedirs(avatar_dir, exist_ok=True)
+    
+    # Generate unique filename
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    filename = f"avatar_{user.id}_{int(datetime.now().timestamp())}.{ext}"
+    file_path = f"{avatar_dir}/{filename}"
+    
+    # Save file
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    # Update user avatar URL
+    avatar_url = f"/uploads/avatars/{filename}"
+    user.avatar = avatar_url
+    db.commit()
+    
+    return {"message": "Avatar uploaded successfully", "avatar": avatar_url}
+
 # --- User Manage Models ---
 class UserCreate(BaseModel):
     username: str
@@ -396,7 +565,7 @@ class UserOut(BaseModel):
     role: str
     created_at: datetime
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class StatsResponse(BaseModel):
     by_day: List[dict]
@@ -1540,7 +1709,7 @@ class QueueItemResponse(BaseModel):
     preview_url: Optional[str] = None
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # --- Gallery Endpoints ---
@@ -1550,12 +1719,28 @@ def get_gallery_images(
     limit: int = 50, 
     offset: int = 0,
     category: str = None,  # Filter by category
+    view_mode: str = "own",  # "own" | "all" (admin only)
     db: Session = Depends(get_db), 
     user: User = Depends(get_current_user)
 ):
-    """Get all images from all users (shared gallery) with metadata."""
-    # Shared gallery - query all images
-    query = db.query(SavedImage)
+    """Get images based on user role and view mode.
+    
+    - Admin with view_mode='all': All images from all users
+    - Admin with view_mode='own': Only admin's own images
+    - Regular user: Own images + shared images (is_shared=True)
+    """
+    from sqlalchemy import or_
+    
+    if user.role == "admin":
+        if view_mode == "own":
+            query = db.query(SavedImage).filter(SavedImage.user_id == user.id)
+        else:  # "all" - admin can see everything
+            query = db.query(SavedImage)
+    else:
+        # Regular user: own images + shared images
+        query = db.query(SavedImage).filter(
+            or_(SavedImage.user_id == user.id, SavedImage.is_shared == True)
+        )
     
     # Apply category filter if provided
     if category and category != "all":
@@ -1579,6 +1764,7 @@ def get_gallery_images(
             "width": img.width,
             "height": img.height,
             "category": img.category or "other",
+            "is_shared": img.is_shared,
             "created_at": img.created_at
         })
     
@@ -1673,14 +1859,36 @@ def get_gallery_videos(
     limit: int = 20,
     offset: int = 0,
     category: str = None,  # Filter by category
+    view_mode: str = "own",  # "own" | "all" (admin only)
     db: Session = Depends(get_db), 
     user: User = Depends(get_current_user)
 ):
-    """Get all completed videos from all users (shared gallery) with metadata."""
-    # Shared gallery - query all completed videos (done or archived)
-    query = db.query(VideoQueueItem).filter(
-        VideoQueueItem.status.in_(["done", "archived"])
-    )
+    """Get videos based on user role and view mode.
+    
+    - Admin with view_mode='all': All completed videos from all users
+    - Admin with view_mode='own': Only admin's own completed videos
+    - Regular user: Own videos + shared videos (is_shared=True)
+    """
+    from sqlalchemy import or_, and_
+    
+    # Base filter: only completed videos
+    base_filter = VideoQueueItem.status.in_(["done", "archived"])
+    
+    if user.role == "admin":
+        if view_mode == "own":
+            query = db.query(VideoQueueItem).filter(
+                and_(base_filter, VideoQueueItem.user_id == user.id)
+            )
+        else:  # "all" - admin can see everything
+            query = db.query(VideoQueueItem).filter(base_filter)
+    else:
+        # Regular user: own videos + shared videos
+        query = db.query(VideoQueueItem).filter(
+            and_(
+                base_filter,
+                or_(VideoQueueItem.user_id == user.id, VideoQueueItem.is_shared == True)
+            )
+        )
     
     # Apply category filter if provided
     if category and category != "all":
@@ -1705,11 +1913,127 @@ def get_gallery_videos(
             "username": creator.username if creator else "Unknown",
             "preview_url": vid.preview_url,
             "category": vid.category or "other",
-            "is_merged": vid.is_merged or False,  # Merged/composite video flag
+            "is_merged": vid.is_merged or False,
+            "is_shared": vid.is_shared,
             "created_at": vid.created_at
         })
     
     return {"total": total, "items": result_items}
+
+# --- Share Toggle Endpoints ---
+
+@app.post("/api/v1/gallery/images/{image_id}/share")
+def toggle_share_image(
+    image_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Toggle share status of an image (admin only).
+    When is_shared=True, regular users can view this image.
+    """
+    image = db.query(SavedImage).filter(SavedImage.id == image_id).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    image.is_shared = not image.is_shared
+    db.commit()
+    return {"id": image_id, "is_shared": image.is_shared}
+
+@app.post("/api/v1/gallery/videos/{video_id}/share")
+def toggle_share_video(
+    video_id: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Toggle share status of a video (admin only).
+    When is_shared=True, regular users can view this video.
+    """
+    video = db.query(VideoQueueItem).filter(VideoQueueItem.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    video.is_shared = not video.is_shared
+    db.commit()
+    return {"id": video_id, "is_shared": video.is_shared}
+
+class BatchShareRequest(BaseModel):
+    ids: List[int]
+    is_shared: bool  # True = share, False = unshare
+
+class BatchShareVideoRequest(BaseModel):
+    ids: List[str]
+    is_shared: bool
+
+@app.post("/api/v1/gallery/images/batch-share")
+def batch_share_images(
+    request: BatchShareRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Batch share/unshare images (admin only)."""
+    updated_count = 0
+    for image_id in request.ids:
+        image = db.query(SavedImage).filter(SavedImage.id == image_id).first()
+        if image:
+            image.is_shared = request.is_shared
+            updated_count += 1
+    db.commit()
+    return {"updated": updated_count, "is_shared": request.is_shared}
+
+@app.post("/api/v1/gallery/videos/batch-share")
+def batch_share_videos(
+    request: BatchShareVideoRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Batch share/unshare videos (admin only)."""
+    updated_count = 0
+    for video_id in request.ids:
+        video = db.query(VideoQueueItem).filter(VideoQueueItem.id == video_id).first()
+        if video:
+            video.is_shared = request.is_shared
+            updated_count += 1
+    db.commit()
+    return {"updated": updated_count, "is_shared": request.is_shared}
+
+class ShareAllRequest(BaseModel):
+    is_shared: bool  # True = share all, False = unshare all
+    skip_first_page: bool = False  # Optional: skip the first N items
+    skip_count: int = 0  # Number of items to skip (e.g., first 9 items = 1 page)
+
+@app.post("/api/v1/gallery/images/share-all")
+def share_all_images(
+    request: ShareAllRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Share/unshare all images (admin only)."""
+    query = db.query(SavedImage).order_by(SavedImage.created_at.desc())
+    if request.skip_count > 0:
+        query = query.offset(request.skip_count)
+    images = query.all()
+    for image in images:
+        image.is_shared = request.is_shared
+    db.commit()
+    return {"updated": len(images), "is_shared": request.is_shared}
+
+@app.post("/api/v1/gallery/videos/share-all")
+def share_all_videos(
+    request: ShareAllRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Share/unshare all completed videos (admin only)."""
+    query = db.query(VideoQueueItem).filter(
+        VideoQueueItem.status.in_(["done", "archived"])
+    ).order_by(VideoQueueItem.created_at.desc())
+    if request.skip_count > 0:
+        query = query.offset(request.skip_count)
+    videos = query.all()
+    for video in videos:
+        video.is_shared = request.is_shared
+    db.commit()
+    return {"updated": len(videos), "is_shared": request.is_shared}
 
 # --- Queue APIs ---
 
