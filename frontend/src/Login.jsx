@@ -1,20 +1,92 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
-function Login({ onLogin }) {
+function Login({ onLogin, onBack }) {
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
+    const [turnstileToken, setTurnstileToken] = useState('')
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(false)
+    const turnstileRef = useRef(null)
+
+    // Cloudflare Turnstile Site Key from env
+    const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '0x4AAAAAAB_ISJIMCgQPi5oQ'
+
+    useEffect(() => {
+        // Load Turnstile script
+        const script = document.createElement('script')
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
+        script.async = true
+        script.defer = true
+        document.head.appendChild(script)
+
+        return () => {
+            // Cleanup
+            if (document.head.contains(script)) {
+                document.head.removeChild(script)
+            }
+        }
+    }, [])
+
+    useEffect(() => {
+        // Render Turnstile widget when script is loaded
+        const renderTurnstile = () => {
+            if (window.turnstile && turnstileRef.current && !turnstileRef.current.hasChildNodes()) {
+                window.turnstile.render(turnstileRef.current, {
+                    sitekey: TURNSTILE_SITE_KEY,
+                    callback: (token) => {
+                        setTurnstileToken(token)
+                    },
+                    'expired-callback': () => {
+                        setTurnstileToken('')
+                    },
+                    'error-callback': () => {
+                        setError('验证码加载失败，请刷新页面')
+                    },
+                    theme: 'dark'
+                })
+            }
+        }
+
+        // Check if turnstile is already loaded
+        if (window.turnstile) {
+            renderTurnstile()
+        } else {
+            // Wait for script to load
+            const checkTurnstile = setInterval(() => {
+                if (window.turnstile) {
+                    clearInterval(checkTurnstile)
+                    renderTurnstile()
+                }
+            }, 100)
+
+            return () => clearInterval(checkTurnstile)
+        }
+    }, [])
+
+    const resetTurnstile = () => {
+        if (window.turnstile && turnstileRef.current) {
+            window.turnstile.reset(turnstileRef.current)
+            setTurnstileToken('')
+        }
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
-        setLoading(true)
         setError(null)
+
+        // Validate turnstile token
+        if (!turnstileToken) {
+            setError('请完成人机验证')
+            return
+        }
+
+        setLoading(true)
 
         try {
             const formData = new URLSearchParams()
             formData.append('username', username)
             formData.append('password', password)
+            formData.append('turnstile_token', turnstileToken)
 
             const res = await fetch('/api/v1/login', {
                 method: 'POST',
@@ -28,10 +100,13 @@ function Login({ onLogin }) {
                 const data = await res.json()
                 onLogin(data)
             } else {
-                setError('登录失败：用户名或密码错误')
+                const errorData = await res.json().catch(() => ({}))
+                setError(errorData.detail || '登录失败：用户名或密码错误')
+                resetTurnstile()
             }
         } catch (e) {
             setError('登录错误：' + e.message)
+            resetTurnstile()
         } finally {
             setLoading(false)
         }
@@ -40,6 +115,26 @@ function Login({ onLogin }) {
     return (
         <div className="login-container">
             <div className="glass-card login-box">
+                {onBack && (
+                    <button
+                        onClick={onBack}
+                        style={{
+                            position: 'absolute',
+                            top: '1rem',
+                            left: '1rem',
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '2.5rem',
+                            height: '2.5rem',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontSize: '1.25rem'
+                        }}
+                    >
+                        ←
+                    </button>
+                )}
                 <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🍌</div>
                 <h2>系统登录</h2>
                 <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Banana Product Studio</p>
@@ -64,8 +159,12 @@ function Login({ onLogin }) {
                             required
                         />
                     </div>
+                    <div className="input-group turnstile-group">
+                        <label>人机验证</label>
+                        <div ref={turnstileRef} className="turnstile-container"></div>
+                    </div>
                     {error && <div className="error-msg" style={{ color: 'var(--error-color)', fontSize: '0.9rem' }}>{error}</div>}
-                    <button type="submit" className="btn-primary" disabled={loading} style={{ marginTop: '1rem' }}>
+                    <button type="submit" className="btn-primary" disabled={loading || !turnstileToken} style={{ marginTop: '1rem' }}>
                         {loading ? '登录中...' : '立即登录'}
                     </button>
                 </form>

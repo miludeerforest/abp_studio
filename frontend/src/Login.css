@@ -36,3 +36,14 @@
     color: var(--text-muted);
     font-weight: 500;
 }
+
+/* Cloudflare Turnstile Styles */
+.turnstile-group {
+    margin-top: 0.5rem;
+}
+
+.turnstile-container {
+    display: flex;
+    justify-content: center;
+    min-height: 65px;
+}

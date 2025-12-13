@@ -7,6 +7,8 @@ import StoryGenerator from './StoryGenerator';
 import UserManagement from './UserManagement';
 import Gallery from './Gallery';
 import AdminDashboard from './AdminDashboard';
+import PublicGallery from './PublicGallery';
+import ProfileSettings from './ProfileSettings';
 import { useWebSocket } from './hooks/useWebSocket';
 import './App.css';
 
@@ -20,8 +22,23 @@ function App() {
 
   useEffect(() => {
     console.log("App Component Mounted");
+    fetchPublicConfig();
   }, []);
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [showLoginPage, setShowLoginPage] = useState(false)
+  const [publicConfig, setPublicConfig] = useState({})
+
+  const fetchPublicConfig = async () => {
+    try {
+      const res = await fetch('/api/v1/public/config');
+      if (res.ok) {
+        const data = await res.json();
+        setPublicConfig(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch public config", e);
+    }
+  };
 
   // Tabs: 'image', 'video', 'story', 'gallery', 'settings', 'users'
   const [activeTab, setActiveTab] = useState('gallery')
@@ -71,14 +88,16 @@ function App() {
   }
 
   const handleLogin = (data) => {
-    // data: { access_token, role, username, ... }
+    // data: { access_token, role, username, user_id, ... }
     const t = data.access_token || data; // Fallback if just token string
     const role = data.role || 'user'; // Default to user if not provided
     const user = data.username || 'user';
+    const userId = data.user_id || 0;
 
     localStorage.setItem('token', t)
     localStorage.setItem('role', role)
     localStorage.setItem('username', user)
+    localStorage.setItem('userId', userId.toString())
 
     setToken(t)
     setUserRole(role)
@@ -92,6 +111,7 @@ function App() {
     localStorage.removeItem('token')
     localStorage.removeItem('role')
     localStorage.removeItem('username')
+    localStorage.removeItem('userId')
     setToken('')
     setUserRole('user')
     setIsLoggedIn(false)
@@ -140,7 +160,10 @@ function App() {
   }
 
   if (!isLoggedIn) {
-    return <Login onLogin={handleLogin} />
+    if (showLoginPage) {
+      return <Login onLogin={handleLogin} onBack={() => setShowLoginPage(false)} />;
+    }
+    return <PublicGallery onLoginClick={() => setShowLoginPage(true)} siteConfig={publicConfig} />;
   }
 
   return (
@@ -198,6 +221,16 @@ function App() {
           >
             <span className="icon">🖼️</span>
             {!sidebarCollapsed && <span className="label">画廊</span>}
+          </button>
+
+          {/* Profile - All Users */}
+          <button
+            className={`sidebar-item ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+            title="个人设置"
+          >
+            <span className="icon">👤</span>
+            {!sidebarCollapsed && <span className="label">个人设置</span>}
           </button>
 
           {/* Admin Only */}
@@ -282,6 +315,10 @@ function App() {
 
         <div style={{ display: activeTab === 'gallery' ? 'block' : 'none', height: '100%' }}>
           <Gallery onSelectForVideo={handleSelectForVideo} />
+        </div>
+
+        <div style={{ display: activeTab === 'profile' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+          <ProfileSettings token={token} onProfileUpdate={() => { }} />
         </div>
 
         {/* Admin Tabs */}

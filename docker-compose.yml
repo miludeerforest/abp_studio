@@ -30,6 +30,7 @@ services:
       - .env
     environment:
       - CHOKIDAR_USEPOLLING=true
+      - VITE_TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-}
     volumes:
       - ./frontend:/app
       - /app/node_modules
