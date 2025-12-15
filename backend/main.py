@@ -115,7 +115,7 @@ class User(Base):
     username = Column(String, unique=True, index=True)  # Login name (cannot change)
     nickname = Column(String, nullable=True)  # Display name (can change)
     avatar = Column(String, nullable=True)  # Avatar URL path
-    default_share = Column(Boolean, default=False)  # Default share status for new content
+    default_share = Column(Boolean, default=True)  # 默认开启分享，创作内容自动同步到公开画廊
     hashed_password = Column(String)
     role = Column(String, default="user") # 'admin', 'user'
     created_at = Column(DateTime, default=get_china_now)
@@ -144,7 +144,7 @@ class VideoQueueItem(Base):
     user_id = Column(Integer, nullable=True) # Linked to User
     category = Column(String, nullable=True, default="other")  # Product category
     is_merged = Column(Boolean, nullable=True, default=False)  # Flag for merged/composite videos
-    is_shared = Column(Boolean, nullable=False, default=False)  # 是否分享给普通用户预览
+    is_shared = Column(Boolean, nullable=False, default=True)  # 默认分享到公开画廊，用户可取消
     created_at = Column(DateTime, default=get_china_now)  # Use China timezone
     _preview_url = Column("preview_url", String, nullable=True)  # Custom preview URL
 
@@ -175,7 +175,7 @@ class SavedImage(Base):
     width = Column(Integer, nullable=True)  # Image width in pixels
     height = Column(Integer, nullable=True)  # Image height in pixels
     category = Column(String, nullable=True, default="other")  # Product category
-    is_shared = Column(Boolean, nullable=False, default=False)  # 是否分享给普通用户预览
+    is_shared = Column(Boolean, nullable=False, default=True)  # 默认分享到公开画廊，用户可取消
     created_at = Column(DateTime, default=get_china_now)
 
 # Create tables
@@ -211,6 +211,7 @@ class ConfigItem(BaseModel):
     analysis_model_name: Optional[str] = None
     site_title: Optional[str] = None
     site_subtitle: Optional[str] = None
+    cache_retention_days: Optional[int] = 7  # 0 = permanent, otherwise days to keep
 
 
 
@@ -450,15 +451,8 @@ async def login(
         "user_id": user.id
     }
 
-# Backward compatibility alias for dependency injection
-# Many endpoints rely on 'token: str = Depends(verify_token)'
-# We should update them to use 'current_user: User = Depends(get_current_user)'
-# BUT to minimize immediate refactoring, we can make verify_token return the user or token?
-# Existing code expects verify_token -> str.
-# Strategy: Update key endpoints, but leave this as a wrapper if possible?
-# Actually, the quickest way is to Replace 'verify_token' usage in endpoints with 'get_current_user'.
-# But there are many endpoints.
-# Let's redefine verify_token to valid JWT and return the token string (preserving old behavior but adding validation).
+# verify_token: Legacy function for endpoints that only need authentication without user object
+# For endpoints that need user data, use get_current_user instead
 
 def verify_token(token: str = Depends(oauth2_scheme)):
     try:
@@ -719,7 +713,8 @@ def get_config(db: Session = Depends(get_db), token: str = Depends(verify_token)
         "app_url": os.getenv("APP_URL", "http://localhost:33012"),
         "analysis_model_name": os.getenv("DEFAULT_ANALYSIS_MODEL_NAME", "gemini-3-pro-preview"),
         "site_title": os.getenv("SITE_TITLE", "Banana Product"),
-        "site_subtitle": os.getenv("SITE_SUBTITLE", "")
+        "site_subtitle": os.getenv("SITE_SUBTITLE", ""),
+        "cache_retention_days": int(os.getenv("CACHE_RETENTION_DAYS", "7"))  # 0 = permanent
     }
     
     # Check if DB is empty for these keys, if so, seed them
@@ -1590,9 +1585,6 @@ async def generate_video_prompt_endpoint(
         except Exception as e:
             logger.error(f"Video prompt gen failed: {e}")
             raise HTTPException(status_code=500, detail=str(e))
-    status: Optional[str] = None
-    result_url: Optional[str] = None
-    error_msg: Optional[str] = None
 
 
 @app.post("/api/v1/story-generate")
@@ -2051,11 +2043,6 @@ async def add_to_queue(
     prompt: str = Form(...),
     category: str = Form("other"),  # Product category
     db: Session = Depends(get_db),
-    token: str = Depends(verify_token), # Keep for backward compatibility if needed, or remove. 
-    # Actually, we defined verify_token to return token string. 
-    # But we want user object.
-    # Let's replace 'token: str = ...' with 'user: User = Depends(get_current_user)'
-    # Note: Frontend sends 'Authorization: Bearer <token>'
     user: User = Depends(get_current_user)
 ):
     if not file and not image_url:
@@ -2568,14 +2555,26 @@ async def generate_queue_item_endpoint(
 
 
 # --- Background Cleanup Task ---
+# Legacy env var for backward compatibility, will be overridden by DB config
 CLEANUP_HOURS = int(os.getenv("CLEANUP_HOURS", "168"))  # Default 7 days (168 hours)
 
 async def cleanup_task():
     while True:
         try:
-            logger.info("Running cleanup task...")
             db = SessionLocal()
-            cutoff = datetime.now() - timedelta(hours=CLEANUP_HOURS)
+            
+            # Read retention days from database config (0 = permanent, skip cleanup)
+            retention_config = db.query(SystemConfig).filter(SystemConfig.key == "cache_retention_days").first()
+            retention_days = int(retention_config.value) if retention_config else 7
+            
+            if retention_days == 0:
+                logger.info("Cleanup task: cache_retention_days=0 (permanent), skipping cleanup")
+                db.close()
+                await asyncio.sleep(3600)
+                continue
+            
+            logger.info(f"Running cleanup task... (retention: {retention_days} days)")
+            cutoff = datetime.now() - timedelta(days=retention_days)
             
             # Find old items, EXCLUDE completed/archived videos and merged story videos
             old_items = db.query(VideoQueueItem).filter(

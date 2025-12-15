@@ -29,7 +29,8 @@ const Gallery = ({ onSelectForVideo }) => {
     const currentUserId = parseInt(localStorage.getItem('userId') || '0', 10);
 
     // View Mode for admin: 'own' (only own content) or 'all' (all users)
-    const [viewMode, setViewMode] = useState('own');
+    // Admin defaults to 'all' to see all members' content
+    const [viewMode, setViewMode] = useState(userRole === 'admin' ? 'all' : 'own');
 
     // Pagination State
     const [imgPage, setImgPage] = useState(1);
