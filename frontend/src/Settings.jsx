@@ -11,7 +11,8 @@ function Settings({ token, config, onConfigChange }) {
         app_url: '',
         analysis_model_name: '',
         site_title: '',
-        site_subtitle: ''
+        site_subtitle: '',
+        cache_retention_days: 7
     })
     const [saving, setSaving] = useState(false)
     const [msg, setMsg] = useState(null)
@@ -29,7 +30,8 @@ function Settings({ token, config, onConfigChange }) {
                 app_url: config.app_url || '',
                 analysis_model_name: config.analysis_model_name || '',
                 site_title: config.site_title || '',
-                site_subtitle: config.site_subtitle || ''
+                site_subtitle: config.site_subtitle || '',
+                cache_retention_days: config.cache_retention_days ?? 7
             })
         }
     }, [config])
@@ -174,6 +176,21 @@ function Settings({ token, config, onConfigChange }) {
                         style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
                     />
                     <small style={{ color: 'var(--text-muted)' }}>用于生成分享链接或回调地址</small>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '24px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>📁 缓存保留时间（天）</label>
+                    <input
+                        type="number"
+                        min="0"
+                        value={localConfig.cache_retention_days}
+                        onChange={(e) => handleChange('cache_retention_days', parseInt(e.target.value) || 0)}
+                        placeholder="0 = 永久保留"
+                        style={{ width: '200px', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
+                    />
+                    <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
+                        设置图片和视频缓存的保留时间。<strong>0 = 永久保留</strong>，其他值按天数自动清理未完成的任务。
+                    </small>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
