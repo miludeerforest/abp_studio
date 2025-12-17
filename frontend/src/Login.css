@@ -3,7 +3,8 @@
     justify-content: center;
     align-items: center;
     height: 100vh;
-    background: radial-gradient(circle at center, #1e1e2f 0%, #0b0c15 100%);
+    height: 100vh;
+    /* background: transparent; - inherited from body */
 }
 
 .login-box {

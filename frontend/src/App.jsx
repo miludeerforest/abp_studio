@@ -46,6 +46,21 @@ function App() {
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
+  // Theme state: 'light' (default) or 'dark'
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('theme') || 'light'
+  })
+
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark')
+  }
+
   // Shared State
   const [config, setConfig] = useState({})
 
@@ -266,6 +281,34 @@ function App() {
         </div>
 
         <div className="sidebar-footer">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <button
+              className="theme-toggle"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? '切换到白天模式' : '切换到夜间模式'}
+              style={{
+                background: 'rgba(255, 255, 255, 0.15)',
+                border: 'none',
+                color: 'var(--text-main)',
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.1rem',
+                transition: 'background 0.2s'
+              }}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
+            {!sidebarCollapsed && (
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                {theme === 'dark' ? '夜间模式' : '白天模式'}
+              </span>
+            )}
+          </div>
           <div className="connection-status" title={isConnected ? '实时连接' : '离线'}>
             <div className={`status-dot ${isConnected ? 'online' : 'offline'}`}></div>
             {!sidebarCollapsed && <span>{isConnected ? '实时连接' : '离线'}</span>}

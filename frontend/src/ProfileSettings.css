@@ -12,7 +12,7 @@
 
 .profile-header h2 {
     font-size: 1.75rem;
-    color: #fff;
+    color: var(--text-main);
     margin-bottom: 0.5rem;
 }
 
@@ -22,8 +22,10 @@
 }
 
 .profile-card {
-    background: rgba(31, 41, 55, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--card-border);
     border-radius: 1rem;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
@@ -31,10 +33,10 @@
 
 .profile-card h3 {
     font-size: 1.1rem;
-    color: #fff;
+    color: var(--text-main);
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--card-border);
 }
 
 /* Avatar Section */
@@ -106,17 +108,17 @@
 .form-group label {
     display: block;
     font-size: 0.875rem;
-    color: #d1d5db;
+    color: var(--text-muted);
     margin-bottom: 0.5rem;
 }
 
 .form-group input {
     width: 100%;
     padding: 0.75rem 1rem;
-    background: rgba(17, 24, 39, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--bg-color);
+    border: 1px solid var(--card-border);
     border-radius: 8px;
-    color: #fff;
+    color: var(--text-main);
     font-size: 0.9rem;
     transition: all 0.2s;
 }

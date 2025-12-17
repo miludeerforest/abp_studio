@@ -59,9 +59,9 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
     const [placementMode, setPlacementMode] = useState('')
 
     const ASPECT_RATIOS = [
-        { id: '1:1', label: '1:1 (Square)', icon: '🟦' },
-        { id: '4:3', label: '4:3 (Landscape)', icon: 'Rectangle' },
-        { id: '16:9', label: '16:9 (Cinema)', icon: '▬' },
+        { id: '1:1', label: '1:1 (Square)', icon: '🖼️' },
+        { id: '4:3', label: '4:3 (Landscape)', icon: '📺' },
+        { id: '16:9', label: '16:9 (Cinema)', icon: '🎬' },
         { id: '9:16', label: '9:16 (Story)', icon: '📱' }
     ]
 
@@ -523,15 +523,15 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
             {/* Step 1: Input */}
             {step === 'input' && (
-                <div style={{ maxWidth: '800px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <div style={{ maxWidth: '1000px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                         {/* Product Upload */}
-                        <div className="upload-zone" onClick={() => document.getElementById('prod-upload').click()} style={{ height: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed var(--card-border)', borderRadius: '12px', cursor: 'pointer', background: 'var(--card-bg)' }}>
+                        <div className="upload-zone" onClick={() => document.getElementById('prod-upload').click()} style={{ height: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed var(--card-border)', borderRadius: '12px', cursor: 'pointer', background: 'var(--card-bg)', backdropFilter: 'blur(20px)' }}>
                             {productImg ? (
                                 <img src={URL.createObjectURL(productImg)} style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain' }} alt="Product" />
                             ) : (
                                 <>
-                                    <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📦</div>
+                                    <div className="icon" style={{ fontSize: '3rem', marginBottom: '16px' }}>📦</div>
                                     <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>上传产品主图</div>
                                     <div style={{ color: 'var(--text-muted)' }}>支持 PNG/JPG (白底最佳)</div>
                                 </>
@@ -540,12 +540,12 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                         </div>
 
                         {/* Reference Upload */}
-                        <div className="upload-zone" onClick={() => document.getElementById('ref-upload').click()} style={{ height: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed var(--card-border)', borderRadius: '12px', cursor: 'pointer', background: 'var(--card-bg)' }}>
+                        <div className="upload-zone" onClick={() => document.getElementById('ref-upload').click()} style={{ height: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed var(--card-border)', borderRadius: '12px', cursor: 'pointer', background: 'var(--card-bg)', backdropFilter: 'blur(20px)' }}>
                             {refImg ? (
                                 <img src={URL.createObjectURL(refImg)} style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain' }} alt="Ref" />
                             ) : (
                                 <>
-                                    <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🖼️</div>
+                                    <div className="icon" style={{ fontSize: '3rem', marginBottom: '16px' }}>🖼️</div>
                                     <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>上传风格参考图</div>
                                     <div style={{ color: 'var(--text-muted)' }}>提取光影与环境结构</div>
                                 </>
@@ -567,7 +567,8 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                         borderRadius: '8px',
                                         border: category === cat.id ? '2px solid var(--primary-color)' : '1px solid var(--card-border)',
                                         background: category === cat.id ? 'rgba(99, 102, 241, 0.2)' : 'var(--card-bg)',
-                                        color: category === cat.id ? '#fff' : 'var(--text-muted)',
+                                        backdropFilter: 'blur(20px)',
+                                        color: category === cat.id ? 'var(--primary-color)' : 'var(--text-muted)',
                                         cursor: 'pointer',
                                         fontSize: '0.95rem',
                                         display: 'flex',
@@ -577,7 +578,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                         transition: 'all 0.2s'
                                     }}
                                 >
-                                    <span style={{ fontSize: '1.5rem' }}>{cat.icon}</span>
+                                    <span className="icon" style={{ fontSize: '1.5rem' }}>{cat.icon}</span>
                                     <span>{cat.label}</span>
                                 </button>
                             ))}
@@ -597,7 +598,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                         borderRadius: '8px',
                                         background: 'transparent',
                                         border: '1px solid var(--primary-color)',
-                                        color: '#fff',
+                                        color: 'var(--text-main)',
                                         outline: 'none'
                                     }}
                                 />
@@ -618,7 +619,8 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                         borderRadius: '8px',
                                         border: aspectRatio === ratio.id ? '2px solid var(--primary-color)' : '1px solid var(--card-border)',
                                         background: aspectRatio === ratio.id ? 'rgba(99, 102, 241, 0.2)' : 'var(--card-bg)',
-                                        color: aspectRatio === ratio.id ? '#fff' : 'var(--text-muted)',
+                                        backdropFilter: 'blur(20px)',
+                                        color: aspectRatio === ratio.id ? 'var(--primary-color)' : 'var(--text-muted)',
                                         cursor: 'pointer',
                                         fontSize: '0.9rem',
                                         display: 'flex',
@@ -628,7 +630,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                         transition: 'all 0.2s'
                                     }}
                                 >
-                                    <span style={{ fontSize: '1.2rem' }}>{ratio.icon}</span>
+                                    <span className="icon" style={{ fontSize: '1.2rem' }}>{ratio.icon}</span>
                                     <span>{ratio.label}</span>
                                 </button>
                             ))}
@@ -638,7 +640,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                     {/* Count Slider */}
                     <div>
                         <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span>生成数量</span>
+                            <span><span className="icon">🔢</span> 生成数量</span>
                             <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{genCount} 张</span>
                         </div>
                         <input
@@ -653,7 +655,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
                     {/* Scene Style Selector */}
                     <div style={{ marginTop: '20px' }}>
-                        <div className="section-title">场景风格 (批量统一)</div>
+                        <div className="section-title"><span className="icon">🎨</span> 场景风格 (批量统一)</div>
                         <select
                             value={sceneStyle}
                             onChange={(e) => setSceneStyle(e.target.value)}
@@ -661,9 +663,10 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                 width: '100%',
                                 padding: '12px 16px',
                                 background: 'var(--card-bg)',
+                                backdropFilter: 'blur(20px)',
                                 border: '1px solid var(--card-border)',
                                 borderRadius: '8px',
-                                color: 'var(--text-color)',
+                                color: 'var(--text-main)',
                                 fontSize: '1rem',
                                 cursor: 'pointer',
                                 outline: 'none'
@@ -701,7 +704,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                         disabled={loading}
                         style={{ padding: '16px', fontSize: '1.2rem', marginTop: '20px' }}
                     >
-                        {loading ? '🧠 正在进行视觉分析...' : `✨ 第一步：智能视觉分析 (Gemini 3 Pro)`}
+                        {loading ? <><span className="icon">🧠</span> 正在进行视觉分析...</> : <><span className="icon">✨</span> 第一步：智能视觉分析 (Gemini 3 Pro)</>}
                     </button>
                 </div>
             )}
@@ -718,14 +721,14 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
             {/* Step 2: Review */}
             {step === 'review' && analysisResult && (
-                <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: '350px 1fr', gap: '32px', height: '100%', overflow: 'hidden' }}>
+                <div style={{ maxWidth: '1600px', margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: '400px 1fr', gap: '32px', height: '100%', overflow: 'hidden' }}>
                     {/* Left: Sidebar Configuration (Reference Style) */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', paddingRight: '10px' }}>
 
                         {/* Analysis Report Box */}
                         <div style={{ border: '1px solid var(--primary-color)', background: 'rgba(99, 102, 241, 0.05)', borderRadius: '8px', padding: '16px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: 'var(--primary-color)', fontWeight: 'bold' }}>
-                                <span>✨</span> 分析报告
+                                <span><span className="icon">✨</span></span> 分析报告
                             </div>
                             <div style={{ fontSize: '0.9rem', marginBottom: '8px' }}>
                                 <span style={{ color: 'var(--text-muted)' }}>识别产品: </span>
@@ -742,7 +745,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
                         {/* Placement Mode Selector */}
                         <div>
-                            <div className="section-title">确认产品摆放方式 (智能识别)</div>
+                            <div className="section-title"><span className="icon">📍</span> 确认产品摆放方式 (智能识别)</div>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                 {PLACEMENT_MODES.map(mode => (
                                     <button
@@ -766,13 +769,13 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
                         {/* Requirements Editor */}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                            <div className="section-title">具体要求与建议 (可修改)</div>
+                            <div className="section-title"><span className="icon">📝</span> 具体要求与建议 (可修改)</div>
                             <textarea
                                 onChange={(e) => {
                                     // Placeholder
                                 }}
                                 readOnly
-                                style={{ flex: 1, minHeight: '150px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '12px', color: '#ccc', resize: 'none', fontSize: '0.9rem', lineHeight: '1.5' }}
+                                style={{ flex: 1, minHeight: '150px', background: 'var(--input-bg, rgba(0,0,0,0.05))', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '12px', color: 'var(--text-main)', resize: 'none', fontSize: '0.9rem', lineHeight: '1.5' }}
                                 defaultValue={`AI 建议: ${analysisResult.environment_analysis}\n\n(此分析将指导所有图片的生成)`}
                             />
                         </div>
@@ -792,8 +795,8 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                         <h3 style={{ marginTop: 0, marginBottom: '20px' }}>生成脚本预览</h3>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
                             {Array.isArray(scripts) && scripts.slice(0, genCount).map((item, idx) => (
-                                <div key={idx} style={{ background: 'var(--card-bg)', padding: '16px', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
-                                    <div style={{ fontWeight: 'bold', color: '#fff', marginBottom: '8px', fontSize: '0.9rem' }}>
+                                <div key={idx} style={{ background: 'var(--card-bg)', backdropFilter: 'blur(20px)', padding: '16px', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
+                                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '8px', fontSize: '0.9rem' }}>
                                         #{idx + 1} {item.angle_name}
                                     </div>
                                     <textarea
@@ -831,9 +834,9 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                     style={{ background: 'linear-gradient(45deg, #8b5cf6, #ec4899)' }}
                                     onClick={handleBatchVideo}
                                 >
-                                    🎬 一键批量转视频
+                                    <span className="icon">🎬</span> 一键批量转视频
                                 </button>
-                                <button className="btn-secondary" onClick={resetFlow}>🔄 开始新任务</button>
+                                <button className="btn-secondary" onClick={resetFlow}><span className="icon">🔄</span> 开始新任务</button>
                             </div>
                         </div>
                     )}
