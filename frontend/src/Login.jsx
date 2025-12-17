@@ -122,14 +122,17 @@ function Login({ onLogin, onBack }) {
                             position: 'absolute',
                             top: '1rem',
                             left: '1rem',
-                            background: 'rgba(255,255,255,0.1)',
-                            border: 'none',
+                            background: 'var(--btn-bg, rgba(255,255,255,0.1))',
+                            border: '1px solid var(--card-border)',
                             borderRadius: '50%',
                             width: '2.5rem',
                             height: '2.5rem',
-                            color: '#fff',
+                            color: 'var(--text-main)',
                             cursor: 'pointer',
-                            fontSize: '1.25rem'
+                            fontSize: '1.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                         }}
                     >
                         ←

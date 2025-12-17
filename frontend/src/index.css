@@ -1,7 +1,7 @@
 @import './Login.css';
 
 :root {
-  /* Core Colors */
+  /* Core Colors - Dark Mode (Default) */
   --bg-color: #0b0c15;
   --sidebar-bg: #12131f;
   --card-bg: #181926;
@@ -17,6 +17,39 @@
   --radius-lg: 16px;
   --radius-md: 12px;
   --radius-sm: 8px;
+
+  /* Responsive Layout - 响应式布局变量 */
+  --content-max-width: 1600px;
+  --content-padding: 24px;
+
+  /* Glass Effect (Dark) */
+  --glass-bg: rgba(30, 30, 40, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: blur(12px);
+}
+
+
+
+/* 大屏幕优化 - 1920px+ */
+@media (min-width: 1920px) {
+  :root {
+    --content-max-width: 1800px;
+  }
+}
+
+/* 超大屏幕优化 - 2560px+ */
+@media (min-width: 2560px) {
+  :root {
+    --content-max-width: 2200px;
+  }
+}
+
+/* 全宽容器工具类 */
+.full-width-container {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: 0 var(--content-padding);
+  width: 100%;
 }
 
 .glass-card {
@@ -36,12 +69,15 @@
 }
 
 body {
-  background-color: var(--bg-color);
+  background: var(--bg-color);
   color: var(--text-main);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  transition: background 0.3s ease, color 0.3s ease;
 }
+
+
 
 /* Layout */
 .app-container {
@@ -61,8 +97,11 @@ body {
   top: 0;
   bottom: 0;
   z-index: 100;
-  transition: width 0.3s ease;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  overflow-x: hidden;
 }
+
+
 
 .sidebar-collapsed .sidebar-nav {
   width: 64px;
@@ -140,6 +179,421 @@ body {
   flex-direction: column;
   gap: 4px;
   overflow-y: auto;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+}
+
+.sidebar-item.active {
+  background: var(--primary-gradient);
+  color: white;
+}
+
+.sidebar-item .icon {
+  font-size: 1.2rem;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.sidebar-item .label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: var(--card-border);
+  margin: 8px 12px;
+}
+
+.sidebar-footer {
+  padding: 16px;
+  border-top: 1px solid var(--card-border);
+  display: flex;
+
+  /* ============================================
+   Light Mode - macOS Big Sur+ Style
+   完美复刻 macOS 风格：Vibrant Light 材质、标准控件、经典配色
+   ============================================ */
+  [data-theme="light"] {
+    /* Wallpaper - 模拟 macOS 默认动态壁纸浅色调 */
+    --bg-color: #f5f5f7;
+    --bg-solid: #ffffff;
+
+    /* Sidebar - Vibrant Light Material */
+    /* macOS 侧边栏是通透的，带有背景模糊，能够透出壁纸颜色 */
+    --sidebar-bg: rgba(255, 255, 255, 0.6);
+    --glass-blur: blur(20px);
+    --sidebar-border: rgba(0, 0, 0, 0.1);
+
+    /* Main Content Area */
+    --card-bg: #ffffff;
+    --card-border: rgba(0, 0, 0, 0.08);
+
+    /* macOS System Colors */
+    --primary-color: #007AFF;
+    /* macOS Blue */
+    --primary-gradient: linear-gradient(180deg, #007AFF 0%, #006ede 100%);
+    --sidebar-selected-bg: #007AFF;
+    --text-main: #000000;
+    --text-muted: #4b5563;
+    --divider: rgba(0, 0, 0, 0.1);
+
+    --success-color: #34c759;
+    --error-color: #ff3b30;
+
+    /* macOS Shadows */
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.06);
+    --modal-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Typography - macOS 字体栈 */
+  [data-theme="light"] body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  /* Sidebar - macOS Style */
+  [data-theme="light"] .sidebar-nav {
+    background: var(--sidebar-bg) !important;
+    backdrop-filter: saturate(180%) var(--glass-blur) !important;
+    -webkit-backdrop-filter: saturate(180%) var(--glass-blur) !important;
+    border-right: 1px solid var(--sidebar-border) !important;
+  }
+
+  /* Sidebar Items */
+  [data-theme="light"] .sidebar-item {
+    color: var(--text-main);
+    border-radius: 6px;
+    /* macOS 侧边栏项目圆角较小 */
+    margin: 2px 10px;
+    padding: 8px 12px;
+    font-weight: 500;
+    font-size: 13px;
+    /* macOS 侧边栏字号偏小 */
+  }
+
+  [data-theme="light"] .sidebar-item .icon {
+    font-size: 1.1em;
+    opacity: 0.85;
+  }
+
+  [data-theme="light"] .sidebar-item:hover {
+    background: rgba(0, 0, 0, 0.05);
+    /* 极浅的灰色悬停 */
+    color: var(--text-main);
+  }
+
+  [data-theme="light"] .sidebar-item.active {
+    background: var(--sidebar-selected-bg);
+    color: #ffffff;
+    box-shadow: none;
+    /* macOS 选中态没有阴影，只有纯色 */
+  }
+
+  [data-theme="light"] .sidebar-item.active .icon {
+    opacity: 1;
+  }
+
+  /* Header & Footer */
+  [data-theme="light"] .sidebar-header {
+    height: 52px;
+    /* 类似 macOS 窗口标题栏高度 */
+    border-bottom: 1px solid var(--sidebar-border);
+    -webkit-app-region: drag;
+    /* 模拟窗口拖拽区 */
+  }
+
+  [data-theme="light"] .sidebar-footer {
+    border-top: 1px solid var(--sidebar-border);
+    background: transparent;
+  }
+
+  /* Cards (Windows/Containers) */
+  [data-theme="light"] .workspace-main,
+  [data-theme="light"] .panel,
+  [data-theme="light"] .glass-card,
+  [data-theme="light"] .result-card {
+    background: #ffffff;
+    border: 1px solid var(--card-border);
+    box-shadow: var(--card-shadow);
+    border-radius: 10px;
+    /* macOS 圆角 */
+  }
+
+  /* Layout Specifics */
+  [data-theme="light"] .workspace-main {
+    background: #f5f5f7 !important;
+    /* 主内容背景色 */
+    box-shadow: none;
+    /* workspace 背景不需要阴影 */
+    border: none;
+  }
+
+  /* Inputs - macOS Style */
+  [data-theme="light"] input[type="text"],
+  [data-theme="light"] input[type="password"],
+  [data-theme="light"] input[type="number"],
+  [data-theme="light"] select,
+  [data-theme="light"] textarea {
+    background: #ffffff;
+    border: 1px solid #d1d1d6;
+    /* macOS 标准边框色 */
+    border-radius: 6px;
+    color: var(--text-main);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02);
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+
+  [data-theme="light"] input:focus,
+  [data-theme="light"] select:focus,
+  [data-theme="light"] textarea:focus {
+    border-color: #007AFF;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3);
+    /* macOS Focus Ring */
+  }
+
+  /* Buttons - macOS Push Button Style */
+  [data-theme="light"] .btn-secondary,
+  [data-theme="light"] .logout-btn,
+  [data-theme="light"] .sidebar-toggle,
+  [data-theme="light"] .theme-toggle {
+    background: #ffffff;
+    border: 1px solid #d1d1d6;
+    border-radius: 6px;
+    color: var(--text-main);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+    /* 轻微立体感 */
+    font-weight: 400;
+    font-size: 13px;
+  }
+
+  [data-theme="light"] .btn-secondary:active,
+  [data-theme="light"] .logout-btn:active,
+  [data-theme="light"] .sidebar-toggle:active,
+  [data-theme="light"] .theme-toggle:active {
+    background: #f5f5f5;
+    box-shadow: none;
+  }
+
+  /* Primary Button */
+  [data-theme="light"] .btn-primary {
+    background: #007AFF;
+    border: 1px solid transparent;
+    color: white;
+    box-shadow: none;
+    font-weight: 500;
+  }
+
+  [data-theme="light"] .btn-primary:hover {
+    background: #006bd1;
+  }
+
+  /* Status Indicators */
+  [data-theme="light"] .connection-status {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  [data-theme="light"] .status-dot.online {
+    background-color: #34c759;
+    box-shadow: none;
+  }
+
+  /* Brand */
+  [data-theme="light"] .brand-name {
+    color: var(--text-main);
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.5px;
+  }
+
+  [data-theme="light"] .brand-user {
+    color: var(--text-muted);
+  }
+
+  /* Upload Zone */
+  [data-theme="light"] .upload-zone {
+    background: #ffffff;
+    border: 2px dashed #d1d1d6;
+    border-radius: 10px;
+  }
+
+  [data-theme="light"] .upload-zone:hover {
+    background: #f0f8ff;
+    border-color: #007AFF;
+  }
+
+  /* Smooth Transitions - Standard macOS duration */
+  [data-theme="light"] * {
+    transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+}
+
+/* 超大屏幕优化 - 2560px+ */
+@media (min-width: 2560px) {
+  :root {
+    --content-max-width: 2200px;
+  }
+}
+
+/* 全宽容器工具类 */
+.full-width-container {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: 0 var(--content-padding);
+  width: 100%;
+}
+
+.glass-card {
+  background: rgba(30, 30, 40, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-color);
+  color: var(--text-main);
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+
+
+/* Layout */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar Navigation */
+.sidebar-nav {
+  width: 240px;
+  background-color: var(--sidebar-bg);
+  border-right: 1px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  overflow-x: hidden;
+}
+
+
+
+.sidebar-collapsed .sidebar-nav {
+  width: 64px;
+}
+
+.sidebar-header {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--card-border);
+  min-height: 64px;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--primary-gradient);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.brand-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.brand-user {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.sidebar-toggle {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: var(--text-main);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar-menu {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidebar-item {
@@ -537,4 +991,197 @@ textarea:focus {
   border: 2px solid rgba(139, 92, 246, 0.3);
   border-top-color: #8b5cf6;
   animation: spin 3s linear infinite;
+}
+
+/* ============================================
+   FORCED OVERRIDES: Light Mode - Glassmorphism Ultimate
+   Reference Style: Vibrant Gradient Mesh + High Transparency Glass
+   ============================================ */
+
+/* 1. Global Variables & Body */
+[data-theme="light"] {
+  /* Glass Variables */
+  --bg-color: transparent !important;
+  /* Body has the gradient */
+  --card-bg: rgba(255, 255, 255, 0.6) !important;
+  /* Higher transparency for better glass effect */
+  --card-border: rgba(255, 255, 255, 0.4) !important;
+  /* Lighter, white-ish border for "cut glass" look */
+  --text-main: #111827 !important;
+  /* Deep gray almost black */
+  --text-muted: #374151 !important;
+  --glass-blur: blur(24px) !important;
+  /* Stronger blur */
+  --primary-color: #4f46e5 !important;
+  /* Indigo-ish primary */
+  --input-bg: rgba(255, 255, 255, 0.8) !important;
+  /* Opaque inputs for readability */
+  --radius-lg: 24px !important;
+  /* Larger rounded corners */
+}
+
+[data-theme="light"] body {
+  background-color: #f3f4f6 !important;
+  /* Complex Gradient Mesh to make glass effect pop */
+  background-image:
+    radial-gradient(at 0% 0%, rgba(167, 243, 208, 0.5) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(224, 231, 255, 0.8) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(253, 186, 116, 0.4) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(196, 181, 253, 0.5) 0px, transparent 50%) !important;
+  background-attachment: fixed !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  color: var(--text-main) !important;
+}
+
+/* 2. Frosted Glass Containers */
+[data-theme="light"] .sidebar,
+[data-theme="light"] .workspace-main,
+[data-theme="light"] .panel,
+[data-theme="light"] .glass-card,
+[data-theme="light"] .lightbox-info-panel,
+/* Add this to force white/glass background */
+[data-theme="light"] .results-grid .result-card,
+[data-theme="light"] .image-workspace .sidebar,
+[data-theme="light"] .story-generator-root .workspace,
+[data-theme="light"] .profile-card,
+[data-theme="light"] .upload-zone,
+[data-theme="light"] .upload-box,
+[data-theme="light"] .story-generator-root .result-card,
+/* Explicitly target result cards */
+[data-theme="light"] .video-generator>div:first-child,
+/* Target Top Controls in VideoGen */
+[data-theme="light"] .video-generator>div:last-child
+
+/* Target Queue Area in VideoGen */
+  {
+  background: var(--card-bg) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  border: 1px solid var(--card-border) !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1) !important;
+  /* Soft colored shadow */
+  border-radius: var(--radius-lg) !important;
+}
+
+/* 3. Sidebar Navigation */
+[data-theme="light"] .sidebar-nav {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+  -webkit-backdrop-filter: blur(30px) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+[data-theme="light"] .sidebar-menu {
+  padding: 12px 0 !important;
+}
+
+[data-theme="light"] .sidebar-item {
+  color: var(--text-main) !important;
+  margin: 2px 16px !important;
+  /* Explicit symmetric margins */
+  border-radius: 12px !important;
+}
+
+[data-theme="light"] .sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Enforce Skeuomorphic (Color) Emojis with Enhanced 3D Depth */
+[data-theme="light"] .sidebar-item .icon,
+[data-theme="light"] .story-generator-root .icon,
+[data-theme="light"] .image-workspace .icon,
+[data-theme="light"] .gallery-filter-select {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Android Emoji", sans-serif !important;
+  font-style: normal;
+  color: initial !important;
+  /* Deep shadow + Saturation Boost for "Juicy" 3D look */
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.2)) saturate(1.2) contrast(1.1);
+  font-size: 1.4rem;
+  /* Slightly larger */
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Bouncy transition */
+}
+
+/* Hover effect for "Physical" feel */
+[data-theme="light"] .sidebar-item:hover .icon,
+[data-theme="light"] .story-generator-root .upload-placeholder .icon,
+[data-theme="light"] .image-workspace button:hover .icon,
+[data-theme="light"] .image-workspace .upload-zone:hover .icon {
+  transform: scale(1.2) translateY(-2px);
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.3)) saturate(1.3);
+}
+
+[data-theme="light"] .sidebar-item.active {
+  background: var(--primary-color) !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3) !important;
+  /* Matching shadow for primary */
+}
+
+/* 4. Inputs & Buttons */
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background: white !important;
+  /* Inputs should be clean white on glass */
+  color: var(--text-main) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  backdrop-filter: none !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02) !important;
+  border-radius: 12px !important;
+}
+
+[data-theme="light"] .btn-secondary,
+[data-theme="light"] .logout-btn,
+[data-theme="light"] .sidebar-toggle,
+[data-theme="light"] .theme-toggle {
+  background: rgba(255, 255, 255, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  color: var(--text-main) !important;
+  backdrop-filter: blur(5px) !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05) !important;
+  border-radius: 12px !important;
+}
+
+[data-theme="light"] .btn-secondary:hover,
+[data-theme="light"] .logout-btn:hover {
+  background: white !important;
+  transform: translateY(-1px);
+}
+
+[data-theme="light"] .btn-primary {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+  /* Vibrant purple-indigo */
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(124, 58, 237, 0.35) !important;
+  border-radius: 12px !important;
+}
+
+/* 5. Specific Component Fixes */
+[data-theme="light"] .result-actions {
+  background: rgba(255, 255, 255, 0.4) !important;
+  backdrop-filter: blur(10px) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.3) !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="light"] .section-title,
+[data-theme="light"] .connection-status {
+  color: var(--text-muted) !important;
+  font-weight: 600 !important;
+}
+
+/* Specific fix for the category buttons in ImageGen (which used inline vars) to look like glass pills */
+/* Assuming they are buttons inside a grid */
+[data-theme="light"] .image-workspace button[style*="var(--card-bg)"] {
+  /* This is a bit tricky to target strictly via CSS, but we set the vars */
+  /* Inline style 'backdropFilter' should take effect */
+}
+
+/* Fix Story Settings & Generator Panels */
+[data-theme="light"] .story-settings-panel,
+[data-theme="light"] .story-generator-panel {
+  background: var(--card-bg) !important;
+  backdrop-filter: var(--glass-blur) !important;
 }

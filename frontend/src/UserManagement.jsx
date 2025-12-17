@@ -128,7 +128,7 @@ function UserManagement({ token }) {
     }
 
     return (
-        <div className="container-fluid" style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto', color: '#fff' }}>
+        <div className="container-fluid" style={{ padding: '24px', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h2>用户管理 & 统计</h2>
                 <button className="btn-primary" onClick={() => setShowAddModal(true)}>+ 添加新用户</button>
@@ -169,7 +169,7 @@ function UserManagement({ token }) {
             )}
 
             <div className="glass-card" style={{ padding: '20px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', color: '#fff' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', textAlign: 'left' }}>
                             <th style={{ padding: '10px' }}>ID</th>
@@ -189,7 +189,8 @@ function UserManagement({ token }) {
                                     <td style={{ padding: '10px', fontWeight: 'bold' }}>{u.username}</td>
                                     <td style={{ padding: '10px' }}>
                                         <span style={{
-                                            background: u.role === 'admin' ? 'var(--primary-color)' : '#666',
+                                            background: u.role === 'admin' ? 'var(--primary-color)' : 'var(--text-muted)',
+                                            color: '#fff',
                                             padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem'
                                         }}>
                                             {u.role}
@@ -205,7 +206,7 @@ function UserManagement({ token }) {
                                                     placeholder="新密码"
                                                     value={newPass}
                                                     onChange={e => setNewPass(e.target.value)}
-                                                    style={{ width: '100px', padding: '4px', background: '#333', border: '1px solid #555', color: '#fff' }}
+                                                    style={{ width: '100px', padding: '4px' }}
                                                 />
                                                 <button className="btn-primary" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={() => handleUpdatePassword(u.id)}>确认</button>
                                                 <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={() => setEditUserId(null)}>取消</button>
@@ -244,7 +245,7 @@ function UserManagement({ token }) {
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
                 }}>
-                    <div className="glass-card" style={{ padding: '30px', width: '400px', background: '#1a1a1a' }}>
+                    <div className="glass-card" style={{ padding: '30px', width: '400px' }}>
                         <h3>添加新用户</h3>
                         <form onSubmit={handleAddUser}>
                             <div style={{ marginBottom: '15px' }}>
@@ -253,7 +254,7 @@ function UserManagement({ token }) {
                                     type="text"
                                     value={newUserUser}
                                     onChange={e => setNewUserUser(e.target.value)}
-                                    style={{ width: '100%', padding: '8px', background: '#333', border: '1px solid #555', color: '#fff' }}
+                                    style={{ width: '100%', padding: '8px' }}
                                     required
                                 />
                             </div>
@@ -263,7 +264,7 @@ function UserManagement({ token }) {
                                     type="password"
                                     value={newUserPass}
                                     onChange={e => setNewUserPass(e.target.value)}
-                                    style={{ width: '100%', padding: '8px', background: '#333', border: '1px solid #555', color: '#fff' }}
+                                    style={{ width: '100%', padding: '8px' }}
                                     required
                                 />
                             </div>

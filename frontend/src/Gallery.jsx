@@ -3,7 +3,7 @@ import './Gallery.css';
 
 // Product categories
 const CATEGORIES = [
-    { value: 'all', label: '全部', icon: '🏷️' },
+    { value: 'all', label: '全部', icon: '🏷️' }, // Wrapped in usage
     { value: 'security', label: '安防监控', icon: '📹' },
     { value: 'daily', label: '日用百货', icon: '🧴' },
     { value: 'beauty', label: '美妆护肤', icon: '💄' },
@@ -291,18 +291,13 @@ const Gallery = ({ onSelectForVideo }) => {
 
     return (
         <div className="gallery-container">
-            {/* Header Section */}
+            {/* Header - Single Row */}
             <div className="gallery-header">
                 <div className="gallery-title">
-                    <h1>
-                        <span className="gallery-title-gradient">
-                            创意画廊
-                        </span>
-                    </h1>
-                    <p className="gallery-subtitle">
-                        Gallery & Creation History V2.1
-                    </p>
+                    <h1><span className="gallery-title-gradient">创意画廊</span></h1>
                 </div>
+
+                <div className="gallery-separator" />
 
                 {/* Tab Switcher */}
                 <div className="gallery-tabs">
@@ -310,90 +305,85 @@ const Gallery = ({ onSelectForVideo }) => {
                         onClick={() => handleTabChange('images')}
                         className={`gallery-tab-btn ${activeTab === 'images' ? 'active' : ''}`}
                     >
-                        <span>🎨</span>
-                        图片
+                        🎨 图片
                     </button>
                     <button
                         onClick={() => handleTabChange('videos')}
                         className={`gallery-tab-btn ${activeTab === 'videos' ? 'active' : ''}`}
                     >
-                        <span>🎬</span>
-                        视频
+                        🎬 视频
                     </button>
                 </div>
 
-                {/* Filter & Actions Row */}
-                <div className="gallery-toolbar">
-                    {/* Category Filter */}
+                <div className="gallery-separator" />
+
+                {/* Filters */}
+                <select
+                    value={categoryFilter}
+                    onChange={(e) => { setCategoryFilter(e.target.value); setImgPage(1); setVidPage(1); }}
+                    className="gallery-filter-select"
+                >
+                    {CATEGORIES.map(cat => (
+                        <option key={cat.value} value={cat.value}>
+                            {cat.icon} {cat.label}
+                        </option>
+                    ))}
+                </select>
+
+                {userRole === 'admin' && (
                     <select
-                        value={categoryFilter}
-                        onChange={(e) => { setCategoryFilter(e.target.value); setImgPage(1); setVidPage(1); }}
+                        value={viewMode}
+                        onChange={(e) => { setViewMode(e.target.value); setImgPage(1); setVidPage(1); }}
                         className="gallery-filter-select"
                     >
-                        {CATEGORIES.map(cat => (
-                            <option key={cat.value} value={cat.value}>
-                                {cat.icon} {cat.label}
-                            </option>
-                        ))}
+                        <option value="own">📁 仅自己</option>
+                        <option value="all">🌐 所有</option>
                     </select>
+                )}
 
-                    {/* Admin View Mode Selector */}
+                {/* Actions - Right Aligned */}
+                <div className="batch-actions">
+                    <button onClick={handleRefresh} className="batch-btn" title="刷新列表">
+                        🔄
+                    </button>
                     {userRole === 'admin' && (
-                        <select
-                            value={viewMode}
-                            onChange={(e) => { setViewMode(e.target.value); setImgPage(1); setVidPage(1); }}
-                            className="gallery-filter-select"
-                            style={{ marginLeft: '8px' }}
-                        >
-                            <option value="own">📁 仅自己的</option>
-                            <option value="all">🌐 所有内容</option>
-                        </select>
+                        <>
+                            <button
+                                onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+                                className={`batch-btn ${selectMode ? 'active' : ''}`}
+                            >
+                                {selectMode ? '✕' : '☑️'}
+                            </button>
+                            {selectMode && (
+                                <>
+                                    <button onClick={toggleSelectAll} className="batch-btn">
+                                        {selectedIds.size === (activeTab === 'images' ? images.length : videos.length) ? '取消' : '全选'}
+                                    </button>
+                                    <button
+                                        onClick={() => handleBatchShare(true)}
+                                        className="batch-btn share"
+                                        disabled={selectedIds.size === 0}
+                                    >
+                                        🔗 {selectedIds.size}
+                                    </button>
+                                    <button
+                                        onClick={() => handleBatchShare(false)}
+                                        className="batch-btn unshare"
+                                        disabled={selectedIds.size === 0}
+                                    >
+                                        🔒
+                                    </button>
+                                    <button
+                                        onClick={handleBatchDelete}
+                                        className="batch-btn delete"
+                                        disabled={selectedIds.size === 0}
+                                    >
+                                        🗑️
+                                    </button>
+                                </>
+                            )}
+                        </>
                     )}
-
-                    {/* Admin Batch Actions & Refresh */}
-                    <div className="batch-actions">
-                        <button onClick={handleRefresh} className="batch-btn" title="刷新列表">
-                            🔄 刷新
-                        </button>
-                        {userRole === 'admin' && (
-                            <>
-                                <button
-                                    onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
-                                    className={`batch-btn ${selectMode ? 'active' : ''}`}
-                                >
-                                    {selectMode ? '✕ 退出选择' : '☑️ 多选'}
-                                </button>
-                                {selectMode && (
-                                    <>
-                                        <button onClick={toggleSelectAll} className="batch-btn">
-                                            {selectedIds.size === (activeTab === 'images' ? images.length : videos.length) ? '取消全选' : '全选'}
-                                        </button>
-                                        <button
-                                            onClick={() => handleBatchShare(true)}
-                                            className="batch-btn share"
-                                            disabled={selectedIds.size === 0}
-                                        >
-                                            🔗 分享 ({selectedIds.size})
-                                        </button>
-                                        <button
-                                            onClick={() => handleBatchShare(false)}
-                                            className="batch-btn unshare"
-                                            disabled={selectedIds.size === 0}
-                                        >
-                                            🔒 取消分享 ({selectedIds.size})
-                                        </button>
-                                        <button
-                                            onClick={handleBatchDelete}
-                                            className="batch-btn delete"
-                                            disabled={selectedIds.size === 0}
-                                        >
-                                            🗑️ 删除 ({selectedIds.size})
-                                        </button>
-                                    </>
-                                )}
-                            </>
-                        )}
-                    </div>
                 </div>
             </div>
 
@@ -412,7 +402,7 @@ const Gallery = ({ onSelectForVideo }) => {
                                     {images.map((img) => (
                                         <div
                                             key={img.id}
-                                            className={`gallery-card ${selectMode ? 'selectable' : ''} ${selectedIds.has(img.id) ? 'selected' : ''}`}
+                                            className={`gallery-card image-card ${selectMode ? 'selectable' : ''} ${selectedIds.has(img.id) ? 'selected' : ''}`}
                                             onClick={() => selectMode ? toggleSelect(img.id) : setSelectedImage(img)}
                                         >
                                             {/* Selection Checkbox */}
@@ -429,14 +419,14 @@ const Gallery = ({ onSelectForVideo }) => {
                                                 loading="lazy"
                                             />
                                             <div className="gallery-overlay">
-                                                {/* Creator Badge - Top Left */}
+                                                {/* Creator Badge - Right Side */}
                                                 {img.username && !selectMode && (
                                                     <div className="gallery-creator">
                                                         👤 {img.username}
                                                     </div>
                                                 )}
 
-                                                {/* Hover Actions - Top Right */}
+                                                {/* Hover Actions - Right Side Vertical */}
                                                 <div className="gallery-actions">
                                                     {onSelectForVideo && (
                                                         <button
@@ -517,6 +507,42 @@ const Gallery = ({ onSelectForVideo }) => {
                                 >
                                     下一页 <span>→</span>
                                 </button>
+                                {/* Page Jump Input */}
+                                {totalPagesImg > 1 && (
+                                    <div className="page-jump">
+                                        <span className="page-jump-label">跳至</span>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max={totalPagesImg}
+                                            className="page-jump-input"
+                                            placeholder={imgPage}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const val = parseInt(e.target.value, 10);
+                                                    if (val >= 1 && val <= totalPagesImg) {
+                                                        setImgPage(val);
+                                                        e.target.value = '';
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                        <span className="page-jump-label">页</span>
+                                        <button
+                                            className="page-jump-btn"
+                                            onClick={(e) => {
+                                                const input = e.target.previousElementSibling?.previousElementSibling;
+                                                const val = parseInt(input?.value, 10);
+                                                if (val >= 1 && val <= totalPagesImg) {
+                                                    setImgPage(val);
+                                                    input.value = '';
+                                                }
+                                            }}
+                                        >
+                                            GO
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -592,14 +618,14 @@ const Gallery = ({ onSelectForVideo }) => {
                                             </div>
 
                                             <div className="gallery-overlay">
-                                                {/* Creator Badge - Top Left */}
+                                                {/* Creator Badge - Right Side */}
                                                 {vid.username && (
                                                     <div className="gallery-creator">
                                                         👤 {vid.username}
                                                     </div>
                                                 )}
 
-                                                {/* Hover Actions - Top Right */}
+                                                {/* Hover Actions - Right Side Vertical */}
                                                 <div className="gallery-actions">
                                                     {/* Share button - admin only */}
                                                     {userRole === 'admin' && (
@@ -664,6 +690,42 @@ const Gallery = ({ onSelectForVideo }) => {
                                 >
                                     下一页 <span>→</span>
                                 </button>
+                                {/* Page Jump Input */}
+                                {totalPagesVid > 1 && (
+                                    <div className="page-jump">
+                                        <span className="page-jump-label">跳至</span>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max={totalPagesVid}
+                                            className="page-jump-input"
+                                            placeholder={vidPage}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const val = parseInt(e.target.value, 10);
+                                                    if (val >= 1 && val <= totalPagesVid) {
+                                                        setVidPage(val);
+                                                        e.target.value = '';
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                        <span className="page-jump-label">页</span>
+                                        <button
+                                            className="page-jump-btn"
+                                            onClick={(e) => {
+                                                const input = e.target.previousElementSibling?.previousElementSibling;
+                                                const val = parseInt(input?.value, 10);
+                                                if (val >= 1 && val <= totalPagesVid) {
+                                                    setVidPage(val);
+                                                    input.value = '';
+                                                }
+                                            }}
+                                        >
+                                            GO
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

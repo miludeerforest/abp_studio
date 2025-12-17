@@ -212,6 +212,11 @@ class ConfigItem(BaseModel):
     site_title: Optional[str] = None
     site_subtitle: Optional[str] = None
     cache_retention_days: Optional[int] = 7  # 0 = permanent, otherwise days to keep
+    # Concurrency settings
+    max_concurrent_image: Optional[int] = 5    # 图片生成全局并发数
+    max_concurrent_video: Optional[int] = 3    # 视频生成全局并发数
+    max_concurrent_story: Optional[int] = 2    # Story Chain 全局并发数
+    max_concurrent_per_user: Optional[int] = 2 # 每用户并发上限
 
 
 
@@ -714,7 +719,12 @@ def get_config(db: Session = Depends(get_db), token: str = Depends(verify_token)
         "analysis_model_name": os.getenv("DEFAULT_ANALYSIS_MODEL_NAME", "gemini-3-pro-preview"),
         "site_title": os.getenv("SITE_TITLE", "Banana Product"),
         "site_subtitle": os.getenv("SITE_SUBTITLE", ""),
-        "cache_retention_days": int(os.getenv("CACHE_RETENTION_DAYS", "7"))  # 0 = permanent
+        "cache_retention_days": int(os.getenv("CACHE_RETENTION_DAYS", "7")),  # 0 = permanent
+        # Concurrency settings
+        "max_concurrent_image": int(os.getenv("MAX_CONCURRENT_IMAGE", "5")),
+        "max_concurrent_video": int(os.getenv("MAX_CONCURRENT_VIDEO", "3")),
+        "max_concurrent_story": int(os.getenv("MAX_CONCURRENT_STORY", "2")),
+        "max_concurrent_per_user": int(os.getenv("MAX_CONCURRENT_PER_USER", "2")),
     }
     
     # Check if DB is empty for these keys, if so, seed them
@@ -745,6 +755,25 @@ def update_config(config: ConfigItem, db: Session = Depends(get_db), token: str 
     
     db.commit()
     return config
+
+
+# --- Concurrency Config Getter for ConcurrencyLimiter ---
+async def get_concurrency_config() -> dict:
+    """
+    Get concurrency-related config from database.
+    Used by ConcurrencyLimiter for dynamic limits.
+    """
+    db = SessionLocal()
+    try:
+        config = {}
+        keys = ["max_concurrent_image", "max_concurrent_video", "max_concurrent_story", "max_concurrent_per_user"]
+        for key in keys:
+            item = db.query(SystemConfig).filter(SystemConfig.key == key).first()
+            if item:
+                config[key] = item.value
+        return config
+    finally:
+        db.close()
 
 # ... (lines 170-432 omitted) ...
 
@@ -1699,6 +1728,7 @@ class QueueItemResponse(BaseModel):
     error_msg: Optional[str] = None
     created_at: datetime
     preview_url: Optional[str] = None
+    user_id: Optional[int] = None  # 任务所有者ID，用于前端权限判断
     
     class Config:
         from_attributes = True
@@ -2030,11 +2060,22 @@ def share_all_videos(
 # --- Queue APIs ---
 
 @app.get("/api/v1/queue", response_model=List[QueueItemResponse])
-def get_queue(db: Session = Depends(get_db), token: str = Depends(verify_token)):
-    # Exclude archived items from queue list (they're preserved for gallery only)
+def get_queue(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    from sqlalchemy import case
+    
+    # 获取所有管理员用户的ID，用于优先级排序
+    admin_ids = [u.id for u in db.query(User).filter(User.role == "admin").all()]
+    
+    # 构建优先级排序：管理员任务 priority=0（优先），其他用户 priority=1
+    priority_order = case(
+        (VideoQueueItem.user_id.in_(admin_ids), 0),
+        else_=1
+    )
+    
+    # 排序：先按优先级，再按创建时间
     return db.query(VideoQueueItem).filter(
         VideoQueueItem.status != "archived"
-    ).order_by(VideoQueueItem.created_at.asc()).all()
+    ).order_by(priority_order, VideoQueueItem.created_at.asc()).all()
 
 @app.post("/api/v1/queue")
 async def add_to_queue(
@@ -2242,11 +2283,15 @@ async def merge_videos_endpoint(
 def delete_queue_item(
     item_id: str,
     db: Session = Depends(get_db),
-    token: str = Depends(verify_token)
+    user: User = Depends(get_current_user)
 ):
     item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
+    
+    # 权限检查：只有管理员或任务所有者可以删除
+    if user.role != "admin" and item.user_id != user.id:
+        raise HTTPException(status_code=403, detail="您只能删除自己的任务")
     
     # Delete file
     if item.file_path and os.path.exists(item.file_path):
@@ -2299,9 +2344,14 @@ async def retry_queue_item(
 def clear_queue(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    token: str = Depends(verify_token)
+    user: User = Depends(get_current_user)
 ):
     query = db.query(VideoQueueItem)
+    
+    # 非管理员只能操作自己的任务
+    if user.role != "admin":
+        query = query.filter(VideoQueueItem.user_id == user.id)
+    
     if status:
         query = query.filter(VideoQueueItem.status == status)
     
@@ -3254,7 +3304,7 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
             
         # Clear user activity status
         try:
-            await connection_manager.update_user_activity(user_id, "")
+            await connection_manager.update_user_activity(user_id, "在线")
         except Exception:
             pass
             
@@ -3265,7 +3315,7 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
         
         # Clear user activity on error too
         try:
-            await connection_manager.update_user_activity(user_id, "")
+            await connection_manager.update_user_activity(user_id, "在线")
         except Exception:
             pass
 
@@ -3972,7 +4022,7 @@ async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_
         
         # Clear user activity status
         try:
-            await connection_manager.update_user_activity(user_id, "")
+            await connection_manager.update_user_activity(user_id, "在线")
         except Exception:
             pass
         
@@ -3985,7 +4035,7 @@ async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_
         
         # Clear user activity on error too
         try:
-            await connection_manager.update_user_activity(user_id, "")
+            await connection_manager.update_user_activity(user_id, "在线")
         except Exception:
             pass
 
@@ -4118,16 +4168,21 @@ async def get_admin_live_status(
         UserActivity.created_at.desc()
     ).limit(50).all()
     
-    activities_list = [
-        {
+    # Build activities list with username lookup
+    activities_list = []
+    for a in recent_activities:
+        # Get username for this activity
+        user = db.query(User).filter(User.id == a.user_id).first()
+        username = (user.nickname or user.username) if user else f"用户 {a.user_id}"
+        
+        activities_list.append({
             "id": a.id,
             "user_id": a.user_id,
+            "username": username,  # Add username field
             "action": a.action,
             "details": a.details,
             "created_at": a.created_at.isoformat() if a.created_at else None
-        }
-        for a in recent_activities
-    ]
+        })
     
     # Get current processing counts
     video_processing = db.query(VideoQueueItem).filter(

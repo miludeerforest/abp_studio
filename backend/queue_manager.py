@@ -87,7 +87,8 @@ class TaskQueue:
         task_type: str,
         payload: Dict[str, Any],
         user_id: int,
-        priority: int = 0
+        priority: int = 0,
+        is_admin: bool = False
     ) -> str:
         """
         Add a task to the queue.
@@ -97,10 +98,15 @@ class TaskQueue:
             payload: Task-specific data
             user_id: Owner of the task
             priority: Higher priority = processed first (default 0)
+            is_admin: If True, task gets high priority (queue jumping)
         
         Returns:
             task_id: Unique identifier for the task
         """
+        # Admin tasks get high priority for queue jumping
+        if is_admin:
+            priority = max(priority, 100)
+        
         task_id = str(uuid.uuid4())
         task = {
             "id": task_id,
@@ -130,7 +136,7 @@ class TaskQueue:
         # Publish event for real-time updates
         await self.publish_event("task_created", task)
         
-        logger.info(f"Enqueued task {task_id} of type {task_type} for user {user_id}")
+        logger.info(f"Enqueued task {task_id} of type {task_type} for user {user_id} (priority={priority})")
         return task_id
     
     async def dequeue(self, task_type: str) -> Optional[Dict[str, Any]]:
@@ -308,28 +314,81 @@ class TaskQueue:
 class ConcurrencyLimiter:
     """
     Redis-based concurrency limiter for global and per-user limits.
+    Supports dynamic configuration from database with caching.
     """
     
-    def __init__(self, redis: aioredis.Redis):
+    # Default limits (fallback if DB config unavailable)
+    DEFAULT_LIMITS = {
+        "image_gen": 5,
+        "video_gen": 3,
+        "story_chain": 2,
+    }
+    DEFAULT_USER_LIMIT = 2
+    
+    # Admin priority for queue insertion
+    ADMIN_PRIORITY = 100
+    
+    def __init__(self, redis: aioredis.Redis, config_getter=None):
         self.redis = redis
-        self.global_limit = int(os.getenv("MAX_GLOBAL_CONCURRENT", "10"))
-        self.user_limit = int(os.getenv("MAX_USER_CONCURRENT", "3"))
+        self._config_getter = config_getter  # Async function to get DB config
+        self._config_cache = {}
+        self._cache_time = None
+        self._cache_ttl = 30  # Cache config for 30 seconds
+    
+    async def _get_config(self) -> dict:
+        """Get config with caching to reduce DB queries."""
+        import time
+        now = time.time()
+        
+        # Use cache if valid
+        if self._cache_time and (now - self._cache_time) < self._cache_ttl:
+            return self._config_cache
+        
+        # Try to get fresh config from DB
+        if self._config_getter:
+            try:
+                self._config_cache = await self._config_getter()
+                self._cache_time = now
+                return self._config_cache
+            except Exception as e:
+                logger.warning(f"Failed to get config from DB: {e}, using defaults")
+        
+        return {}
+    
+    async def get_global_limit(self, task_type: str) -> int:
+        """Get global concurrent limit for a task type."""
+        config = await self._get_config()
+        
+        # Map task types to config keys
+        limits = {
+            "image_gen": int(config.get("max_concurrent_image", self.DEFAULT_LIMITS.get("image_gen", 5))),
+            "video_gen": int(config.get("max_concurrent_video", self.DEFAULT_LIMITS.get("video_gen", 3))),
+            "story_chain": int(config.get("max_concurrent_story", self.DEFAULT_LIMITS.get("story_chain", 2))),
+        }
+        return limits.get(task_type, 5)
+    
+    async def get_user_limit(self) -> int:
+        """Get per-user concurrent limit."""
+        config = await self._get_config()
+        return int(config.get("max_concurrent_per_user", self.DEFAULT_USER_LIMIT))
     
     async def can_acquire_global(self, task_type: str) -> bool:
         """Check if we can start a new task globally."""
         key = f"concurrent:{task_type}"
         current = await self.redis.get(key) or 0
-        return int(current) < self.global_limit
+        limit = await self.get_global_limit(task_type)
+        return int(current) < limit
     
     async def acquire_global(self, task_type: str, timeout: int = 300) -> bool:
         """Acquire a global execution slot."""
         key = f"concurrent:{task_type}"
+        limit = await self.get_global_limit(task_type)
         
         # Use INCR with expiry for atomic increment
         current = await self.redis.incr(key)
         await self.redis.expire(key, timeout)
         
-        if current > self.global_limit:
+        if current > limit:
             await self.redis.decr(key)
             return False
         return True
@@ -343,16 +402,18 @@ class ConcurrencyLimiter:
         """Check if a user can start a new task."""
         key = f"user:{user_id}:concurrent:{task_type}"
         current = await self.redis.get(key) or 0
-        return int(current) < self.user_limit
+        limit = await self.get_user_limit()
+        return int(current) < limit
     
     async def acquire_user(self, user_id: int, task_type: str, timeout: int = 300) -> bool:
         """Acquire a user execution slot."""
         key = f"user:{user_id}:concurrent:{task_type}"
+        limit = await self.get_user_limit()
         
         current = await self.redis.incr(key)
         await self.redis.expire(key, timeout)
         
-        if current > self.user_limit:
+        if current > limit:
             await self.redis.decr(key)
             return False
         return True
@@ -378,10 +439,13 @@ async def get_task_queue() -> TaskQueue:
     return task_queue
 
 
-async def get_concurrency_limiter() -> ConcurrencyLimiter:
+async def get_concurrency_limiter(config_getter=None) -> ConcurrencyLimiter:
     """Get or create the global ConcurrencyLimiter instance."""
     global concurrency_limiter
     if concurrency_limiter is None:
         queue = await get_task_queue()
-        concurrency_limiter = ConcurrencyLimiter(queue.redis)
+        concurrency_limiter = ConcurrencyLimiter(queue.redis, config_getter)
+    elif config_getter and not concurrency_limiter._config_getter:
+        # Update config getter if not set
+        concurrency_limiter._config_getter = config_getter
     return concurrency_limiter

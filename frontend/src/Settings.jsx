@@ -12,7 +12,12 @@ function Settings({ token, config, onConfigChange }) {
         analysis_model_name: '',
         site_title: '',
         site_subtitle: '',
-        cache_retention_days: 7
+        cache_retention_days: 7,
+        // Concurrency settings
+        max_concurrent_image: 5,
+        max_concurrent_video: 3,
+        max_concurrent_story: 2,
+        max_concurrent_per_user: 2
     })
     const [saving, setSaving] = useState(false)
     const [msg, setMsg] = useState(null)
@@ -31,7 +36,12 @@ function Settings({ token, config, onConfigChange }) {
                 analysis_model_name: config.analysis_model_name || '',
                 site_title: config.site_title || '',
                 site_subtitle: config.site_subtitle || '',
-                cache_retention_days: config.cache_retention_days ?? 7
+                cache_retention_days: config.cache_retention_days ?? 7,
+                // Concurrency settings
+                max_concurrent_image: config.max_concurrent_image ?? 5,
+                max_concurrent_video: config.max_concurrent_video ?? 3,
+                max_concurrent_story: config.max_concurrent_story ?? 2,
+                max_concurrent_per_user: config.max_concurrent_per_user ?? 2
             })
         }
     }, [config])
@@ -57,153 +67,210 @@ function Settings({ token, config, onConfigChange }) {
     }
 
     return (
-        <div style={{ maxWidth: '800px', margin: '0 auto', padding: '24px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px', width: '100%' }}>
             <div className="section-title">系统设置</div>
 
-            <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-lg)', padding: '24px' }}>
+            <div className="glass-card" style={{ padding: '32px' }}>
 
                 {/* Image Generation Settings */}
-                <h3 style={{ marginTop: 0, marginBottom: '16px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>📦 批量场景生成配置</h3>
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>API URL</label>
-                    <input
-                        type="text"
-                        value={localConfig.api_url}
-                        onChange={(e) => handleChange('api_url', e.target.value)}
-                        placeholder="e.g. https://generativelanguage.googleapis.com"
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
-                </div>
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>API Key</label>
-                    <input
-                        type="password"
-                        value={localConfig.api_key}
-                        onChange={(e) => handleChange('api_key', e.target.value)}
-                        placeholder="Your API Key"
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
-                </div>
-                <div className="form-group" style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>Model Name</label>
-                    <input
-                        type="text"
-                        value={localConfig.model_name}
-                        onChange={(e) => handleChange('model_name', e.target.value)}
-                        placeholder="e.g. gemini-3-pro-image-preview"
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
-                </div>
-                <div className="form-group" style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>Visual Analysis Model Name (Step 1)</label>
-                    <input
-                        type="text"
-                        value={localConfig.analysis_model_name}
-                        onChange={(e) => handleChange('analysis_model_name', e.target.value)}
-                        placeholder="e.g. gemini-3-pro-preview"
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
-                    <small style={{ color: 'var(--text-muted)' }}>Used for analyzing product and reference images.</small>
+                <div style={{ marginBottom: '32px' }}>
+                    <h3 style={{ marginTop: 0, marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px', fontSize: '1.1rem', color: 'var(--text-main)' }}>📦 批量场景生成配置</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>API URL</label>
+                            <input
+                                type="text"
+                                value={localConfig.api_url}
+                                onChange={(e) => handleChange('api_url', e.target.value)}
+                                placeholder="e.g. https://generativelanguage.googleapis.com"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>API Key</label>
+                            <input
+                                type="password"
+                                value={localConfig.api_key}
+                                onChange={(e) => handleChange('api_key', e.target.value)}
+                                placeholder="Your API Key"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>Model Name</label>
+                            <input
+                                type="text"
+                                value={localConfig.model_name}
+                                onChange={(e) => handleChange('model_name', e.target.value)}
+                                placeholder="e.g. gemini-3-pro-image-preview"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>Visual Analysis Model (Step 1)</label>
+                            <input
+                                type="text"
+                                value={localConfig.analysis_model_name}
+                                onChange={(e) => handleChange('analysis_model_name', e.target.value)}
+                                placeholder="e.g. gemini-3-pro-preview"
+                                style={{ width: '100%' }}
+                            />
+                            <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>Used for analyzing product and reference images.</small>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Video Generation Settings */}
-                <h3 style={{ marginBottom: '16px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>🎬 视频生成配置</h3>
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>API URL</label>
-                    <input
-                        type="text"
-                        value={localConfig.video_api_url}
-                        onChange={(e) => handleChange('video_api_url', e.target.value)}
-                        placeholder="Video Generation API URL"
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
-                </div>
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>API Key</label>
-                    <input
-                        type="password"
-                        value={localConfig.video_api_key}
-                        onChange={(e) => handleChange('video_api_key', e.target.value)}
-                        placeholder="Video Generation API Key"
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
-                </div>
-                <div className="form-group" style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>Model Name</label>
-                    <input
-                        type="text"
-                        value={localConfig.video_model_name}
-                        onChange={(e) => handleChange('video_model_name', e.target.value)}
-                        placeholder="e.g. sora-video-portrait"
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
+                <div style={{ marginBottom: '32px' }}>
+                    <h3 style={{ marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px', fontSize: '1.1rem', color: 'var(--text-main)' }}>🎬 视频生成配置</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>API URL</label>
+                            <input
+                                type="text"
+                                value={localConfig.video_api_url}
+                                onChange={(e) => handleChange('video_api_url', e.target.value)}
+                                placeholder="Video Generation API URL"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>API Key</label>
+                            <input
+                                type="password"
+                                value={localConfig.video_api_key}
+                                onChange={(e) => handleChange('video_api_key', e.target.value)}
+                                placeholder="Video Generation API Key"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>Model Name</label>
+                            <input
+                                type="text"
+                                value={localConfig.video_model_name}
+                                onChange={(e) => handleChange('video_model_name', e.target.value)}
+                                placeholder="e.g. sora-video-portrait"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {/* System Settings */}
-                <h3 style={{ marginBottom: '16px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>🖥️ 系统配置</h3>
-
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>网站标题 (Site Title)</label>
-                    <input
-                        type="text"
-                        value={localConfig.site_title || ''}
-                        onChange={(e) => handleChange('site_title', e.target.value)}
-                        placeholder="e.g. Banana Product"
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
-                    <small style={{ color: 'var(--text-muted)' }}>显示在侧边栏顶部的主标题</small>
+                <div style={{ marginBottom: '32px' }}>
+                    <h3 style={{ marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px', fontSize: '1.1rem', color: 'var(--text-main)' }}>🖥️ 系统配置</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>网站标题 (Site Title)</label>
+                            <input
+                                type="text"
+                                value={localConfig.site_title || ''}
+                                onChange={(e) => handleChange('site_title', e.target.value)}
+                                placeholder="e.g. Banana Product"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>网站副标题 (Subtitle)</label>
+                            <input
+                                type="text"
+                                value={localConfig.site_subtitle || ''}
+                                onChange={(e) => handleChange('site_subtitle', e.target.value)}
+                                placeholder="e.g. AI Product Design Studio"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>应用地址 (App URL)</label>
+                            <input
+                                type="text"
+                                value={localConfig.app_url}
+                                onChange={(e) => handleChange('app_url', e.target.value)}
+                                placeholder="e.g. http://localhost:33012"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>📁 缓存保留 (天)</label>
+                            <input
+                                type="number"
+                                min="0"
+                                value={localConfig.cache_retention_days}
+                                onChange={(e) => handleChange('cache_retention_days', parseInt(e.target.value) || 0)}
+                                placeholder="0 = 永久保留"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    </div>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>网站副标题 (Site Subtitle)</label>
-                    <input
-                        type="text"
-                        value={localConfig.site_subtitle || ''}
-                        onChange={(e) => handleChange('site_subtitle', e.target.value)}
-                        placeholder="e.g. AI Product Design Studio"
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
-                    <small style={{ color: 'var(--text-muted)' }}>显示在主标题下方的副标题</small>
+                {/* Concurrency Settings */}
+                <div style={{ marginBottom: '24px' }}>
+                    <h3 style={{ marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px', fontSize: '1.1rem', color: 'var(--text-main)' }}>⚡ 并行处理配置</h3>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>🖼️ 图片并发</label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="20"
+                                value={localConfig.max_concurrent_image}
+                                onChange={(e) => handleChange('max_concurrent_image', parseInt(e.target.value) || 5)}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>🎬 视频并发</label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="10"
+                                value={localConfig.max_concurrent_video}
+                                onChange={(e) => handleChange('max_concurrent_video', parseInt(e.target.value) || 3)}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>📖 Story并发</label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="5"
+                                value={localConfig.max_concurrent_story}
+                                onChange={(e) => handleChange('max_concurrent_story', parseInt(e.target.value) || 2)}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>👤 用户限额</label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="10"
+                                value={localConfig.max_concurrent_per_user}
+                                onChange={(e) => handleChange('max_concurrent_per_user', parseInt(e.target.value) || 2)}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    </div>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>应用地址 (App URL)</label>
-                    <input
-                        type="text"
-                        value={localConfig.app_url}
-                        onChange={(e) => handleChange('app_url', e.target.value)}
-                        placeholder="e.g. http://localhost:33012"
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
-                    <small style={{ color: 'var(--text-muted)' }}>用于生成分享链接或回调地址</small>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>📁 缓存保留时间（天）</label>
-                    <input
-                        type="number"
-                        min="0"
-                        value={localConfig.cache_retention_days}
-                        onChange={(e) => handleChange('cache_retention_days', parseInt(e.target.value) || 0)}
-                        placeholder="0 = 永久保留"
-                        style={{ width: '200px', padding: '10px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)', color: '#fff' }}
-                    />
-                    <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
-                        设置图片和视频缓存的保留时间。<strong>0 = 永久保留</strong>，其他值按天数自动清理未完成的任务。
-                    </small>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '32px', borderTop: '1px solid var(--card-border)', paddingTop: '24px' }}>
                     <button
                         className="btn-primary"
                         onClick={handleSave}
                         disabled={saving}
-                        style={{ padding: '12px 32px' }}
+                        style={{ padding: '12px 48px', fontSize: '1rem' }}
                     >
                         {saving ? '💾 保存中...' : '💾 保存所有配置'}
                     </button>
-                    {msg && <span style={{ color: '#4ade80' }}>✅ {msg}</span>}
-                    {error && <span style={{ color: 'var(--error-color)' }}>❌ {error}</span>}
+                    {msg && <span style={{ color: 'var(--success-color)', fontWeight: '500' }}>✅ {msg}</span>}
+                    {error && <span style={{ color: 'var(--error-color)', fontWeight: '500' }}>❌ {error}</span>}
                 </div>
 
             </div>

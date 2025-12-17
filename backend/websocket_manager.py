@@ -73,7 +73,8 @@ class ConnectionManager:
                 "username": username,
                 "role": "admin" if is_admin else "user",
                 "connected_at": datetime.now().isoformat(),
-                "last_activity": datetime.now().isoformat()
+                "last_activity": datetime.now().isoformat(),
+                "current_activity": "在线"  # 默认状态
             }
         
         logger.info(f"WebSocket connected: user {user_id} ({username})")

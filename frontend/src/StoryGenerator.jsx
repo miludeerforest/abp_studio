@@ -36,7 +36,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
     const VISUAL_STYLES = [
         { id: '', label: '不指定风格', prompt: '' },
         { id: 'cyberpunk', label: '赛博朋克/霓虹', prompt: 'Cyberpunk neon style, vibrant neon lights, futuristic urban aesthetic, high contrast colors, glowing effects.' },
-        { id: 'cinematic', label: '电影写实', prompt: 'Cinematic realistic style, professional film lighting, shallow depth of field, dramatic shadows.' },
+        { id: 'cinematic', label: '电影写实', prompt: 'Natural realistic style, soft natural daylight, balanced exposure, subtle shadows, true-to-life colors, everyday authenticity, smartphone camera aesthetic.' },
+        { id: 'vlog', label: '生活VLOG', prompt: 'Casual vlog style, handheld camera feel, natural ambient lighting, authentic everyday moments, warm tones, slightly desaturated, real-life atmosphere, no heavy post-processing.' },
         { id: 'watercolor', label: '水彩画', prompt: 'Watercolor painting style, soft edges, flowing colors, artistic brush strokes.' },
         { id: 'anime', label: '动漫风', prompt: 'Anime style, clean lines, vibrant colors, Japanese animation aesthetic.' },
         { id: 'bw_film', label: '黑白胶片', prompt: 'Black and white film photography style, classic noir aesthetic, high contrast, film grain.' },
@@ -409,7 +410,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
 
                             {/* Generation Mode Toggle */}
                             <div className="form-group" style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>生成模式</label>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>生成模式</label>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <button
                                         onClick={() => setGenerationMode('fission')}
@@ -419,7 +420,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                             borderRadius: '6px',
                                             border: generationMode === 'fission' ? '2px solid #10b981' : '1px solid #444',
                                             background: generationMode === 'fission' ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-                                            color: generationMode === 'fission' ? '#34d399' : '#888',
+                                            color: generationMode === 'fission' ? '#34d399' : 'var(--text-muted)',
                                             cursor: 'pointer',
                                             fontSize: '0.9rem',
                                             fontWeight: generationMode === 'fission' ? '600' : '400'
@@ -435,7 +436,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                             borderRadius: '6px',
                                             border: generationMode === 'linear' ? '2px solid #6d28d9' : '1px solid #444',
                                             background: generationMode === 'linear' ? 'rgba(109, 40, 217, 0.2)' : 'transparent',
-                                            color: generationMode === 'linear' ? '#a78bfa' : '#888',
+                                            color: generationMode === 'linear' ? '#a78bfa' : 'var(--text-muted)',
                                             cursor: 'pointer',
                                             fontSize: '0.9rem',
                                             fontWeight: generationMode === 'linear' ? '600' : '400'
@@ -444,7 +445,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                         🔗 线性模式（一镜到底）
                                     </button>
                                 </div>
-                                <p style={{ color: '#666', fontSize: '0.8rem', marginTop: '6px' }}>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '6px' }}>
                                     {generationMode === 'fission'
                                         ? '从产品图片裂变出多个独立场景，3个一组并发生成后合并'
                                         : '分镜脚本串行生成，保持画面连贯性'}
@@ -453,7 +454,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
 
                             {/* Product Category */}
                             <div className="form-group" style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>产品类别</label>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>产品类别</label>
                                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                     {CATEGORIES.map(cat => (
                                         <button
@@ -464,7 +465,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                 borderRadius: '6px',
                                                 border: category === cat.id ? '2px solid #6d28d9' : '1px solid #444',
                                                 background: category === cat.id ? 'rgba(109, 40, 217, 0.2)' : 'transparent',
-                                                color: category === cat.id ? '#a78bfa' : '#888',
+                                                color: category === cat.id ? '#a78bfa' : 'var(--text-muted)',
                                                 cursor: 'pointer',
                                                 fontSize: '0.9rem'
                                             }}
@@ -477,19 +478,11 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
 
                             {/* Visual Style */}
                             <div className="form-group" style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>视觉风格</label>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>视觉风格</label>
                                 <select
                                     value={visualStyle}
                                     onChange={(e) => setVisualStyle(e.target.value)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '10px',
-                                        background: '#1a1a2e',
-                                        border: '1px solid #444',
-                                        borderRadius: '6px',
-                                        color: '#fff',
-                                        fontSize: '0.95rem'
-                                    }}
+                                    className="form-select"
                                 >
                                     {VISUAL_STYLES.map(style => (
                                         <option key={style.id} value={style.id}>{style.label}</option>
@@ -499,19 +492,11 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
 
                             {/* Camera Movement */}
                             <div className="form-group" style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: '#ccc' }}>运镜风格</label>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>运镜风格</label>
                                 <select
                                     value={cameraMovement}
                                     onChange={(e) => setCameraMovement(e.target.value)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '10px',
-                                        background: '#1a1a2e',
-                                        border: '1px solid #444',
-                                        borderRadius: '6px',
-                                        color: '#fff',
-                                        fontSize: '0.95rem'
-                                    }}
+                                    className="form-select"
                                 >
                                     {CAMERA_MOVEMENTS.map(cam => (
                                         <option key={cam.id} value={cam.id}>{cam.label}</option>
@@ -520,7 +505,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                             </div>
 
                             <div className="form-group" style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', color: '#ccc' }}>
+                                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-main)', fontWeight: '600' }}>
                                     镜头数量: {shotCount}
                                 </label>
                                 <input
@@ -560,7 +545,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                 {step === 2 && (
                     <div className="storyboard-editor">
                         <h3>确认分镜脚本 (共 {shots.length} 个镜头)</h3>
-                        <p style={{ color: '#888', marginBottom: '10px' }}>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '10px' }}>
                             无需生成关键帧。系统将自动串行生成视频，保证画面连贯。
                         </p>
                         <div className="shots-grid">
@@ -636,8 +621,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                                                 'rgba(109, 40, 217, 0.2)',
                                                                     borderRadius: '8px',
                                                                     border: `1px solid ${branch.status === 'done' ? '#10b981' :
-                                                                            branch.status?.includes('error') ? '#ef4444' :
-                                                                                '#6d28d9'
+                                                                        branch.status?.includes('error') ? '#ef4444' :
+                                                                            '#6d28d9'
                                                                         }`
                                                                 }}>
                                                                     <div style={{ fontSize: '0.9rem', fontWeight: '600' }}>

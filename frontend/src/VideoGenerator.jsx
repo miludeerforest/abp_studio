@@ -15,6 +15,10 @@ const CATEGORIES = [
 ];
 
 function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, requestTimestamp, config, onConfigChange, isActive }) {
+    // 用户权限信息
+    const userRole = localStorage.getItem('role') || 'user';
+    const currentUserId = parseInt(localStorage.getItem('userId') || '0', 10);
+
     const [videoApiUrl, setVideoApiUrl] = useState(config.video_api_url || '')
     const [videoApiKey, setVideoApiKey] = useState(config.video_api_key || '')
     const [videoModelName, setVideoModelName] = useState(config.video_model_name || 'sora-video-portrait')
@@ -411,6 +415,7 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
             {/* Top Controls Area */}
             <div style={{
                 background: 'var(--card-bg)',
+                backdropFilter: 'blur(20px)',
                 border: '1px solid var(--card-border)',
                 borderRadius: 'var(--radius-lg)',
                 padding: '24px',
@@ -456,9 +461,10 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                 width: '100%',
                                 padding: '10px',
                                 borderRadius: '8px',
-                                background: 'rgba(0,0,0,0.8)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                color: '#fff'
+                                background: 'var(--card-bg)',
+                                backdropFilter: 'blur(20px)',
+                                border: '1px solid var(--card-border)',
+                                color: 'var(--text-main)'
                             }}
                         >
                             {CATEGORIES.map(cat => (
@@ -478,9 +484,9 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                     padding: '10px',
                                     marginTop: '8px',
                                     borderRadius: '8px',
-                                    background: 'transparent',
+                                    background: 'var(--input-bg, transparent)',
                                     border: '1px solid var(--primary-color)',
-                                    color: '#fff',
+                                    color: 'var(--text-main)',
                                     outline: 'none'
                                 }}
                             />
@@ -520,6 +526,7 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
             {/* Queue / Result Area */}
             <div style={{
                 background: 'var(--card-bg)',
+                backdropFilter: 'blur(20px)',
                 border: '1px solid var(--card-border)',
                 borderRadius: 'var(--radius-lg)',
                 padding: '24px',
@@ -553,8 +560,12 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                         )}
                     </div>
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <button className="btn-secondary" onClick={clearDone} style={{ fontSize: '0.8rem' }}>清除已完成</button>
-                        <button className="btn-secondary" onClick={clearAll} style={{ fontSize: '0.8rem', color: 'var(--error-color)' }}>清除全部</button>
+                        <button className="btn-secondary" onClick={clearDone} style={{ fontSize: '0.8rem' }}>
+                            {userRole === 'admin' ? '清除已完成' : '清除我的已完成'}
+                        </button>
+                        <button className="btn-secondary" onClick={clearAll} style={{ fontSize: '0.8rem', color: 'var(--error-color)' }}>
+                            {userRole === 'admin' ? '清除全部' : '清除我的任务'}
+                        </button>
                     </div>
                 </div>
 
@@ -581,7 +592,8 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                 display: 'grid',
                                 gridTemplateColumns: '40px 80px 1fr 120px 100px', // Adjusted grid
                                 gap: '16px',
-                                background: selectedVideoIds.has(item.id) ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255,255,255,0.03)',
+                                background: selectedVideoIds.has(item.id) ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-secondary, rgba(255,255,255,0.03))',
+                                backdropFilter: 'blur(10px)',
                                 border: selectedVideoIds.has(item.id) ? '1px solid var(--primary-color)' : '1px solid var(--card-border)',
                                 borderRadius: '8px',
                                 padding: '12px',
@@ -669,13 +681,16 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                             ▶️
                                         </button>
                                     )}
-                                    <button
-                                        onClick={() => removeItem(item.id)}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', opacity: 0.7 }}
-                                        title="删除"
-                                    >
-                                        🗑️
-                                    </button>
+                                    {/* 只有管理员或任务所有者能看到删除按钮 */}
+                                    {(userRole === 'admin' || item.user_id === currentUserId) && (
+                                        <button
+                                            onClick={() => removeItem(item.id)}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', opacity: 0.7 }}
+                                            title="删除"
+                                        >
+                                            🗑️
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}
