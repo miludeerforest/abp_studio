@@ -333,7 +333,7 @@ class ConcurrencyLimiter:
         self._config_getter = config_getter  # Async function to get DB config
         self._config_cache = {}
         self._cache_time = None
-        self._cache_ttl = 30  # Cache config for 30 seconds
+        self._cache_ttl = 10  # Reduced from 30s to 10s for faster config updates
     
     async def _get_config(self) -> dict:
         """Get config with caching to reduce DB queries."""

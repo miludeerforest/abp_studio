@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
 const BACKEND_URL = ''
-const CONCURRENT_LIMIT = 3;
 
 const CATEGORIES = [
     { value: 'daily', label: '日用百货', icon: '🧴' },
@@ -22,6 +21,8 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
     const [videoApiUrl, setVideoApiUrl] = useState(config.video_api_url || '')
     const [videoApiKey, setVideoApiKey] = useState(config.video_api_key || '')
     const [videoModelName, setVideoModelName] = useState(config.video_model_name || 'sora-video-portrait')
+    // 从配置读取并发限制
+    const CONCURRENT_LIMIT = config.max_concurrent_video || 3;
 
     // Queue State
     // Item: { id, filename, preview_url, prompt, status: 'pending'|'processing'|'done'|'error', result_url: url, error_msg: msg, created_at }
@@ -30,10 +31,11 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
     const [globalPrompt, setGlobalPrompt] = useState('Make this image move naturally, high quality, 4k')
     const [showConfig, setShowConfig] = useState(false)
     const [isDragging, setIsDragging] = useState(false)
-    const [isQueueRunning, setIsQueueRunning] = useState(false)
+    const isQueueRunning = true // 队列永远自动运行
     const [selectedVideo, setSelectedVideo] = useState(null)
     const [category, setCategory] = useState('daily')  // Product category for videos
     const [customProductName, setCustomProductName] = useState('')  // Custom product name for 'other' category
+    const [connectionWarning, setConnectionWarning] = useState(false) // 网络连接警告
 
     // Merge State
     const [selectedVideoIds, setSelectedVideoIds] = useState(new Set())
@@ -105,21 +107,54 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
         if (config.video_model_name) setVideoModelName(config.video_model_name)
     }, [config])
 
-    // Initial Fetch & Polling
+    // Initial Fetch & Polling with dynamic interval
     useEffect(() => {
         fetchQueue()
 
-        // Poll more frequently if active
-        // Also ensure we poll even if not 'running' to catch new additions from Auto Mode
-        const pollInterval = isActive ? 2000 : 5000;
+        // Dynamic polling based on processing state
+        let consecutiveErrors = 0;
+        let timeoutId;
 
-        const interval = setInterval(() => {
-            // Always fetch if active (to see new items) OR if processing
+        const poll = async () => {
+            // Determine interval: faster when processing, slower when idle
+            const getInterval = () => {
+                if (processingCountRef.current > 0) return 1500;  // Fast when processing
+                if (isActive) return 2500;  // Active tab but not processing
+                return 5000;  // Background
+            };
+
+            // Always fetch if active OR if processing
             if (isActive || isQueueRunningRef.current || processingCountRef.current > 0) {
-                fetchQueue()
+                try {
+                    const res = await fetch(`${BACKEND_URL}/api/v1/queue`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                        consecutiveErrors = 0;
+                        setConnectionWarning(false);
+                        const data = await res.json();
+                        if (data) {
+                            setQueue(data);
+                            const processing = data.filter(i => i.status === 'processing').length;
+                            setProcessingCount(processing);
+                        }
+                    } else {
+                        throw new Error(`HTTP ${res.status}`);
+                    }
+                } catch (e) {
+                    console.error("Polling error", e);
+                    consecutiveErrors++;
+                    if (consecutiveErrors >= 3) {
+                        setConnectionWarning(true);
+                    }
+                }
             }
-        }, pollInterval)
-        return () => clearInterval(interval)
+            // Schedule next poll with dynamic interval
+            timeoutId = setTimeout(poll, getInterval());
+        };
+
+        timeoutId = setTimeout(poll, 1500);  // Initial poll
+        return () => clearTimeout(timeoutId)
     }, [isActive]) // Re-run when active state changes
 
     const fetchQueue = async () => {
@@ -133,9 +168,14 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                 // Update processing count based on server state
                 const processing = data.filter(i => i.status === 'processing').length
                 setProcessingCount(processing)
+                setConnectionWarning(false) // 连接成功，清除警告
+            } else {
+                // 服务器返回错误，但不立即显示警告
+                console.warn("Failed to fetch queue: HTTP", res.status)
             }
         } catch (e) {
             console.error("Failed to fetch queue", e)
+            // 网络错误，但由polling effect统一处理
         }
     }
 
@@ -394,7 +434,7 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
     }
 
     const clearAll = async () => {
-        if (!confirm("确定要清空所有任务吗？")) return
+        if (!confirm("确定要清空所有任务吗?")) return
         try {
             await fetch(`${BACKEND_URL}/api/v1/queue`, {
                 method: 'DELETE',
@@ -403,6 +443,24 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
             fetchQueue()
         } catch (e) {
             console.error("Failed to clear all", e)
+        }
+    }
+
+    const retryItem = async (id) => {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/v1/queue/${id}/retry`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            if (res.ok) {
+                fetchQueue()
+            } else {
+                const txt = await res.text()
+                alert("重试失败: " + txt)
+            }
+        } catch (e) {
+            console.error("Failed to retry", e)
+            alert("重试请求失败: " + e.message)
         }
     }
 
@@ -523,6 +581,48 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                 </div>
             </div>
 
+            {/* \u7f51\u7edc\u8fde\u63a5\u8b66\u544a\u6a2a\u5e45 */}
+            {connectionWarning && (
+                <div style={{
+                    background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(251, 191, 36, 0.15) 100%)',
+                    border: '1px solid rgba(251, 146, 60, 0.4)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '16px 20px',
+                    margin: '0 0 24px 0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                }}>
+                    <span style={{ fontSize: '1.3rem' }}>⚠️</span>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ color: '#fb923c', fontWeight: '600', marginBottom: '4px', fontSize: '0.95rem' }}>
+                            网络连接不稳定
+                        </div>
+                        <div style={{ color: '#fbbf24', fontSize: '0.85rem', lineHeight: '1.4' }}>
+                            无法获取最新队列状态，但视频生成任务仍在后台执行。<br />
+                            请稍候刷新页面或等待连接恢复后查看结果。
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setConnectionWarning(false)}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#fb923c',
+                            cursor: 'pointer',
+                            fontSize: '1.2rem',
+                            padding: '4px 8px',
+                            opacity: 0.8,
+                            transition: 'opacity 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.target.style.opacity = '1'}
+                        onMouseLeave={(e) => e.target.style.opacity = '0.8'}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
             {/* Queue / Result Area */}
             <div style={{
                 background: 'var(--card-bg)',
@@ -535,13 +635,6 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div className="section-title" style={{ marginBottom: 0 }}>任务队列 ({queue.length})</div>
-                        <button
-                            className={isQueueRunning ? "btn-secondary" : "btn-primary"}
-                            onClick={() => setIsQueueRunning(!isQueueRunning)}
-                            style={{ padding: '6px 16px', fontSize: '0.9rem' }}
-                        >
-                            {isQueueRunning ? '⏸️ 暂停队列' : '▶️ 开始生成'}
-                        </button>
                         {/* Merge Button */}
                         {selectedVideoIds.size > 0 && (
                             <button
@@ -679,6 +772,17 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}
                                         >
                                             ▶️
+                                        </button>
+                                    )}
+                                    {/* 重试按钮 - 只在失败时显示 */}
+                                    {item.status === 'error' && (userRole === 'admin' || item.user_id === currentUserId) && (
+                                        <button
+                                            onClick={() => retryItem(item.id)}
+                                            className="btn-icon"
+                                            title="重试"
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'var(--warning-color, #f59e0b)' }}
+                                        >
+                                            🔄
                                         </button>
                                     )}
                                     {/* 只有管理员或任务所有者能看到删除按钮 */}

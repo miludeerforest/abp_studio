@@ -6,6 +6,8 @@ import json
 import logging
 import subprocess
 import uuid
+import random
+import time
 # Fix for Starlette/python-multipart strict limits
 try:
     # Patch python-multipart (if applicable)
@@ -48,6 +50,33 @@ from queue_manager import get_task_queue, get_concurrency_limiter
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# --- Global Request Throttler (Anti-CF Rate Limit) ---
+_request_timestamps = []
+_request_lock = asyncio.Lock()
+THROTTLE_WINDOW_SECONDS = 10  # Time window for rate limiting
+THROTTLE_MAX_REQUESTS = 15     # Max requests per window
+
+async def throttle_request():
+    """
+    Global request throttler to prevent Cloudflare 429 rate limits.
+    Limits requests to THROTTLE_MAX_REQUESTS per THROTTLE_WINDOW_SECONDS.
+    """
+    async with _request_lock:
+        current_time = time.time()
+        # Clean up old timestamps outside the window
+        _request_timestamps[:] = [t for t in _request_timestamps if current_time - t < THROTTLE_WINDOW_SECONDS]
+        
+        # If we've hit the limit, wait until the oldest request expires
+        if len(_request_timestamps) >= THROTTLE_MAX_REQUESTS:
+            oldest = _request_timestamps[0]
+            wait = THROTTLE_WINDOW_SECONDS - (current_time - oldest) + random.uniform(0.5, 2.0)
+            if wait > 0:
+                logger.info(f"Rate limiting: waiting {wait:.1f}s before next request (anti-CF)")
+                await asyncio.sleep(wait)
+        
+        # Record this request timestamp
+        _request_timestamps.append(time.time())
 
 from fastapi.staticfiles import StaticFiles
 from starlette.staticfiles import StaticFiles as StarletteStaticFiles
@@ -853,12 +882,15 @@ async def call_openai_compatible_api(
         "Authorization": f"Bearer {api_key}"
     }
 
-    # Retry logic for 429 errors
-    max_retries = 3
-    base_delay = 2.0
+    # Enhanced retry logic with Jitter for Cloudflare rate limit prevention
+    max_retries = 4  # Increased from 3
+    base_delay = 3.0  # Increased from 2.0
     
     for attempt in range(max_retries + 1):
         try:
+            # Apply global request throttling (anti-CF)
+            await throttle_request()
+            
             target_url = api_url
             if not target_url.endswith("/chat/completions") and not target_url.endswith(":generateContent"):
                  target_url = f"{target_url.rstrip('/')}/chat/completions"
@@ -868,11 +900,16 @@ async def call_openai_compatible_api(
             # Enable streaming
             payload["stream"] = True
             
-            async with client.stream("POST", target_url, json=payload, headers=headers, timeout=600.0) as response:
+            # Staged timeout: quick connect, longer read
+            timeout = httpx.Timeout(connect=15.0, read=300.0, write=30.0, pool=30.0)
+            
+            async with client.stream("POST", target_url, json=payload, headers=headers, timeout=timeout) as response:
                 if response.status_code == 429:
                     if attempt < max_retries:
-                        wait_time = base_delay * (2 ** attempt)
-                        logger.warning(f"Rate limited (429). Retrying in {wait_time}s...")
+                        # Add Jitter randomization to prevent thundering herd
+                        jitter = random.uniform(0.8, 1.5)
+                        wait_time = base_delay * (2 ** attempt) * jitter
+                        logger.warning(f"Rate limited (429). Retrying in {wait_time:.1f}s with jitter...")
                         await asyncio.sleep(wait_time)
                         continue
                     else:
@@ -917,8 +954,26 @@ async def call_openai_compatible_api(
                 
                 # Check for HTML error response (e.g. Cloudflare 504/502)
                 content_sample = content.strip().lower()
+                # Check if response is HTML (Cloudflare 429 page or other gateway errors)
                 if content_sample.startswith("html>") or content_sample.startswith("<!doctype") or "<html" in content_sample:
-                    logger.error(f"Received HTML content instead of image for {angle_name}: {content[:200]}")
+                    logger.warning(f"Received HTML content (likely Cloudflare rate limit) for {angle_name}: {content[:300]}")
+                    
+                    # Check if it's a Cloudflare rate limit page
+                    if "429" in content or "Too many requests" in content.lower() or "Just a moment" in content:
+                        if attempt < max_retries:
+                            # Randomized wait for Cloudflare with extra buffer
+                            cloudflare_extra = random.uniform(8, 15)
+                            jitter = random.uniform(0.8, 1.5)
+                            wait_time = base_delay * (2 ** attempt) * jitter + cloudflare_extra
+                            logger.warning(f"Detected Cloudflare rate limit. Retrying in {wait_time:.1f}s (attempt {attempt+1}/{max_retries+1})...")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            logger.error(f"Rate limit persists after {max_retries+1} attempts for {angle_name}")
+                            return ImageResult(angle_name=angle_name, error="Rate Limit Exceeded (Cloudflare Protection)")
+                    
+                    # Other HTML errors (gateway timeout, etc.)
+                    logger.error(f"API Gateway Error for {angle_name}")
                     return ImageResult(angle_name=angle_name, error="API Gateway Timeout (Upstream Error)")
 
                 import re
@@ -933,8 +988,9 @@ async def call_openai_compatible_api(
         except Exception as e:
             logger.error(f"Request failed: {e}")
             if attempt < max_retries:
-                wait_time = base_delay * (2 ** attempt)
-                logger.warning(f"Request failed with {e}. Retrying in {wait_time}s...")
+                jitter = random.uniform(0.8, 1.5)
+                wait_time = base_delay * (2 ** attempt) * jitter
+                logger.warning(f"Request failed with {e}. Retrying in {wait_time:.1f}s...")
                 await asyncio.sleep(wait_time)
                 continue
             return ImageResult(angle_name=angle_name, error=str(e))
@@ -2061,21 +2117,51 @@ def share_all_videos(
 
 @app.get("/api/v1/queue", response_model=List[QueueItemResponse])
 def get_queue(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    from sqlalchemy import case
+    from sqlalchemy import case, func, extract
     
-    # 获取所有管理员用户的ID，用于优先级排序
-    admin_ids = [u.id for u in db.query(User).filter(User.role == "admin").all()]
+    # 三级优先级系统 - 使用公平调度算法
+    # redkaytop (最高优先级): 基础权重 0
+    # 15089833871 (中等优先级): 基础权重 300  
+    # 其他用户 (普通优先级): 基础权重 600
+    # 
+    # 公平调度规则：
+    # 最终分数 = 基础权重 - 等待秒数
+    # 等待时间越长，分数越低（越优先）
+    # 这样即使是低优先级任务，等待足够久后也会被处理
     
-    # 构建优先级排序：管理员任务 priority=0（优先），其他用户 priority=1
-    priority_order = case(
-        (VideoQueueItem.user_id.in_(admin_ids), 0),
-        else_=1
+    # 首先获取所有用户ID和用户名的映射
+    user_id_to_username = {u.id: u.username for u in db.query(User).all()}
+    
+    # 找出特定用户的ID
+    redkaytop_ids = [uid for uid, uname in user_id_to_username.items() if uname == "redkaytop"]
+    user_15089833871_ids = [uid for uid, uname in user_id_to_username.items() if uname == "15089833871"]
+    
+    # 基础优先级权重（数字越小越优先）
+    base_priority_weight = case(
+        (VideoQueueItem.user_id.in_(redkaytop_ids), 0),          # 最高优先级
+        (VideoQueueItem.user_id.in_(user_15089833871_ids), 300), # 中等优先级（5分钟等待可追平）
+        else_=600                                                 # 普通优先级（10分钟等待可追平）
     )
     
-    # 排序：先按优先级，再按创建时间
-    return db.query(VideoQueueItem).filter(
-        VideoQueueItem.status != "archived"
-    ).order_by(priority_order, VideoQueueItem.created_at.asc()).all()
+    # 计算等待时间（秒）
+    wait_seconds = extract('epoch', func.now() - VideoQueueItem.created_at)
+    
+    # 最终调度分数 = 基础权重 - 等待秒数
+    # 例如：
+    # - P0任务刚创建: 0 - 0 = 0 (最优先)
+    # - P2任务等待10分钟: 600 - 600 = 0 (与P0新任务同等优先)
+    # - P2任务等待15分钟: 600 - 900 = -300 (比P1新任务还优先)
+    fair_score = base_priority_weight - wait_seconds
+    
+    # 权限过滤：管理员可以看到所有任务，普通用户只能看到自己的任务
+    base_query = db.query(VideoQueueItem).filter(VideoQueueItem.status != "archived")
+    
+    if user.role != "admin":
+        # 普通用户只能看到自己的任务
+        base_query = base_query.filter(VideoQueueItem.user_id == user.id)
+    
+    # 排序：按公平分数排序（分数越低越优先）
+    return base_query.order_by(fair_score.asc()).all()
 
 @app.post("/api/v1/queue")
 async def add_to_queue(
@@ -2433,113 +2519,148 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
             "Authorization": f"Bearer {video_api_key}"
         }
         
-        # Disable stream mode to avoid hanging connections
-        payload["stream"] = False 
+        # Enable stream mode as required by Sora2 API
+        payload["stream"] = True 
 
-        logger.info(f"Posting to {target_url} (Non-Stream Mode)")
+        logger.info(f"Posting to {target_url} (Stream Mode)")
 
-        async with httpx.AsyncClient() as client:
+        # Use longer timeout for video generation (30 min total, 2 min connect)
+        async with httpx.AsyncClient(timeout=httpx.Timeout(1800.0, connect=120.0)) as client:
             try:
-                # 900s (15 min) timeout for the generation process - increased for longer videos
-                resp = await client.post(target_url, json=payload, headers=headers, timeout=900.0)
-                
-                if resp.status_code != 200:
-                    logger.error(f"Video API Error {resp.status_code}: {resp.text}")
-                    item.error_msg = f"API Error {resp.status_code}: {resp.text[:200]}"
-                    item.status = "error"
-                else:
-                    data = resp.json()
-                    # Standard OpenAI format: choices[0].message.content
-                    full_content = data.get("choices", [])[0].get("message", {}).get("content", "")
-                        
-                    # Parse final result
-                    import re
-                    # 1. Markdown Image
-                    img_match = re.search(r'!\[.*?\]\((.*?)\)', full_content)
-                    # 2. Raw URL (http...) - Updated to exclude trailing ' and )
-                    url_match = re.search(r'https?://[^\s<>"\')]+|data:image/[^\s<>"\')]+', full_content)
-                    
-                    found_url = None
-                    if img_match:
-                        found_url = img_match.group(1)
-                    elif url_match:
-                        found_url = url_match.group(0)
-                        
-                    if found_url:
-                        # Cleanup trailing punctuation just in case
-                        found_url = found_url.strip("'\".,)>")
-                        # Paranoid cleanup for trailing quotes
-                        found_url = found_url.split("'")[0]
-                        found_url = found_url.split('"')[0]
-                        
-                        # Try to convert Sora URL to watermark-free version
-                        found_url = await convert_sora_to_watermark_free(found_url)
-                        
-                        # Download video to local storage if it's an external URL
-                        final_url = found_url
-                        preview_url = None
-                        
-                        if found_url.startswith("http"):
-                            try:
-                                local_filename = f"video_{item_id}.mp4"
-                                local_path = f"/app/uploads/queue/{local_filename}"
-                                
-                                async with httpx.AsyncClient() as download_client:
-                                    video_resp = await download_client.get(found_url, timeout=300.0)
-                                    if video_resp.status_code == 200:
-                                        with open(local_path, "wb") as f:
-                                            f.write(video_resp.content)
-                                        final_url = f"/uploads/queue/{local_filename}"
-                                        logger.info(f"Video downloaded to local: {final_url}")
-                                        
-                                        # Generate thumbnail from first frame
-                                        thumb_filename = f"video_{item_id}_thumb.jpg"
-                                        thumb_path = f"/app/uploads/queue/{thumb_filename}"
-                                        try:
-                                            thumb_cmd = [
-                                                "ffmpeg", "-y",
-                                                "-i", local_path,
-                                                "-ss", "00:00:00.500",
-                                                "-vframes", "1",
-                                                "-q:v", "2",
-                                                thumb_path
-                                            ]
-                                            subprocess.run(thumb_cmd, check=True, capture_output=True)
-                                            preview_url = f"/uploads/queue/{thumb_filename}"
-                                        except Exception as thumb_err:
-                                            logger.warning(f"Failed to generate thumbnail: {thumb_err}")
-                                    else:
-                                        logger.warning(f"Failed to download video: HTTP {video_resp.status_code}")
-                            except Exception as dl_err:
-                                logger.warning(f"Video download failed, keeping remote URL: {dl_err}")
-                        
-                        item.result_url = final_url
-                        if preview_url:
-                            item.preview_url = preview_url
-                        item.status = "done"
-                        logger.info(f"Video Generated Successfully: {final_url}")
-                        
-                        # Log activity and update user status
-                        try:
-                            activity = UserActivity(
-                                user_id=item.user_id,
-                                action="video_gen_complete",
-                                details=f"视频生成完成 | 提示词: {item.prompt[:30]}..."
-                            )
-                            db.add(activity)
-                            
-                            # Update user status to idle and broadcast
-                            await connection_manager.update_user_activity(item.user_id, "空闲")
-                        except Exception as act_err:
-                            logger.warning(f"Failed to log video completion: {act_err}")
+                # Stream response - client timeout applies globally
+                async with client.stream("POST", target_url, json=payload, headers=headers, timeout=900.0) as resp:
+                    if resp.status_code != 200:
+                        error_text = await resp.aread()
+                        logger.error(f"Video API Error {resp.status_code}: {error_text.decode()}")
+                        item.error_msg = f"API Error {resp.status_code}: {error_text.decode()[:200]}"
+                        item.status = "error"
                     else:
-                         logger.warning(f"No URL found in video response: {full_content[:200]}")
-                         item.error_msg = "No video URL found in response."
-                         item.status = "error"
-                             
+                        # Process streaming response (SSE format)
+                        full_content = ""
+                        import json
+                        
+                        async for line in resp.aiter_lines():
+                            if not line.strip():
+                                continue
+                            
+                            # SSE format: "data: {json}"
+                            if line.startswith("data: "):
+                                data_str = line[6:]  # Remove "data: " prefix
+                                
+                                # Check for [DONE] signal
+                                if data_str.strip() == "[DONE]":
+                                    logger.info("Stream completed with [DONE] signal")
+                                    break
+                                
+                                try:
+                                    chunk_data = json.loads(data_str)
+                                    # Extract delta content from streaming chunk
+                                    choices = chunk_data.get("choices", [])
+                                    if choices:
+                                        delta = choices[0].get("delta", {})
+                                        # Sora2 API uses "reasoning_content" instead of "content"
+                                        # Try reasoning_content first, fallback to content
+                                        content_chunk = delta.get("reasoning_content") or delta.get("content", "")
+                                        if content_chunk:
+                                            full_content += content_chunk
+                                            logger.debug(f"Stream chunk received ({len(content_chunk)} chars): {content_chunk[:100]}...")
+                                except json.JSONDecodeError as je:
+                                    logger.warning(f"Failed to parse SSE chunk: {data_str[:100]}")
+                                    continue
+                        
+                        logger.info(f"Stream complete, total content length: {len(full_content)}")
+                        
+                        # Parse final accumulated content
+                        import re
+                        # 1. Markdown Image
+                        img_match = re.search(r'!\[.*?\]\((.*?)\)', full_content)
+                        # 2. Raw URL (http...) - Updated to exclude trailing ' and )
+                        url_match = re.search(r'https?://[^\s<>"\'\\)]+|data:image/[^\s<>"\'\\)]+', full_content)
+                        
+                        found_url = None
+                        if img_match:
+                            found_url = img_match.group(1)
+                        elif url_match:
+                            found_url = url_match.group(0)
+                            
+                        if found_url:
+                            # Cleanup trailing punctuation just in case
+                            found_url = found_url.strip("'\".,)>")
+                            # Paranoid cleanup for trailing quotes
+                            found_url = found_url.split("'")[0]
+                            found_url = found_url.split('"')[0]
+                            
+                            logger.info(f"Extracted video URL: {found_url[:100]}...")
+                            
+                            # Try to convert Sora URL to watermark-free version
+                            found_url = await convert_sora_to_watermark_free(found_url)
+                            
+                            # Download video to local storage if it's an external URL
+                            final_url = found_url
+                            preview_url = None
+                            
+                            if found_url.startswith("http"):
+                                try:
+                                    local_filename = f"video_{item_id}.mp4"
+                                    local_path = f"/app/uploads/queue/{local_filename}"
+                                    
+                                    logger.info(f"Downloading video from {found_url[:100]}...")
+                                    async with httpx.AsyncClient() as download_client:
+                                        video_resp = await download_client.get(found_url, timeout=300.0)
+                                        if video_resp.status_code == 200:
+                                            with open(local_path, "wb") as f:
+                                                f.write(video_resp.content)
+                                            final_url = f"/uploads/queue/{local_filename}"
+                                            logger.info(f"Video downloaded to local: {final_url}")
+                                            
+                                            # Generate thumbnail from first frame
+                                            thumb_filename = f"video_{item_id}_thumb.jpg"
+                                            thumb_path = f"/app/uploads/queue/{thumb_filename}"
+                                            try:
+                                                thumb_cmd = [
+                                                    "ffmpeg", "-y",
+                                                    "-i", local_path,
+                                                    "-ss", "00:00:00.500",
+                                                    "-vframes", "1",
+                                                    "-q:v", "2",
+                                                    thumb_path
+                                                ]
+                                                subprocess.run(thumb_cmd, check=True, capture_output=True)
+                                                preview_url = f"/uploads/queue/{thumb_filename}"
+                                            except Exception as thumb_err:
+                                                logger.warning(f"Failed to generate thumbnail: {thumb_err}")
+                                        else:
+                                            logger.warning(f"Failed to download video: HTTP {video_resp.status_code}")
+                                except Exception as dl_err:
+                                    logger.warning(f"Video download failed, keeping remote URL: {dl_err}")
+                            
+                            item.result_url = final_url
+                            if preview_url:
+                                item.preview_url = preview_url
+                            item.status = "done"
+                            logger.info(f"Video Generated Successfully: {final_url}")
+                            
+                            # Log activity and update user status
+                            try:
+                                activity = UserActivity(
+                                    user_id=item.user_id,
+                                    action="video_gen_complete",
+                                    details=f"视频生成完成 | 提示词: {item.prompt[:30]}..."
+                                )
+                                db.add(activity)
+                                
+                                # Update user status to idle and broadcast
+                                await connection_manager.update_user_activity(item.user_id, "空闲")
+                            except Exception as act_err:
+                                logger.warning(f"Failed to log video completion: {act_err}")
+                        else:
+                            logger.warning(f"No URL found in video response: {full_content[:200]}")
+                            item.error_msg = "No video URL found in response."
+                            item.status = "error"
+                              
             except httpx.TimeoutException:
-                logger.error("Video Generation Timeout (600s)")
-                item.error_msg = "Video Generation Timed Out"
+                logger.error("Video Generation Timeout (900s / 15 minutes)")
+                item.error_msg = "Video Generation Timed Out (超过15分钟)"
                 item.status = "error"
             except Exception as e:
                 logger.error(f"Video Client Error: {e}")
@@ -2993,12 +3114,20 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                 db.close()
             
             # Trigger Generation with retry mechanism (max 3 attempts)
+            # With progressive delay to avoid CF rate limiting
             max_retries = 3
+            VIDEO_RETRY_BASE_DELAY = 8  # Base delay for video retries (seconds)
+            
             for attempt in range(1, max_retries + 1):
                 logging.info(f"Chain {chain_id}: Shot {shot_num} attempt {attempt}/{max_retries}")
                 
                 # Reset status for retry
                 if attempt > 1:
+                    # Progressive delay with jitter: 8s, 16s, 32s (+ random 2-8s)
+                    retry_delay = VIDEO_RETRY_BASE_DELAY * (2 ** (attempt - 2)) + random.uniform(2, 8)
+                    logging.info(f"Chain {chain_id}: Waiting {retry_delay:.1f}s before retry (anti-CF)")
+                    await asyncio.sleep(retry_delay)
+                    
                     db = SessionLocal()
                     retry_item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
                     if retry_item:
@@ -3006,6 +3135,9 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                         retry_item.error_msg = None
                         db.commit()
                     db.close()
+                
+                # Apply global throttling before video API call
+                await throttle_request()
                 
                 await process_video_background(item_id, final_api_url, final_api_key, final_model)
                 
@@ -3028,9 +3160,6 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                         status["status"] = "failed"
                         status["error"] = f"Shot {shot_num} failed after {max_retries} attempts: {error_msg}"
                         return
-                    
-                    # Wait before retry
-                    await asyncio.sleep(5)
             
             # Get result_url after successful generation
             db = SessionLocal()
@@ -3088,8 +3217,13 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                             db.commit()
                         db.close()
                         
-                        # Wait before retry
-                        await asyncio.sleep(5)
+                        # Progressive delay for download retry regeneration
+                        regen_delay = 10 + random.uniform(3, 10) * download_attempt
+                        logging.info(f"Chain {chain_id}: Waiting {regen_delay:.1f}s before regeneration (anti-CF)")
+                        await asyncio.sleep(regen_delay)
+                        
+                        # Apply throttling before regeneration
+                        await throttle_request()
                         
                         # Regenerate video
                         await process_video_background(item_id, final_api_url, final_api_key, final_model)
@@ -3359,17 +3493,19 @@ class StoryFissionRequest(BaseModel):
     api_url: Optional[str] = None
     api_key: Optional[str] = None
     model_name: Optional[str] = None
+    category: str = "other"  # Product category for gallery/video classification
 
 class FissionBranch(BaseModel):
     branch_id: int
     scene_name: str
     theme: str
-    image_prompt: str
-    video_prompt: str
-    camera_movement: str
+    product_focus: Optional[str] = None  # 该分支突出的产品特点
+    image_prompt: str  # 图片生成 prompt
+    video_prompt: str  # 视频生成 prompt
+    camera_movement: Optional[str] = "static with motion"  # 默认运镜
 
 STORY_FISSION_STATUS = {}
-FISSION_CONCURRENT_LIMIT = 3  # 3 branches at a time
+
 
 async def analyze_fission_branches(
     image_b64: str,
@@ -3521,7 +3657,8 @@ async def generate_branch_image(
     image_api_url: str,
     image_api_key: str,
     image_model: str,
-    user_id: int = None  # NEW: for gallery save
+    user_id: int = None,  # for gallery save
+    category: str = "other"  # NEW: Product category for classification
 ) -> str:
     """Generate a stylized image for a branch with retry mechanism. Returns local file path."""
     branch_id = branch.get("branch_id", 0)
@@ -3650,7 +3787,7 @@ async def generate_branch_image(
                                 prompt=f"[Fission] {scene_name}: {image_prompt[:200]}",
                                 width=img_width,
                                 height=img_height,
-                                category="fission"
+                                category=category  # Use user-selected category instead of hardcoded 'fission'
                             )
                             db.add(gallery_item)
                             db.commit()
@@ -3695,7 +3832,8 @@ async def generate_branch_video(
     video_api_url: str,
     video_api_key: str,
     video_model: str,
-    user_id: int
+    user_id: int,
+    category: str = "other"  # NEW: Product category for classification
 ) -> dict:
     """Generate video for a branch. Returns result dict."""
     branch_id = branch.get("branch_id", 0)
@@ -3721,7 +3859,8 @@ async def generate_branch_video(
             file_path=queue_file_path,
             prompt=full_prompt,
             status="pending",
-            user_id=user_id
+            user_id=user_id,
+            category=category  # Use user-selected category
         )
         db.add(new_item)
         db.commit()
@@ -3845,64 +3984,272 @@ async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_
         )
         
         logging.info(f"Fission {fission_id}: Generated {len(branches)} branch scripts")
-        status["branches"] = [{"branch_id": b.get("branch_id"), "scene_name": b.get("scene_name"), "status": "pending"} for b in branches]
+        status["branches"] = [{"branch_id": b.get("branch_id"), "scene_name": b.get("scene_name"), "status": "pending", "retry_count": 0} for b in branches]
         
-        # Step 3: Generate images in batches of 3
+        # Step 3: Generate images with batch-level retry mechanism
         status["phase"] = "generating_images"
         os.makedirs("/app/uploads/queue", exist_ok=True)
         
-        image_paths = {}
-        for i in range(0, len(branches), FISSION_CONCURRENT_LIMIT):
-            batch = branches[i:i + FISSION_CONCURRENT_LIMIT]
-            logging.info(f"Fission {fission_id}: Image batch {i//FISSION_CONCURRENT_LIMIT + 1}, {len(batch)} branches")
+        # Get concurrency settings
+        concurrency_config = await get_concurrency_config()
+        # Default to 5 if not set
+        concurrent_limit = int(concurrency_config.get("max_concurrent_image", 5))
+        logging.info(f"Fission {fission_id}: Using dynamic concurrency limit: {concurrent_limit}")
+        
+        # Get global limiter
+        limiter = await get_concurrency_limiter()
+        
+        async def generate_with_limit(branch, batch_index=0):
+            """Wrapper to enforce global concurrency limit with request spacing"""
+            branch_id = branch.get("branch_id")
             
-            tasks = [
-                generate_branch_image(b, original_b64, fission_id, image_api_url, image_api_key, image_model, user_id)
-                for b in batch
-            ]
+            # Add spacing within batch to prevent CF rate limiting (0.3-0.8s per request)
+            if batch_index > 0:
+                spacing_delay = random.uniform(0.3, 0.8) * batch_index
+                await asyncio.sleep(spacing_delay)
+            
+            # Apply global throttling
+            await throttle_request()
+            
+            # Acquire global slot
+            acquired = await limiter.acquire_global("image_gen", timeout=600)
+            if not acquired:
+                logging.warning(f"Fission {fission_id}: Branch {branch_id} failed to acquire global slot (timeout)")
+                return Exception("Global concurrency limit reached (timeout)")
+            
+            try:
+                return await generate_branch_image(
+                    branch, original_b64, fission_id, 
+                    image_api_url, image_api_key, image_model, user_id, req.category
+                )
+            finally:
+                await limiter.release_global("image_gen")
+
+        # Batch-level retry mechanism with Sliding Window (Semaphore-based)
+        # This allows completed slots to be immediately filled with new tasks
+        MAX_RETRY_ROUNDS = 3
+        RETRY_DELAY = 5  # seconds between retry rounds
+        
+        image_paths = {}
+        branches_to_process = branches.copy()  # Start with all branches
+        retry_round = 0
+        
+        # Create semaphore for sliding window concurrency control
+        semaphore = asyncio.Semaphore(concurrent_limit)
+        
+        async def generate_with_semaphore(branch, branch_index_in_batch):
+            """Wrapper using semaphore for true sliding window behavior"""
+            async with semaphore:
+                # Add spacing to prevent CF rate limiting
+                if branch_index_in_batch > 0:
+                    spacing_delay = random.uniform(0.3, 0.8) * min(branch_index_in_batch, 3)
+                    await asyncio.sleep(spacing_delay)
+                
+                # Apply global throttling
+                await throttle_request()
+                
+                branch_id = branch.get("branch_id")
+                
+                # Acquire global slot
+                acquired = await limiter.acquire_global("image_gen", timeout=600)
+                if not acquired:
+                    logging.warning(f"Fission {fission_id}: Branch {branch_id} failed to acquire global slot (timeout)")
+                    return {"branch_id": branch_id, "error": "Global concurrency limit reached (timeout)"}
+                
+                try:
+                    result = await generate_branch_image(
+                        branch, original_b64, fission_id, 
+                        image_api_url, image_api_key, image_model, user_id, req.category
+                    )
+                    return {"branch_id": branch_id, "result": result}
+                except Exception as e:
+                    return {"branch_id": branch_id, "error": str(e)}
+                finally:
+                    await limiter.release_global("image_gen")
+        
+        while retry_round < MAX_RETRY_ROUNDS:
+            failed_branches = []
+            status["retry_round"] = retry_round + 1
+            
+            # Use sliding window: all tasks start concurrently, semaphore limits active count
+            logging.info(f"Fission {fission_id}: Starting {len(branches_to_process)} image tasks with sliding window (limit={concurrent_limit})")
+            
+            # Launch all tasks at once - semaphore handles concurrency
+            tasks = [generate_with_semaphore(b, idx) for idx, b in enumerate(branches_to_process)]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            for j, result in enumerate(results):
-                branch_id = batch[j].get("branch_id", i + j + 1)
+            for result in results:
                 if isinstance(result, Exception):
-                    logging.error(f"Fission {fission_id}: Branch {branch_id} image error: {result}")
-                    status["branches"][i + j]["status"] = "image_error"
+                    # Gather-level exception
+                    logging.error(f"Fission {fission_id}: Task exception: {result}")
+                    continue
+                
+                branch_id = result.get("branch_id")
+                
+                # Find branch index in original branches list
+                branch_idx = next((idx for idx, b in enumerate(branches) if b.get("branch_id") == branch_id), None)
+                
+                if branch_idx is None:
+                    logging.error(f"Fission {fission_id}: Cannot find branch {branch_id} in original list")
+                    continue
+                
+                if "error" in result:
+                    # Track failure
+                    original_branch = next((b for b in branches if b.get("branch_id") == branch_id), None)
+                    logging.warning(f"Fission {fission_id}: Branch {branch_id} failed (attempt {retry_round + 1}/{MAX_RETRY_ROUNDS}): {result['error']}")
+                    status["branches"][branch_idx]["status"] = "image_error"
+                    status["branches"][branch_idx]["error"] = result["error"]
+                    status["branches"][branch_idx]["retry_count"] = retry_round + 1
+                    if original_branch:
+                        failed_branches.append(original_branch)
                 else:
-                    image_paths[branch_id] = result
-                    status["branches"][i + j]["status"] = "image_done"
-                    status["branches"][i + j]["image_url"] = f"/uploads/queue/fission_{fission_id}_branch_{branch_id}.jpg"
+                    # Success
+                    image_paths[branch_id] = result["result"]
+                    status["branches"][branch_idx]["status"] = "image_done"
+                    status["branches"][branch_idx]["image_url"] = f"/uploads/queue/fission_{fission_id}_branch_{branch_id}.jpg"
+                    logging.info(f"Fission {fission_id}: Branch {branch_id} image generated successfully")
+            
+            # Check if all branches succeeded
+            if not failed_branches:
+                logging.info(f"Fission {fission_id}: All {len(branches)} images generated successfully")
+                break
+            
+            # Check if we should retry
+            retry_round += 1
+            if retry_round < MAX_RETRY_ROUNDS:
+                status["failed_count"] = len(failed_branches)
+                logging.warning(f"Fission {fission_id}: {len(failed_branches)} branches failed, starting retry round {retry_round + 1} after {RETRY_DELAY}s...")
+                await asyncio.sleep(RETRY_DELAY)
+                branches_to_process = failed_branches  # Only retry failed branches
+            else:
+                # Max retries reached
+                logging.error(f"Fission {fission_id}: {len(failed_branches)} branches still failed after {MAX_RETRY_ROUNDS} retry rounds")
+                status["failed_count"] = len(failed_branches)
+                status["error"] = f"{len(failed_branches)} 个分支图片生成失败，已达最大重试次数"
+                status["status"] = "partial_failure"
+                # Don't break - continue to video generation with available images
         
-        # Step 4: Generate videos in batches of 3
+        # Step 4: Generate videos in batches (Dynamic Batch Size + Global Concurrency Limit)
         status["phase"] = "generating_videos"
         
-        for i in range(0, len(branches), FISSION_CONCURRENT_LIMIT):
-            batch = branches[i:i + FISSION_CONCURRENT_LIMIT]
-            logging.info(f"Fission {fission_id}: Video batch {i//FISSION_CONCURRENT_LIMIT + 1}, {len(batch)} branches")
-            
-            tasks = []
-            for b in batch:
-                branch_id = b.get("branch_id", 0)
-                if branch_id in image_paths:
-                    tasks.append(generate_branch_video(
-                        b, image_paths[branch_id], fission_id,
-                        video_api_url, video_api_key, video_model, user_id
-                    ))
-            
-            if tasks:
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Get video concurrent limit
+        video_limit = int(concurrency_config.get("max_concurrent_video", 3))
+        logging.info(f"Fission {fission_id}: Using dynamic video concurrency limit: {video_limit}")
+
+        async def generate_video_with_limit(b, img_path):
+             branch_id = b.get("branch_id")
+             
+             # Intelligent retry mechanism for acquiring global slot
+             # With progressive delay to avoid CF rate limiting
+             max_retries = 5
+             VIDEO_RETRY_BASE_DELAY = 10  # Base delay for video retries (seconds)
+             
+             for attempt in range(max_retries):
+                 # Progressive delay on retries (not on first attempt)
+                 if attempt > 0:
+                     retry_delay = VIDEO_RETRY_BASE_DELAY * (1.5 ** (attempt - 1)) + random.uniform(3, 8)
+                     logging.info(f"Fission {fission_id}: Branch {branch_id} waiting {retry_delay:.1f}s before retry (anti-CF)")
+                     await asyncio.sleep(retry_delay)
+                 
+                 # Apply global throttling before video API call
+                 await throttle_request()
+                 
+                 # Try to acquire global slot (30-second timeout per attempt)
+                 acquired = await limiter.acquire_global("video_gen", timeout=30)
+                 
+                 if acquired:
+                     # Successfully acquired slot
+                     try:
+                         logging.info(f"Fission {fission_id}: Branch {branch_id} acquired slot (attempt {attempt + 1})")
+                         return await generate_branch_video(
+                            b, img_path, fission_id,
+                            video_api_url, video_api_key, video_model, user_id, req.category
+                        )
+                     finally:
+                         await limiter.release_global("video_gen")
+                 else:
+                     # Slot not available
+                     if attempt < max_retries - 1:
+                         logging.info(f"Fission {fission_id}: Branch {branch_id} slot busy (attempt {attempt + 1}/{max_retries})")
+                     else:
+                         logging.error(f"Fission {fission_id}: Branch {branch_id} failed after {max_retries} attempts")
+                         return {"branch_id": branch_id, "status": "error", "error": f"Failed to acquire slot after {max_retries} retries"}
+             
+             # Should never reach here, but just in case
+             return {"branch_id": branch_id, "status": "error", "error": "Unexpected retry loop exit"}
+
+        # Use Semaphore sliding window for video generation (same as image)
+        video_semaphore = asyncio.Semaphore(video_limit)
+        
+        async def generate_video_with_semaphore(b, img_path, task_index):
+            """Wrapper using semaphore for true sliding window behavior"""
+            async with video_semaphore:
+                branch_id = b.get("branch_id")
                 
-                for j, result in enumerate(results):
-                    if isinstance(result, Exception):
-                        logging.error(f"Fission {fission_id}: Video error: {result}")
-                    elif isinstance(result, dict):
-                        branch_id = result.get("branch_id", 0)
-                        # Find and update the branch status
-                        for bi, bs in enumerate(status["branches"]):
-                            if bs.get("branch_id") == branch_id:
-                                status["branches"][bi].update(result)
-                                if result.get("status") == "done":
-                                    status["completed_branches"] += 1
-                                break
+                # Add spacing to prevent CF rate limiting
+                if task_index > 0:
+                    spacing_delay = random.uniform(0.5, 1.5) * min(task_index, 3)
+                    await asyncio.sleep(spacing_delay)
+                
+                # Apply global throttling
+                await throttle_request()
+                
+                # Acquire global slot with retry
+                max_retries = 5
+                VIDEO_RETRY_BASE_DELAY = 10
+                
+                for attempt in range(max_retries):
+                    if attempt > 0:
+                        retry_delay = VIDEO_RETRY_BASE_DELAY * (1.5 ** (attempt - 1)) + random.uniform(3, 8)
+                        logging.info(f"Fission {fission_id}: Branch {branch_id} waiting {retry_delay:.1f}s before retry (anti-CF)")
+                        await asyncio.sleep(retry_delay)
+                        await throttle_request()
+                    
+                    acquired = await limiter.acquire_global("video_gen", timeout=30)
+                    
+                    if acquired:
+                        try:
+                            logging.info(f"Fission {fission_id}: Branch {branch_id} acquired slot (attempt {attempt + 1})")
+                            return await generate_branch_video(
+                                b, img_path, fission_id,
+                                video_api_url, video_api_key, video_model, user_id, req.category
+                            )
+                        finally:
+                            await limiter.release_global("video_gen")
+                    else:
+                        if attempt < max_retries - 1:
+                            logging.info(f"Fission {fission_id}: Branch {branch_id} slot busy (attempt {attempt + 1}/{max_retries})")
+                        else:
+                            logging.error(f"Fission {fission_id}: Branch {branch_id} failed after {max_retries} attempts")
+                            return {"branch_id": branch_id, "status": "error", "error": f"Failed to acquire slot after {max_retries} retries"}
+                
+                return {"branch_id": branch_id, "status": "error", "error": "Unexpected retry loop exit"}
+        
+        # Prepare tasks for all branches with images
+        video_tasks = []
+        task_index = 0
+        for b in branches:
+            branch_id = b.get("branch_id", 0)
+            if branch_id in image_paths:
+                video_tasks.append(generate_video_with_semaphore(b, image_paths[branch_id], task_index))
+                task_index += 1
+        
+        if video_tasks:
+            logging.info(f"Fission {fission_id}: Starting {len(video_tasks)} video tasks with sliding window (limit={video_limit})")
+            results = await asyncio.gather(*video_tasks, return_exceptions=True)
+            
+            for result in results:
+                if isinstance(result, Exception):
+                    logging.error(f"Fission {fission_id}: Video error: {result}")
+                elif isinstance(result, dict):
+                    branch_id = result.get("branch_id", 0)
+                    # Find and update the branch status
+                    for bi, bs in enumerate(status["branches"]):
+                        if bs.get("branch_id") == branch_id:
+                            status["branches"][bi].update(result)
+                            if result.get("status") == "done":
+                                status["completed_branches"] += 1
+                            break
         
         # Step 5: Merge all successful videos into one
         status["phase"] = "merging"
