@@ -81,6 +81,52 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
     // Abort Controller
     const abortControllerRef = useRef(null);
 
+    // Timeout warning state
+    const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+
+    // Restore saved state on mount (handle refresh)
+    useEffect(() => {
+        const savedState = localStorage.getItem('batchSceneState');
+        if (savedState) {
+            try {
+                const state = JSON.parse(savedState);
+                const timeDiff = Date.now() - state.timestamp;
+
+                // Restore if less than 30 minutes old
+                if (timeDiff < 30 * 60 * 1000) {
+                    console.log('恢复之前的分析结果...');
+                    setAnalysisResult(state.analysisResult);
+                    setScripts(state.scripts);
+                    setPlacementMode(state.placementMode);
+                    setCategory(state.category || 'security');
+                    setGenCount(state.genCount || 9);
+                    setAspectRatio(state.aspectRatio || '1:1');
+                    setSceneStyle(state.sceneStyle || '');
+                    setStep('review');
+                } else {
+                    // Clear expired state
+                    localStorage.removeItem('batchSceneState');
+                }
+            } catch (err) {
+                console.error('恢复状态失败:', err);
+                localStorage.removeItem('batchSceneState');
+            }
+        }
+    }, []);
+
+    // Timeout warning timer (10 minutes after reaching review step)
+    useEffect(() => {
+        if (step === 'review') {
+            const warningTimer = setTimeout(() => {
+                setShowTimeoutWarning(true);
+            }, 10 * 60 * 1000); // 10 minutes
+
+            return () => clearTimeout(warningTimer);
+        } else {
+            setShowTimeoutWarning(false);
+        }
+    }, [step]);
+
     // AUTO MODE LOGIC
     useEffect(() => {
         if (!isAutoMode) return;
@@ -88,10 +134,10 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
         // Auto Step 1 -> 2 (Review) -> 3 (Generate)
         // Reduced delay for faster auto mode
         if (step === 'review' && analysisResult && !loading) {
-            console.log("Auto Mode: Analysis success. Triggering Generation in 0.5s...");
+            console.log("Auto Mode: Analysis success. Triggering Generation in 200ms...");
             const timer = setTimeout(() => {
                 handleGenerate();
-            }, 500);  // Reduced from 1500ms to 500ms for speed
+            }, 200);  // Reduced from 500ms to 200ms for faster processing
             return () => clearTimeout(timer);
         }
 
@@ -262,8 +308,17 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
             })
 
             if (!response.ok) {
-                const errData = await response.json()
-                throw new Error(errData.detail || '分析失败')
+                // Check if response is JSON before parsing
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    const errData = await response.json()
+                    throw new Error(errData.detail || '分析失败')
+                } else {
+                    // Not JSON - probably HTML error page
+                    const text = await response.text()
+                    console.error("Non-JSON error response:", text.substring(0, 200))
+                    throw new Error(`服务器错误 (${response.status}): ${response.statusText}`)
+                }
             }
 
             const data = await response.json()
@@ -284,6 +339,23 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
             }
             setScripts(finalScripts)
             setStep('review')
+
+            // Save to localStorage for persistence
+            try {
+                localStorage.setItem('batchSceneState', JSON.stringify({
+                    analysisResult: data,
+                    scripts: finalScripts,
+                    placementMode: data.placement_mode,
+                    category: category,
+                    genCount: genCount,
+                    aspectRatio: aspectRatio,
+                    sceneStyle: sceneStyle,
+                    timestamp: Date.now()
+                }));
+                console.log('分析结果已保存，页面刷新后可恢复');
+            } catch (saveErr) {
+                console.warn('保存状态失败:', saveErr);
+            }
         } catch (err) {
             if (err.name === 'AbortError') {
                 console.log("Analysis Aborted");
@@ -362,8 +434,8 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
         const activeScripts = (scripts && Array.isArray(scripts)) ? scripts.slice(0, genCount) : [];
         console.log("HandleGenerate: Scripts prepared", activeScripts);
 
-        // BATCHING LOGIC: Parallel Concurrency of 3
-        const CONCURRENT_LIMIT = 3;
+        // BATCHING LOGIC: Parallel Concurrency from config
+        const CONCURRENT_LIMIT = config.max_concurrent_image || 3;
         const allResults = [];
         // Init AbortController
         if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -467,6 +539,14 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
     const resetFlow = () => {
         console.log("Resetting Flow to Input");
+        
+        // Abort any pending requests
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        
+        // Reset all states
         setProductImg(null)
         setRefImg(null)
         setProductFileName('Product')
@@ -476,6 +556,12 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
         onResultsChange([])
         setError(null)
         setCustomProductName('')
+        setIsAutoMode(false)  // Also reset Auto Mode
+        setSceneStyle('')  // Reset scene style
+
+        // Clear saved state
+        localStorage.removeItem('batchSceneState');
+        setShowTimeoutWarning(false);
     }
 
     return (
@@ -722,6 +808,47 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
             {/* Step 2: Review */}
             {step === 'review' && analysisResult && (
                 <div style={{ maxWidth: '1600px', margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: '400px 1fr', gap: '32px', height: '100%', overflow: 'hidden' }}>
+
+                    {/* Timeout Warning Banner (Full Width, spanning both columns) */}
+                    {showTimeoutWarning && (
+                        <div style={{
+                            gridColumn: '1 / -1',
+                            background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.15))',
+                            border: '1px solid rgba(251, 191, 36, 0.5)',
+                            borderRadius: '8px',
+                            padding: '12px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            animation: 'pulse 2s infinite',
+                            marginBottom: '-12px'
+                        }}>
+                            <span style={{ fontSize: '1.5rem' }}>⚠️</span>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 'bold', color: '#f59e0b', marginBottom: '4px' }}>
+                                    页面可能即将刷新
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                                    建议尽快完成生成操作。如页面刷新，您的分析结果将自动恢复。
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowTimeoutWarning(false)}
+                                style={{
+                                    background: 'transparent',
+                                    border: '1px solid rgba(251, 191, 36, 0.5)',
+                                    color: '#f59e0b',
+                                    padding: '4px 12px',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem'
+                                }}
+                            >
+                                知道了
+                            </button>
+                        </div>
+                    )}
+
                     {/* Left: Sidebar Configuration (Reference Style) */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', paddingRight: '10px' }}>
 
@@ -780,14 +907,23 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                             />
                         </div>
 
-                        {/* Action Button */}
-                        <button
-                            className="btn-primary"
-                            onClick={handleGenerate}
-                            style={{ padding: '16px', fontSize: '1.1rem' }}
-                        >
-                            确认方案并生成 ({genCount}张)
-                        </button>
+                        {/* Action Buttons */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <button
+                                className="btn-primary"
+                                onClick={handleGenerate}
+                                style={{ padding: '16px', fontSize: '1.1rem' }}
+                            >
+                                确认方案并生成 ({genCount}张)
+                            </button>
+                            <button
+                                className="btn-secondary"
+                                onClick={resetFlow}
+                                style={{ padding: '12px', fontSize: '0.95rem' }}
+                            >
+                                <span className="icon">🔄</span> 重新上传图片
+                            </button>
+                        </div>
                     </div>
 
                     {/* Right: Scripts Preview (Grid) */}

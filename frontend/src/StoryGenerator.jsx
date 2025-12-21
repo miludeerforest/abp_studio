@@ -5,6 +5,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [connectionWarning, setConnectionWarning] = useState(false); // 网络连接警告，不影响任务执行
     const abortControllerRef = useRef(null);
 
     // Step 1: Input
@@ -85,11 +86,22 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
         }
     }, [step]);
 
-    // Polling Effect for Linear (Chain) Mode
+    // Polling Effect for Linear (Chain) Mode with dynamic interval
     useEffect(() => {
         let intervalId;
+        let consecutiveErrors = 0;
+
+        // Dynamic interval based on progress - faster when closer to completion
+        const getInterval = () => {
+            if (!chainStatus) return 2000;
+            const progress = (chainStatus.completed_shots || 0) / (chainStatus.total_shots || 1);
+            if (progress > 0.8) return 1000;  // Fast polling near completion
+            if (progress > 0.5) return 1500;
+            return 2000;
+        };
+
         if (polling && chainId && generationMode === 'linear') {
-            intervalId = setInterval(async () => {
+            const poll = async () => {
                 try {
                     const res = await fetch(`${BACKEND_URL}/api/v1/story-chain/${chainId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
@@ -97,23 +109,50 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                     if (res.ok) {
                         const data = await res.json();
                         setChainStatus(data);
+                        setConnectionWarning(false);
+                        consecutiveErrors = 0;
                         if (data.status === 'completed' || data.status === 'failed') {
                             setPolling(false);
+                        }
+                    } else {
+                        consecutiveErrors++;
+                        if (consecutiveErrors >= 3) {
+                            setConnectionWarning(true);
                         }
                     }
                 } catch (e) {
                     console.error("Polling error", e);
+                    consecutiveErrors++;
+                    if (consecutiveErrors >= 3) {
+                        setConnectionWarning(true);
+                    }
                 }
-            }, 2000);
+                // Schedule next poll with dynamic interval
+                if (polling) {
+                    intervalId = setTimeout(poll, getInterval());
+                }
+            };
+            intervalId = setTimeout(poll, getInterval());
         }
-        return () => clearInterval(intervalId);
-    }, [polling, chainId, token, generationMode]);
+        return () => clearTimeout(intervalId);
+    }, [polling, chainId, token, generationMode, chainStatus]);
 
-    // Polling Effect for Fission Mode
+    // Polling Effect for Fission Mode with dynamic interval
     useEffect(() => {
         let intervalId;
+        let consecutiveErrors = 0;
+
+        // Dynamic interval based on progress
+        const getInterval = () => {
+            if (!fissionStatus) return 2000;
+            const progress = (fissionStatus.completed_branches || 0) / (fissionStatus.total_branches || 1);
+            if (progress > 0.8) return 1000;
+            if (progress > 0.5) return 1500;
+            return 2000;
+        };
+
         if (polling && fissionId && generationMode === 'fission') {
-            intervalId = setInterval(async () => {
+            const poll = async () => {
                 try {
                     const res = await fetch(`${BACKEND_URL}/api/v1/story-fission/${fissionId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
@@ -121,17 +160,32 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                     if (res.ok) {
                         const data = await res.json();
                         setFissionStatus(data);
+                        setConnectionWarning(false);
+                        consecutiveErrors = 0;
                         if (data.status === 'completed' || data.status === 'failed') {
                             setPolling(false);
+                        }
+                    } else {
+                        consecutiveErrors++;
+                        if (consecutiveErrors >= 3) {
+                            setConnectionWarning(true);
                         }
                     }
                 } catch (e) {
                     console.error("Fission polling error", e);
+                    consecutiveErrors++;
+                    if (consecutiveErrors >= 3) {
+                        setConnectionWarning(true);
+                    }
                 }
-            }, 2000);
+                if (polling) {
+                    intervalId = setTimeout(poll, getInterval());
+                }
+            };
+            intervalId = setTimeout(poll, getInterval());
         }
-        return () => clearInterval(intervalId);
-    }, [polling, fissionId, token, generationMode]);
+        return () => clearTimeout(intervalId);
+    }, [polling, fissionId, token, generationMode, fissionStatus]);
 
 
     const handleImageUpload = (e) => {
@@ -382,6 +436,43 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
 
             {error && <div className="error-banner">{error}</div>}
 
+            {/* \u7f51\u7edc\u8fde\u63a5\u8b66\u544a - \u4e0d\u540c\u4e8e\u4efb\u52a1\u9519\u8bef */}
+            {connectionWarning && !error && (
+                <div style={{
+                    background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(251, 191, 36, 0.15) 100%)',
+                    border: '1px solid rgba(251, 146, 60, 0.4)',
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    margin: '0 24px 16px 24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                }}>
+                    <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ color: '#fb923c', fontWeight: '600', marginBottom: '4px' }}>
+                            网络连接不稳定
+                        </div>
+                        <div style={{ color: '#fbbf24', fontSize: '0.9rem' }}>
+                            无法获取最新状态，但您的任务仍在后台执行中，请稍候刷新页面查看结果
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setConnectionWarning(false)}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#fb923c',
+                            cursor: 'pointer',
+                            fontSize: '1.2rem',
+                            padding: '4px'
+                        }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
             <div className="workspace">
                 {/* Step 1: Input */}
                 {step === 1 && (
@@ -595,13 +686,29 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                 <div style={{ marginTop: '20px' }}>
                                                     <p style={{ fontSize: '1.1em', color: '#888' }}>
                                                         阶段: {fissionStatus.phase === 'analyzing' ? '分析裂变场景' :
-                                                            fissionStatus.phase === 'generating_images' ? '生成场景图片' :
+                                                            fissionStatus.phase === 'generating_images' ? (
+                                                                fissionStatus.retry_round && fissionStatus.retry_round > 1
+                                                                    ? `生成场景图片 (第${fissionStatus.retry_round}轮重试)`
+                                                                    : '生成场景图片'
+                                                            ) :
                                                                 fissionStatus.phase === 'generating_videos' ? '生成场景视频' :
                                                                     fissionStatus.phase === 'merging' ? '合并视频' : fissionStatus.phase}
                                                     </p>
                                                     <p style={{ fontSize: '1.2em', marginTop: '10px' }}>
                                                         完成 {fissionStatus.completed_branches || 0} / {fissionStatus.total_branches || shotCount} 个分支
                                                     </p>
+
+                                                    {/* Retry Info */}
+                                                    {fissionStatus.failed_count && fissionStatus.failed_count > 0 && (
+                                                        <p style={{
+                                                            fontSize: '0.95em',
+                                                            color: '#f59e0b',
+                                                            marginTop: '8px',
+                                                            fontWeight: '600'
+                                                        }}>
+                                                            ⚠️ {fissionStatus.failed_count} 个分支失败，正在重试...
+                                                        </p>
+                                                    )}
 
                                                     {/* Branch Progress Grid */}
                                                     {fissionStatus.branches && fissionStatus.branches.length > 0 && (
@@ -642,6 +749,20 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                                                 branch.status === 'image_done' ? '🖼️ 图片完成' :
                                                                                     branch.status?.includes('error') ? '❌ 失败' : '🎬 生成中'}
                                                                     </div>
+                                                                    {/* Retry Count Badge */}
+                                                                    {branch.retry_count && branch.retry_count > 0 && (
+                                                                        <div style={{
+                                                                            fontSize: '0.65rem',
+                                                                            marginTop: '4px',
+                                                                            padding: '2px 6px',
+                                                                            background: 'rgba(251, 146, 60, 0.2)',
+                                                                            color: '#fb923c',
+                                                                            borderRadius: '3px',
+                                                                            display: 'inline-block'
+                                                                        }}>
+                                                                            🔄 重试 {branch.retry_count} 次
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -660,6 +781,58 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                             }}
                                                         ></div>
                                                     </div>
+
+                                                    {/* Estimated Time */}
+                                                    <p style={{ fontSize: '0.9em', color: '#888', marginTop: '10px' }}>
+                                                        {(() => {
+                                                            const completed = fissionStatus.completed_branches || 0;
+                                                            const total = fissionStatus.total_branches || shotCount;
+                                                            const remaining = total - completed;
+                                                            // 估算：每个分支约2-3分钟
+                                                            const minTime = remaining * 2;
+                                                            const maxTime = remaining * 3;
+                                                            if (remaining > 0) {
+                                                                return `预计剩余 ${minTime}-${maxTime} 分钟`;
+                                                            }
+                                                            return '即将完成...';
+                                                        })()}
+                                                    </p>
+
+                                                    {/* New Task Button - Allow queueing multiple tasks */}
+                                                    <button
+                                                        onClick={() => {
+                                                            // Reset for new task, but keep current task running in background
+                                                            setStep(1);
+                                                            setFissionId(null);
+                                                            setFissionStatus(null);
+                                                            setPolling(false);
+                                                            setProductImg(null);
+                                                            setPreviewUrl(null);
+                                                            setShots([]);
+                                                            setError(null);
+                                                        }}
+                                                        style={{
+                                                            marginTop: '25px',
+                                                            padding: '12px 28px',
+                                                            fontSize: '1rem',
+                                                            fontWeight: '600',
+                                                            background: 'linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%)',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '10px',
+                                                            cursor: 'pointer',
+                                                            boxShadow: '0 4px 15px rgba(109, 40, 217, 0.4)',
+                                                            transition: 'all 0.3s ease'
+                                                        }}
+                                                        onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
+                                                        onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+                                                    >
+                                                        ➕ 新建任务 (当前任务后台运行)
+                                                    </button>
+
+                                                    <p style={{ fontSize: '0.8em', color: '#666', marginTop: '10px' }}>
+                                                        💡 可继续上传新任务，系统将自动排队处理
+                                                    </p>
                                                 </div>
                                             )}
                                         </div>
@@ -688,7 +861,18 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                 >
                                                     ⬇️ 下载完整视频
                                                 </a>
-                                                <button className="secondary-btn" onClick={() => setStep(1)}>再做一个</button>
+                                                <button className="secondary-btn" onClick={() => {
+                                                    // Complete reset for new task
+                                                    setStep(1);
+                                                    setFissionId(null);
+                                                    setFissionStatus(null);
+                                                    setPolling(false);
+                                                    setProductImg(null);
+                                                    setPreviewUrl(null);
+                                                    setShots([]);
+                                                    setError(null);
+                                                    setLoading(false);
+                                                }}>再做一个</button>
                                             </div>
                                         </div>
                                     )}
@@ -697,7 +881,17 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                         <div className="failed-state">
                                             <h2 style={{ color: '#ef4444' }}>裂变生成失败</h2>
                                             <p>{fissionStatus.error}</p>
-                                            <button className="secondary-btn" onClick={() => setStep(1)} style={{ marginTop: '20px' }}>返回重试</button>
+                                            <button className="secondary-btn" onClick={() => {
+                                                setStep(1);
+                                                setFissionId(null);
+                                                setFissionStatus(null);
+                                                setPolling(false);
+                                                setProductImg(null);
+                                                setPreviewUrl(null);
+                                                setShots([]);
+                                                setError(null);
+                                                setLoading(false);
+                                            }} style={{ marginTop: '20px' }}>返回重试</button>
                                         </div>
                                     )}
                                 </>
