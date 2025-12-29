@@ -117,10 +117,11 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
 
         const poll = async () => {
             // Determine interval: faster when processing, slower when idle
+            // 优化：减少轮询频率，避免过度消耗
             const getInterval = () => {
-                if (processingCountRef.current > 0) return 1500;  // Fast when processing
-                if (isActive) return 2500;  // Active tab but not processing
-                return 5000;  // Background
+                if (processingCountRef.current > 0) return 3000;  // 3秒间隔（处理中）
+                if (isActive) return 5000;  // 5秒间隔（活跃标签页）
+                return 10000;  // 10秒间隔（后台）
             };
 
             // Always fetch if active OR if processing
@@ -742,6 +743,11 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                             ❌ {item.error_msg}
                                         </div>
                                     )}
+                                    {item.retry_count > 0 && item.status !== 'done' && (
+                                        <div style={{ color: 'var(--warning-color, #f59e0b)', fontSize: '0.75rem', marginTop: '2px' }}>
+                                            🔄 已重试 {item.retry_count} 次
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Status */}
@@ -774,17 +780,19 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                             ▶️
                                         </button>
                                     )}
-                                    {/* 重试按钮 - 只在失败时显示 */}
-                                    {item.status === 'error' && (userRole === 'admin' || item.user_id === currentUserId) && (
-                                        <button
-                                            onClick={() => retryItem(item.id)}
-                                            className="btn-icon"
-                                            title="重试"
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'var(--warning-color, #f59e0b)' }}
-                                        >
-                                            🔄
-                                        </button>
-                                    )}
+                                    {/* 重试按钮 - 只在超时错误时显示（其他错误自动重试） */}
+                                    {item.status === 'error' &&
+                                        (item.error_msg?.includes('Timed Out') || item.error_msg?.includes('超时')) &&
+                                        (userRole === 'admin' || item.user_id === currentUserId) && (
+                                            <button
+                                                onClick={() => retryItem(item.id)}
+                                                className="btn-icon"
+                                                title="超时重试"
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'var(--warning-color, #f59e0b)' }}
+                                            >
+                                                🔄
+                                            </button>
+                                        )}
                                     {/* 只有管理员或任务所有者能看到删除按钮 */}
                                     {(userRole === 'admin' || item.user_id === currentUserId) && (
                                         <button
@@ -798,6 +806,26 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                 </div>
                             </div>
                         ))}
+
+                        {/* 队列底部说明 */}
+                        {queue.some(item => item.status === 'error') && (
+                            <div style={{
+                                marginTop: '16px',
+                                padding: '12px 16px',
+                                background: 'rgba(245, 158, 11, 0.1)',
+                                border: '1px solid rgba(245, 158, 11, 0.3)',
+                                borderRadius: '8px',
+                                fontSize: '0.9rem',
+                                color: 'var(--text-muted, #888)'
+                            }}>
+                                <p style={{ margin: 0, lineHeight: 1.6 }}>
+                                    🔄 <strong>失败任务自动重试中</strong>（最多 3 次，间隔 30-60 秒）
+                                </p>
+                                <p style={{ margin: '8px 0 0 0', fontSize: '0.85rem', opacity: 0.8 }}>
+                                    💡 超时任务需手动点击 🔄 重试，其他错误将自动重试
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

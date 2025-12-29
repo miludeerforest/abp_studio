@@ -27,6 +27,10 @@ backend/update_db_config.py
 backend/verify_*.py
 backend/check_*.py
 backend/cleanup_*.py
+
+# Root level test scripts (also contain secrets)
+test_*.py
+diagnose_*.py
 # User generated content (Images/Videos)
 backend/uploads/
 # Local Database files (if any)

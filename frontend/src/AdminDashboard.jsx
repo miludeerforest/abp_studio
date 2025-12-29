@@ -181,13 +181,13 @@ function AdminDashboard({ token, isConnected = false, lastMessage = null }) {
                                         {user.username?.charAt(0).toUpperCase() || '?'}
                                     </div>
                                     <div className="user-info">
-                                        <div className="user-name">{user.username}</div>
+                                        <div className="user-name">
+                                            {user.username}
+                                            {user.role === 'admin' && <span className="admin-badge">管理员</span>}
+                                        </div>
                                         <div className="user-activity">
                                             {user.current_activity || '空闲'}
                                         </div>
-                                    </div>
-                                    <div className="user-badge">
-                                        {user.role === 'admin' && <span className="admin-badge">管理员</span>}
                                     </div>
                                 </div>
                             ))

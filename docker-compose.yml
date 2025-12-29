@@ -7,6 +7,7 @@ services:
     networks:
       - default
       - 1panel-network
+      - flow2api_worker_net
     env_file:
       - .env
     environment:
@@ -41,5 +42,7 @@ services:
 
 networks:
   1panel-network:
+    external: true
+  flow2api_worker_net:
     external: true
 

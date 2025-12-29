@@ -171,9 +171,9 @@ function UserManagement({ token }) {
             <div className="glass-card" style={{ padding: '20px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
-                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', textAlign: 'left' }}>
-                            <th style={{ padding: '10px' }}>ID</th>
-                            <th style={{ padding: '10px' }}>用户名</th>
+                        <tr style={{ borderBottom: '1px solid var(--card-border)', textAlign: 'center' }}>
+                            <th style={{ padding: '10px', width: '60px' }}>ID</th>
+                            <th style={{ padding: '10px', textAlign: 'left' }}>用户名</th>
                             <th style={{ padding: '10px' }}>角色</th>
                             <th style={{ padding: '10px' }}>生成图片数</th>
                             <th style={{ padding: '10px' }}>生成视频数</th>
@@ -184,9 +184,9 @@ function UserManagement({ token }) {
                         {users.map(u => {
                             const uStats = getUserStats(u.id);
                             return (
-                                <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                <tr key={u.id} style={{ borderBottom: '1px solid var(--card-border)', textAlign: 'center' }}>
                                     <td style={{ padding: '10px', opacity: 0.7 }}>{u.id}</td>
-                                    <td style={{ padding: '10px', fontWeight: 'bold' }}>{u.username}</td>
+                                    <td style={{ padding: '10px', fontWeight: 'bold', textAlign: 'left' }}>{u.username}</td>
                                     <td style={{ padding: '10px' }}>
                                         <span style={{
                                             background: u.role === 'admin' ? 'var(--primary-color)' : 'var(--text-muted)',

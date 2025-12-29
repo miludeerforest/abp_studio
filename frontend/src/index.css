@@ -1005,8 +1005,9 @@ textarea:focus {
   /* Body has the gradient */
   --card-bg: rgba(255, 255, 255, 0.6) !important;
   /* Higher transparency for better glass effect */
-  --card-border: rgba(255, 255, 255, 0.4) !important;
-  /* Lighter, white-ish border for "cut glass" look */
+  /* Higher transparency for better glass effect */
+  --card-border: rgba(0, 0, 0, 0.1) !important;
+  /* Dark faint border for visibility on light bg */
   --text-main: #111827 !important;
   /* Deep gray almost black */
   --text-muted: #374151 !important;

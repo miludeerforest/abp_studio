@@ -351,25 +351,32 @@ const Gallery = ({ onSelectForVideo }) => {
                             <button
                                 onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
                                 className={`batch-btn ${selectMode ? 'active' : ''}`}
+                                title={selectMode ? "退出选择" : "批量管理"}
                             >
                                 {selectMode ? '✕' : '☑️'}
                             </button>
+
                             {selectMode && (
                                 <>
-                                    <button onClick={toggleSelectAll} className="batch-btn">
-                                        {selectedIds.size === (activeTab === 'images' ? images.length : videos.length) ? '取消' : '全选'}
+                                    <div className="batch-separator" />
+
+                                    <button onClick={toggleSelectAll} className="batch-btn text-btn" title="全选/取消">
+                                        {selectedIds.size === (activeTab === 'images' ? images.length : videos.length) ? '🚫' : '✅'}
                                     </button>
+
                                     <button
                                         onClick={() => handleBatchShare(true)}
-                                        className="batch-btn share"
+                                        className="batch-btn"
                                         disabled={selectedIds.size === 0}
+                                        title="公开所选"
                                     >
-                                        🔗 {selectedIds.size}
+                                        🔗 {selectedIds.size > 0 && <span className="btn-badge">{selectedIds.size}</span>}
                                     </button>
                                     <button
                                         onClick={() => handleBatchShare(false)}
-                                        className="batch-btn unshare"
+                                        className="batch-btn"
                                         disabled={selectedIds.size === 0}
+                                        title="私有化所选"
                                     >
                                         🔒
                                     </button>
@@ -377,6 +384,7 @@ const Gallery = ({ onSelectForVideo }) => {
                                         onClick={handleBatchDelete}
                                         className="batch-btn delete"
                                         disabled={selectedIds.size === 0}
+                                        title="删除所选"
                                     >
                                         🗑️
                                     </button>

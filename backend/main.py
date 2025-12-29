@@ -117,11 +117,12 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5
 # Increase connection pool size to handle concurrent requests
 engine = create_engine(
     DATABASE_URL,
-    pool_size=20,           # Increased from default 5
-    max_overflow=30,        # Increased from default 10
-    pool_timeout=60,        # Increased timeout
-    pool_recycle=1800,      # Recycle connections after 30 minutes
-    pool_pre_ping=True      # Test connection health before use
+    pool_size=30,           # Increased from 20 to handle more concurrent tasks
+    max_overflow=50,        # Increased from 30 to allow more burst capacity
+    pool_timeout=45,        # Reduced timeout to fail faster on exhaustion
+    pool_recycle=900,       # Recycle connections every 15 minutes (was 30)
+    pool_pre_ping=True,     # Test connection health before use
+    pool_use_lifo=True      # LIFO helps reuse recently-active connections (better efficiency)
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -176,6 +177,8 @@ class VideoQueueItem(Base):
     is_shared = Column(Boolean, nullable=False, default=True)  # 默认分享到公开画廊，用户可取消
     created_at = Column(DateTime, default=get_china_now)  # Use China timezone
     _preview_url = Column("preview_url", String, nullable=True)  # Custom preview URL
+    retry_count = Column(Integer, default=0)  # 累计重试次数
+    last_retry_at = Column(DateTime, nullable=True)  # 上次重试/处理时间
 
     @property
     def preview_url(self):
@@ -2422,7 +2425,7 @@ async def retry_queue_item(
         raise HTTPException(status_code=400, detail="Video API not configured")
     
     # Trigger background generation
-    background_tasks.add_task(process_video_background, item_id, video_api_url, video_api_key, video_model_name)
+    background_tasks.add_task(process_video_with_auto_retry, item_id, video_api_url, video_api_key, video_model_name)
     
     return {"status": "retrying", "item_id": item_id}
 
@@ -2463,6 +2466,48 @@ def clear_queue(
     return {"status": "cleared", "count": count}
 
 # --- Background Task for Video Generation ---
+
+def detect_api_error_cn(response_content: str) -> str:
+    """智能检测API响应中的错误并返回对应的中文提示。
+    
+    Args:
+        response_content: API返回的完整响应内容
+        
+    Returns:
+        中文错误提示信息
+    """
+    content_lower = response_content.lower()
+    
+    # 内容策略违规相关
+    if any(kw in content_lower for kw in ['content policy', 'policy violation', 'violat', 'inappropriate', 'nsfw', 'safety']):
+        return "❌ 内容审核未通过：图片可能包含敏感、暴力或不适内容，请更换图片后重试"
+    
+    # 速率限制相关
+    if any(kw in content_lower for kw in ['rate limit', 'too many requests', 'quota exceeded', '429']):
+        return "⏳ API请求频率超限：系统将在稍后自动重试，请耐心等待"
+    
+    # 模型/服务不可用
+    if any(kw in content_lower for kw in ['model not available', 'service unavailable', 'temporarily unavailable', '503']):
+        return "🔧 视频生成服务暂时不可用，系统将自动重试"
+    
+    # 图片格式/尺寸问题
+    if any(kw in content_lower for kw in ['invalid image', 'unsupported format', 'image too', 'resolution']):
+        return "🖼️ 图片格式或尺寸不符合要求，请使用标准JPG/PNG格式（推荐9:16竖版）"
+    
+    # 认证/权限问题
+    if any(kw in content_lower for kw in ['unauthorized', 'authentication', 'invalid key', '401', '403']):
+        return "🔑 API认证失败，请联系管理员检查API密钥配置"
+    
+    # 请求参数问题
+    if any(kw in content_lower for kw in ['invalid request', 'bad request', 'parameter', '400']):
+        return "⚠️ 请求参数错误，请检查提示词或图片格式"
+    
+    # 服务器错误
+    if any(kw in content_lower for kw in ['internal server error', '500', 'server error']):
+        return "🔥 视频生成服务器内部错误，系统将自动重试"
+    
+    # 默认提示
+    return f"❓ 视频URL解析失败：{response_content[:100]}..."
 
 async def convert_sora_to_watermark_free(sora_url: str) -> str:
     """
@@ -2655,7 +2700,9 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
                                 logger.warning(f"Failed to log video completion: {act_err}")
                         else:
                             logger.warning(f"No URL found in video response: {full_content[:200]}")
-                            item.error_msg = "No video URL found in response."
+                            # 智能错误检测 - 将API返回的错误翻译为中文提示
+                            error_msg_cn = detect_api_error_cn(full_content)
+                            item.error_msg = error_msg_cn
                             item.status = "error"
                               
             except httpx.TimeoutException:
@@ -2675,6 +2722,152 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
         db.close()
 
 
+async def process_video_with_auto_retry(item_id: str, video_api_url: str, video_api_key: str, video_model_name: str, skip_concurrency_check: bool = False):
+    """Wrapper function that adds automatic retry logic to video generation.
+    
+    Retries up to 3 times for retryable errors. Timeout errors are NOT retried.
+    Retry count is persisted to database to prevent loss on restart.
+    
+    IMPORTANT: This function now enforces global video concurrency limits.
+    
+    Args:
+        skip_concurrency_check: If True, skip acquiring global slot (used when caller already holds a slot, e.g., Story Fission)
+    """
+    MAX_AUTO_RETRIES = 3
+    RETRY_BASE_DELAY = 60  # 增加到 60 秒基础延迟
+    COOLDOWN_SECONDS = 120  # 同一任务两次尝试之间的最小间隔
+    SLOT_ACQUIRE_TIMEOUT = 600  # 获取槽位的最大等待时间（秒）
+    SLOT_RETRY_INTERVAL = 5  # 等待槽位时的重试间隔（秒）
+    
+    # 从数据库获取当前重试计数
+    db = SessionLocal()
+    try:
+        item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+        if not item:
+            logger.error(f"Video {item_id}: Item not found")
+            return
+        
+        # 检查冷却期：如果最近处理过，跳过
+        if item.last_retry_at:
+            seconds_since_last = (get_china_now() - item.last_retry_at).total_seconds()
+            if seconds_since_last < COOLDOWN_SECONDS and item.retry_count > 0:
+                logger.warning(f"Video {item_id}: Still in cooldown period ({seconds_since_last:.0f}s < {COOLDOWN_SECONDS}s), skipping")
+                return
+        
+        start_attempt = item.retry_count + 1  # 从持久化的计数继续
+    finally:
+        db.close()
+    
+    # 是否需要获取并发槽位
+    limiter = None
+    slot_acquired = False
+    
+    if not skip_concurrency_check:
+        # 获取全局并发限制器
+        limiter = await get_concurrency_limiter(get_concurrency_config)
+        
+        # 尝试获取全局视频生成槽位
+        wait_start = asyncio.get_event_loop().time()
+        
+        while not slot_acquired:
+            elapsed = asyncio.get_event_loop().time() - wait_start
+            if elapsed > SLOT_ACQUIRE_TIMEOUT:
+                logger.error(f"Video {item_id}: Failed to acquire slot after {SLOT_ACQUIRE_TIMEOUT}s timeout")
+                # 更新状态为等待中
+                db = SessionLocal()
+                try:
+                    item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+                    if item and item.status == "processing":
+                        item.status = "pending"
+                        item.error_msg = "队列繁忙，等待重试"
+                        db.commit()
+                finally:
+                    db.close()
+                return
+            
+            slot_acquired = await limiter.acquire_global("video_gen", timeout=30)
+            if not slot_acquired:
+                logger.info(f"Video {item_id}: Waiting for slot (elapsed: {elapsed:.0f}s)")
+                await asyncio.sleep(SLOT_RETRY_INTERVAL)
+        
+        logger.info(f"Video {item_id}: Acquired global video slot")
+    else:
+        logger.info(f"Video {item_id}: Skipping concurrency check (caller holds slot)")
+    
+    try:
+        for attempt in range(start_attempt, MAX_AUTO_RETRIES + 1):
+            logger.info(f"Video {item_id}: Starting attempt {attempt}/{MAX_AUTO_RETRIES}")
+            
+            # 更新重试计数和时间戳
+            db = SessionLocal()
+            try:
+                item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+                if item:
+                    item.retry_count = attempt
+                    item.last_retry_at = get_china_now()
+                    db.commit()
+            finally:
+                db.close()
+            
+            # Apply global throttling before each attempt
+            await throttle_request()
+            
+            # Call the original function
+            await process_video_background(item_id, video_api_url, video_api_key, video_model_name)
+            
+            # Check the result - use short-lived DB session to avoid connection exhaustion
+            should_retry = False
+            retry_delay = 0
+            
+            db = SessionLocal()
+            try:
+                item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
+                if not item:
+                    logger.error(f"Video {item_id}: Item not found after processing")
+                    return
+                
+                if item.status == "done":
+                    logger.info(f"Video {item_id}: Completed successfully on attempt {attempt}")
+                    # 成功后重置重试计数
+                    item.retry_count = 0
+                    db.commit()
+                    return
+                
+                if item.status == "error":
+                    error_msg = item.error_msg or ""
+                    
+                    # Timeout errors should NOT be auto-retried
+                    if "Timed Out" in error_msg or "超时" in error_msg:
+                        logger.warning(f"Video {item_id}: Timeout error, not retrying")
+                        return
+                    
+                    # Other errors can be retried
+                    if attempt < MAX_AUTO_RETRIES:
+                        # 更保守的重试策略：基础延迟 + 指数退避 + 随机波动
+                        retry_delay = RETRY_BASE_DELAY * (1.5 ** (attempt - 1)) + random.uniform(10, 30)
+                        logger.info(f"Video {item_id}: Error '{error_msg[:50]}...', retrying in {retry_delay:.1f}s (attempt {attempt}/{MAX_AUTO_RETRIES})")
+                        
+                        # Reset status to pending for next attempt
+                        item.status = "pending"
+                        item.error_msg = None
+                        db.commit()
+                        should_retry = True
+                    else:
+                        logger.error(f"Video {item_id}: All {MAX_AUTO_RETRIES} attempts failed")
+                        return
+            finally:
+                db.close()  # CRITICAL: Close connection BEFORE sleep to avoid pool exhaustion
+            
+            # Sleep AFTER closing DB connection to free up pool resources
+            if should_retry:
+                await asyncio.sleep(retry_delay)
+    finally:
+        # 只有在实际获取了槽位时才释放
+        if slot_acquired and limiter:
+            await limiter.release_global("video_gen")
+            logger.info(f"Video {item_id}: Released global video slot")
+
+
 @app.post("/api/v1/queue/{item_id}/generate")
 async def generate_queue_item_endpoint(
     item_id: str,
@@ -2687,7 +2880,22 @@ async def generate_queue_item_endpoint(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     
-    # 2. Get Config
+    # 2. Prevent duplicate trigger - if already processing, reject the request
+    if item.status == "processing":
+        raise HTTPException(status_code=409, detail="Task is already being processed")
+    
+    # 2.5 冷却期检查：防止短时间内重复触发
+    COOLDOWN_SECONDS = 60  # 1 分钟冷却期
+    if item.last_retry_at and item.status == "pending":
+        seconds_since_last = (get_china_now() - item.last_retry_at).total_seconds()
+        if seconds_since_last < COOLDOWN_SECONDS:
+            remaining = int(COOLDOWN_SECONDS - seconds_since_last)
+            raise HTTPException(
+                status_code=429, 
+                detail=f"任务正在处理中，请等待 {remaining} 秒后再试"
+            )
+    
+    # 3. Get Config
     db_config_list = db.query(SystemConfig).all()
     config_dict = {conf.key: conf.value for conf in db_config_list}
     
@@ -2720,7 +2928,7 @@ async def generate_queue_item_endpoint(
         pass  # WebSocket not required
 
     logger.info(f"Triggering Background Generation for {item_id}")
-    background_tasks.add_task(process_video_background, item_id, video_api_url, video_api_key, video_model_name)
+    background_tasks.add_task(process_video_with_auto_retry, item_id, video_api_url, video_api_key, video_model_name)
 
     return {"status": "processing", "message": "Video generation started in background"}
 
@@ -2793,6 +3001,8 @@ class StoryChainRequest(BaseModel):
     visual_style_prompt: Optional[str] = None  # Visual style prompt text
     camera_movement: Optional[str] = None  # Camera movement ID
     camera_movement_prompt: Optional[str] = None  # Camera movement prompt text
+    category: str = "other"  # Product category for gallery/video classification
+
 
 STORY_CHAIN_STATUS = {}
 
@@ -3103,7 +3313,8 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                     file_path=queue_file_path,
                     prompt=prompt_text,
                     status="pending",
-                    user_id=user_id
+                    user_id=user_id,
+                    category=req.category  # Use user-selected product category
                 )
                 db.add(new_item)
                 db.commit()
@@ -3139,7 +3350,7 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                 # Apply global throttling before video API call
                 await throttle_request()
                 
-                await process_video_background(item_id, final_api_url, final_api_key, final_model)
+                await process_video_with_auto_retry(item_id, final_api_url, final_api_key, final_model)
                 
                 # Check result
                 db = SessionLocal()
@@ -3226,7 +3437,7 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                         await throttle_request()
                         
                         # Regenerate video
-                        await process_video_background(item_id, final_api_url, final_api_key, final_model)
+                        await process_video_with_auto_retry(item_id, final_api_url, final_api_key, final_model)
                         
                         # Get new result_url
                         db = SessionLocal()
@@ -3881,7 +4092,7 @@ async def generate_branch_video(
                 db.commit()
             db.close()
         
-        await process_video_background(item_id, video_api_url, video_api_key, video_model)
+        await process_video_with_auto_retry(item_id, video_api_url, video_api_key, video_model, skip_concurrency_check=True)
         
         db = SessionLocal()
         completed_item = db.query(VideoQueueItem).filter(VideoQueueItem.id == item_id).first()
