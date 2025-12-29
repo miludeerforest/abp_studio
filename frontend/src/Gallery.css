@@ -14,7 +14,8 @@
 /* Header - Floating Glass Island */
 .gallery-header {
   margin: 1rem 1.5rem 0.5rem 1.5rem;
-  padding: 0.5rem 1.5rem;
+  padding: 0.5rem 1rem;
+  /* Reduced horizontal padding */
   border-radius: 999px;
   /* Fully rounded capsule */
   background: rgba(255, 255, 255, 0.7);
@@ -27,11 +28,21 @@
   flex-direction: row;
   /* Strict row */
   align-items: center;
-  gap: 1.5rem;
+  gap: 0.75rem;
+  /* Reduced gap from 1.5rem */
   flex-wrap: nowrap;
   z-index: 10;
   position: sticky;
   top: 1rem;
+  overflow-x: auto;
+  /* Allow scroll on small screens */
+  scrollbar-width: none;
+  /* Hide scrollbar Firefox */
+}
+
+.gallery-header::-webkit-scrollbar {
+  display: none;
+  /* Hide scrollbar Chrome/Safari */
 }
 
 /* Dark mode header */
@@ -60,7 +71,7 @@ html[data-theme="dark"] .gallery-header {
 /* Tab Switcher - Segmented Control style */
 .gallery-tabs {
   background: rgba(0, 0, 0, 0.05);
-  padding: 4px;
+  padding: 3px;
   border-radius: 99px;
   display: flex;
   flex-direction: row;
@@ -75,12 +86,14 @@ html[data-theme="dark"] .gallery-tabs {
 }
 
 .gallery-tab-btn {
-  padding: 0.4rem 1rem;
+  padding: 0.3rem 0.8rem;
+  /* Tighter padding */
   border-radius: 99px;
   /* Capsule */
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   margin: 0;
+  white-space: nowrap;
 }
 
 /* Active tab style */
@@ -100,18 +113,20 @@ html[data-theme="dark"] .gallery-tab-btn.active {
   appearance: none;
   /* Remove default arrow */
   -webkit-appearance: none;
-  padding: 0.5rem 2.5rem 0.5rem 1rem;
-  /* Right padding for arrow */
+  padding: 0.4rem 2rem 0.4rem 1rem;
+  /* Reduced padding */
   background-color: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 99px;
   color: var(--text-main);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
   outline: none;
-  min-width: 140px;
+  min-width: 100px;
+  /* Reduced min-width */
   transition: all 0.2s ease;
+  white-space: nowrap;
 
   /* Custom Arrow Icon (Encoded SVG) */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
@@ -143,28 +158,48 @@ html[data-theme="dark"] .gallery-filter-select:hover {
   margin-left: auto;
 }
 
+.batch-separator {
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 0 0.25rem;
+}
+
+html[data-theme="dark"] .batch-separator {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .batch-btn {
-  width: 32px;
   height: 32px;
-  border-radius: 50%;
-  /* Circular buttons */
-  padding: 0;
+  min-width: 32px;
+  padding: 0 6px;
+  /* Allow expansion for pill shape if text is present */
+  border-radius: 99px;
+  /* Capsule */
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(0, 0, 0, 0.05);
   font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-muted);
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  /* Setup for skeuomorphic icons */
 }
 
 html[data-theme="dark"] .batch-btn {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
 }
 
 .batch-btn:hover {
-  background: rgba(55, 65, 81, 0.8);
-  color: white;
+  background: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  color: var(--text-main);
 }
 
 .batch-btn.active {

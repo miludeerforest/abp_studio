@@ -168,16 +168,27 @@
     padding: 12px;
     background: var(--bg-color);
     /* use bg-color for inner list items for contrast against card-bg */
-    border: 1px solid transparent;
-    border-radius: 8px;
+    border-bottom: 1px solid var(--card-border);
+    border-radius: 0;
     cursor: pointer;
     transition: all 0.2s;
     flex-wrap: nowrap;
 }
 
+.user-item:first-child {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.user-item:last-child {
+    border-bottom: none;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
 .user-item:hover {
     background: rgba(99, 102, 241, 0.1);
-    border-color: var(--primary-color);
+    /* border-color: var(--primary-color); removed to keep bottom border consistent or handle separately */
 }
 
 .user-item.selected {
@@ -202,14 +213,22 @@
 .user-info {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    /* Ensure internal text vertical centering */
+    gap: 2px;
 }
 
 .user-name {
     font-weight: 600;
-    margin-bottom: 2px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .user-activity {
@@ -218,21 +237,24 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    line-height: 1.2;
 }
 
-.user-badge {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-}
-
+/* Old .user-badge container is removed, styling .admin-badge directly */
 .admin-badge {
     background: linear-gradient(135deg, #f59e0b, #ef4444);
-    padding: 2px 8px;
+    padding: 3px 8px;
+    /* Increased padding */
     border-radius: 4px;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
+    /* Increased font size */
     text-transform: uppercase;
     font-weight: bold;
+    color: white;
+    flex-shrink: 0;
+    line-height: normal;
+    /* Reset line-height */
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
 }
 
 /* Activity Feed */

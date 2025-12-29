@@ -222,6 +222,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                     visual_style_prompt: VISUAL_STYLES.find(s => s.id === visualStyle)?.prompt || '',
                     camera_movement: cameraMovement,
                     camera_movement_prompt: CAMERA_MOVEMENTS.find(c => c.id === cameraMovement)?.prompt || '',
+                    category: category,  // Product category for gallery/video classification
                     api_url: config.api_url,
                     api_key: config.api_key,
                     model_name: config.video_model_name
@@ -335,7 +336,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                 visual_style: visualStyle,
                 visual_style_prompt: VISUAL_STYLES.find(s => s.id === visualStyle)?.prompt || '',
                 camera_movement: cameraMovement,
-                camera_movement_prompt: CAMERA_MOVEMENTS.find(c => c.id === cameraMovement)?.prompt || ''
+                camera_movement_prompt: CAMERA_MOVEMENTS.find(c => c.id === cameraMovement)?.prompt || '',
+                category: category  // Product category for gallery/video classification
             };
 
             try {
@@ -602,7 +604,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                 <input
                                     type="range"
                                     min="3"
-                                    max="10"
+                                    max="5"
                                     value={shotCount}
                                     onChange={(e) => setShotCount(parseInt(e.target.value))}
                                     style={{ width: '100%' }}
