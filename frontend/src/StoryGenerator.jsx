@@ -749,7 +749,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                                         {branch.status === 'done' ? '✅ 完成' :
                                                                             branch.status === 'pending' ? '⏳ 等待' :
                                                                                 branch.status === 'image_done' ? '🖼️ 图片完成' :
-                                                                                    branch.status?.includes('error') ? '❌ 失败' : '🎬 生成中'}
+                                                                                    branch.status === 'processing' ? '🎬 生成中' :
+                                                                                        branch.status?.includes('error') ? '❌ 失败' : '🎬 生成中'}
                                                                     </div>
                                                                     {/* Retry Count Badge */}
                                                                     {branch.retry_count && branch.retry_count > 0 && (
@@ -764,6 +765,41 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                                         }}>
                                                                             🔄 重试 {branch.retry_count} 次
                                                                         </div>
+                                                                    )}
+                                                                    {/* Retry Button for Failed Branches */}
+                                                                    {branch.status?.includes('error') && branch.image_url && (
+                                                                        <button
+                                                                            onClick={async () => {
+                                                                                try {
+                                                                                    const res = await fetch(`/api/v1/story-fission/${fissionId}/branch/${branch.branch_id}/retry`, {
+                                                                                        method: 'POST',
+                                                                                        headers: { 'Authorization': `Bearer ${token}` }
+                                                                                    });
+                                                                                    if (res.ok) {
+                                                                                        // Refresh status
+                                                                                        setPolling(true);
+                                                                                    } else {
+                                                                                        const err = await res.json();
+                                                                                        alert(`重试失败: ${err.detail || '未知错误'}`);
+                                                                                    }
+                                                                                } catch (e) {
+                                                                                    alert(`重试失败: ${e.message}`);
+                                                                                }
+                                                                            }}
+                                                                            style={{
+                                                                                marginTop: '8px',
+                                                                                padding: '4px 10px',
+                                                                                fontSize: '0.7rem',
+                                                                                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                                                                                color: 'white',
+                                                                                border: 'none',
+                                                                                borderRadius: '4px',
+                                                                                cursor: 'pointer',
+                                                                                fontWeight: '600'
+                                                                            }}
+                                                                        >
+                                                                            🔄 重试
+                                                                        </button>
                                                                     )}
                                                                 </div>
                                                             ))}
@@ -863,6 +899,30 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                 >
                                                     ⬇️ 下载完整视频
                                                 </a>
+                                                {/* Remerge Button - useful after retrying failed branches */}
+                                                <button
+                                                    className="secondary-btn"
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await fetch(`/api/v1/story-fission/${fissionId}/remerge`, {
+                                                                method: 'POST',
+                                                                headers: { 'Authorization': `Bearer ${token}` }
+                                                            });
+                                                            if (res.ok) {
+                                                                alert('重新合成已启动，请稍等片刻后刷新查看结果');
+                                                                setPolling(true);
+                                                            } else {
+                                                                const err = await res.json();
+                                                                alert(`合成失败: ${err.detail || '未知错误'}`);
+                                                            }
+                                                        } catch (e) {
+                                                            alert(`合成失败: ${e.message}`);
+                                                        }
+                                                    }}
+                                                    style={{ marginLeft: '10px' }}
+                                                >
+                                                    🔄 重新合成
+                                                </button>
                                                 <button className="secondary-btn" onClick={() => {
                                                     // Complete reset for new task
                                                     setStep(1);

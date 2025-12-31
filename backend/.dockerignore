@@ -19,3 +19,9 @@ htmlcov/
 # Misc
 .DS_Store
 *.log
+
+# Large directories (avoid massive build context)
+uploads/
+*.mp4
+*.webm
+*.mov

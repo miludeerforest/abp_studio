@@ -1186,3 +1186,67 @@ textarea:focus {
   background: var(--card-bg) !important;
   backdrop-filter: var(--glass-blur) !important;
 }
+
+/* ============================================
+   Floating Gallery Trigger Button - Right Side
+   ============================================ */
+.gallery-trigger-btn {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px 12px 12px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  border-radius: 12px 0 0 12px;
+  color: white;
+  cursor: pointer;
+  box-shadow: -4px 0 20px rgba(99, 102, 241, 0.4);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gallery-trigger-btn:hover {
+  padding-right: 12px;
+  box-shadow: -6px 0 30px rgba(99, 102, 241, 0.5);
+}
+
+.gallery-trigger-btn.active {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  box-shadow: -4px 0 25px rgba(79, 70, 229, 0.5);
+}
+
+.gallery-trigger-icon {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.gallery-trigger-arrow {
+  font-size: 1.2rem;
+  font-weight: bold;
+  opacity: 0.8;
+  transition: transform 0.3s ease;
+}
+
+.gallery-trigger-btn:hover .gallery-trigger-arrow {
+  transform: translateX(-2px);
+}
+
+.gallery-trigger-btn.active .gallery-trigger-arrow {
+  transform: translateX(2px);
+}
+
+/* Dark mode adjustments */
+html[data-theme="dark"] .gallery-trigger-btn {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  box-shadow: -4px 0 20px rgba(79, 70, 229, 0.3);
+}
+
+/* Hide when gallery is open to avoid overlap */
+.gallery-trigger-btn.active {
+  opacity: 0;
+  pointer-events: none;
+}

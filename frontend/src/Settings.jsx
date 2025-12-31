@@ -17,7 +17,12 @@ function Settings({ token, config, onConfigChange }) {
         max_concurrent_image: 5,
         max_concurrent_video: 3,
         max_concurrent_story: 2,
-        max_concurrent_per_user: 2
+        max_concurrent_per_user: 2,
+        // Video Quality Review
+        review_api_url: '',
+        review_api_key: '',
+        review_model_name: 'gpt-4o',
+        review_enabled: false
     })
     const [saving, setSaving] = useState(false)
     const [msg, setMsg] = useState(null)
@@ -41,7 +46,12 @@ function Settings({ token, config, onConfigChange }) {
                 max_concurrent_image: config.max_concurrent_image ?? 5,
                 max_concurrent_video: config.max_concurrent_video ?? 3,
                 max_concurrent_story: config.max_concurrent_story ?? 2,
-                max_concurrent_per_user: config.max_concurrent_per_user ?? 2
+                max_concurrent_per_user: config.max_concurrent_per_user ?? 2,
+                // Video Quality Review
+                review_api_url: config.review_api_url || '',
+                review_api_key: config.review_api_key || '',
+                review_model_name: config.review_model_name || 'gpt-4o',
+                review_enabled: config.review_enabled === true || config.review_enabled === 'true'
             })
         }
     }, [config])
@@ -153,6 +163,56 @@ function Settings({ token, config, onConfigChange }) {
                                 placeholder="e.g. sora-video-portrait"
                                 style={{ width: '100%' }}
                             />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Video Quality Review Settings */}
+                <div style={{ marginBottom: '32px' }}>
+                    <h3 style={{ marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px', fontSize: '1.1rem', color: 'var(--text-main)' }}>验️ 视频质量审查配置</h3>
+                    <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)', fontWeight: '600', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={localConfig.review_enabled}
+                                onChange={(e) => handleChange('review_enabled', e.target.checked)}
+                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                            />
+                            启用自动审查
+                        </label>
+                        <small style={{ color: 'var(--text-muted)' }}>视频生成完成后自动调用AI评估内容质量</small>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>审查 API URL (OAI兼容)</label>
+                            <input
+                                type="text"
+                                value={localConfig.review_api_url}
+                                onChange={(e) => handleChange('review_api_url', e.target.value)}
+                                placeholder="e.g. https://api.openai.com/v1"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>审查 API Key</label>
+                            <input
+                                type="password"
+                                value={localConfig.review_api_key}
+                                onChange={(e) => handleChange('review_api_key', e.target.value)}
+                                placeholder="Your Review API Key"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>审查模型名称</label>
+                            <input
+                                type="text"
+                                value={localConfig.review_model_name}
+                                onChange={(e) => handleChange('review_model_name', e.target.value)}
+                                placeholder="e.g. gpt-4o, claude-3.5-sonnet"
+                                style={{ width: '100%' }}
+                            />
+                            <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>支持图片输入的模型 (如 GPT-4o, Claude 3.5)</small>
                         </div>
                     </div>
                 </div>

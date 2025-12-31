@@ -40,6 +40,11 @@ const Gallery = ({ onSelectForVideo }) => {
     // Filter State
     const [categoryFilter, setCategoryFilter] = useState('all');
 
+    // Date Filter State
+    const [dateFilter, setDateFilter] = useState('all'); // 'all' | 'today' | 'week' | 'month' | 'custom'
+    const [customStartDate, setCustomStartDate] = useState('');
+    const [customEndDate, setCustomEndDate] = useState('');
+
     // Data State
     const [images, setImages] = useState([]);
     const [videos, setVideos] = useState([]);
@@ -60,11 +65,11 @@ const Gallery = ({ onSelectForVideo }) => {
     const [totalImages, setTotalImages] = useState(0);
     const [totalVideos, setTotalVideos] = useState(0);
 
-    // Fetch data when page/filter/viewMode changes
+    // Fetch data when page/filter/viewMode/date changes
     useEffect(() => {
         if (activeTab === 'images') fetchImages();
         else fetchVideos();
-    }, [activeTab, imgPage, vidPage, categoryFilter, viewMode]);
+    }, [activeTab, imgPage, vidPage, categoryFilter, viewMode, dateFilter, customStartDate, customEndDate]);
 
     // Reset selection only when switching tabs or category (not when changing pages)
     useEffect(() => {
@@ -72,14 +77,60 @@ const Gallery = ({ onSelectForVideo }) => {
         setSelectMode(false);
     }, [activeTab, categoryFilter]);
 
+    // Calculate date range based on filter
+    const getDateParams = () => {
+        const today = new Date();
+        let startDate = '';
+        let endDate = '';
+
+        // Helper to format date as YYYY-MM-DD in local timezone (not UTC)
+        const formatLocalDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        switch (dateFilter) {
+            case 'today':
+                startDate = formatLocalDate(today);
+                endDate = startDate;
+                break;
+            case 'week':
+                const weekAgo = new Date(today);
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                startDate = formatLocalDate(weekAgo);
+                endDate = formatLocalDate(today);
+                break;
+            case 'month':
+                const monthAgo = new Date(today);
+                monthAgo.setMonth(monthAgo.getMonth() - 1);
+                startDate = formatLocalDate(monthAgo);
+                endDate = formatLocalDate(today);
+                break;
+            case 'custom':
+                startDate = customStartDate;
+                endDate = customEndDate;
+                break;
+            default:
+                break;
+        }
+
+        let params = '';
+        if (startDate) params += `&start_date=${startDate}`;
+        if (endDate) params += `&end_date=${endDate}`;
+        return params;
+    };
+
     const fetchImages = async () => {
         setLoading(true);
         const token = localStorage.getItem('token');
         const offset = (imgPage - 1) * LIMIT;
         const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
         const viewParam = userRole === 'admin' ? `&view_mode=${viewMode}` : '';
+        const dateParams = getDateParams();
         try {
-            const res = await fetch(`/api/v1/gallery/images?limit=${LIMIT}&offset=${offset}${categoryParam}${viewParam}`, {
+            const res = await fetch(`/api/v1/gallery/images?limit=${LIMIT}&offset=${offset}${categoryParam}${viewParam}${dateParams}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -100,8 +151,9 @@ const Gallery = ({ onSelectForVideo }) => {
         const offset = (vidPage - 1) * LIMIT;
         const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
         const viewParam = userRole === 'admin' ? `&view_mode=${viewMode}` : '';
+        const dateParams = getDateParams();
         try {
-            const res = await fetch(`/api/v1/gallery/videos?limit=${LIMIT}&offset=${offset}${categoryParam}${viewParam}`, {
+            const res = await fetch(`/api/v1/gallery/videos?limit=${LIMIT}&offset=${offset}${categoryParam}${viewParam}${dateParams}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -291,107 +343,147 @@ const Gallery = ({ onSelectForVideo }) => {
 
     return (
         <div className="gallery-container">
-            {/* Header - Single Row */}
+            {/* Header - Two Row Layout */}
             <div className="gallery-header">
-                <div className="gallery-title">
-                    <h1><span className="gallery-title-gradient">创意画廊</span></h1>
-                </div>
+                {/* Row 1: Title + Tabs */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', width: '100%' }}>
+                    <div className="gallery-title">
+                        <h1><span className="gallery-title-gradient">创意画廊</span></h1>
+                    </div>
 
-                <div className="gallery-separator" />
+                    {/* Tab Switcher */}
+                    <div className="gallery-tabs">
+                        <button
+                            onClick={() => handleTabChange('images')}
+                            className={`gallery-tab-btn ${activeTab === 'images' ? 'active' : ''}`}
+                        >
+                            🎨 图片
+                        </button>
+                        <button
+                            onClick={() => handleTabChange('videos')}
+                            className={`gallery-tab-btn ${activeTab === 'videos' ? 'active' : ''}`}
+                        >
+                            🎬 视频
+                        </button>
+                    </div>
 
-                {/* Tab Switcher */}
-                <div className="gallery-tabs">
-                    <button
-                        onClick={() => handleTabChange('images')}
-                        className={`gallery-tab-btn ${activeTab === 'images' ? 'active' : ''}`}
-                    >
-                        🎨 图片
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('videos')}
-                        className={`gallery-tab-btn ${activeTab === 'videos' ? 'active' : ''}`}
-                    >
-                        🎬 视频
-                    </button>
-                </div>
+                    {/* Spacer */}
+                    <div style={{ flex: 1 }} />
 
-                <div className="gallery-separator" />
+                    {/* Filters Group */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {/* Category Filter */}
+                        <select
+                            value={categoryFilter}
+                            onChange={(e) => { setCategoryFilter(e.target.value); setImgPage(1); setVidPage(1); }}
+                            className="gallery-filter-select"
+                        >
+                            {CATEGORIES.map(cat => (
+                                <option key={cat.value} value={cat.value}>
+                                    {cat.icon} {cat.label}
+                                </option>
+                            ))}
+                        </select>
 
-                {/* Filters */}
-                <select
-                    value={categoryFilter}
-                    onChange={(e) => { setCategoryFilter(e.target.value); setImgPage(1); setVidPage(1); }}
-                    className="gallery-filter-select"
-                >
-                    {CATEGORIES.map(cat => (
-                        <option key={cat.value} value={cat.value}>
-                            {cat.icon} {cat.label}
-                        </option>
-                    ))}
-                </select>
-
-                {userRole === 'admin' && (
-                    <select
-                        value={viewMode}
-                        onChange={(e) => { setViewMode(e.target.value); setImgPage(1); setVidPage(1); }}
-                        className="gallery-filter-select"
-                    >
-                        <option value="own">📁 仅自己</option>
-                        <option value="all">🌐 所有</option>
-                    </select>
-                )}
-
-                {/* Actions - Right Aligned */}
-                <div className="batch-actions">
-                    <button onClick={handleRefresh} className="batch-btn" title="刷新列表">
-                        🔄
-                    </button>
-                    {userRole === 'admin' && (
-                        <>
-                            <button
-                                onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
-                                className={`batch-btn ${selectMode ? 'active' : ''}`}
-                                title={selectMode ? "退出选择" : "批量管理"}
+                        {/* View Mode (Admin) */}
+                        {userRole === 'admin' && (
+                            <select
+                                value={viewMode}
+                                onChange={(e) => { setViewMode(e.target.value); setImgPage(1); setVidPage(1); }}
+                                className="gallery-filter-select"
                             >
-                                {selectMode ? '✕' : '☑️'}
-                            </button>
+                                <option value="own">📁 我的</option>
+                                <option value="all">🌐 全部</option>
+                            </select>
+                        )}
 
-                            {selectMode && (
-                                <>
-                                    <div className="batch-separator" />
+                        {/* Date Filter */}
+                        <select
+                            value={dateFilter}
+                            onChange={(e) => { setDateFilter(e.target.value); setImgPage(1); setVidPage(1); }}
+                            className="gallery-filter-select"
+                        >
+                            <option value="all">📅 全部</option>
+                            <option value="today">今日</option>
+                            <option value="week">近7天</option>
+                            <option value="month">近30天</option>
+                            <option value="custom">自定义</option>
+                        </select>
 
-                                    <button onClick={toggleSelectAll} className="batch-btn text-btn" title="全选/取消">
-                                        {selectedIds.size === (activeTab === 'images' ? images.length : videos.length) ? '🚫' : '✅'}
-                                    </button>
+                        {/* Custom Date Range */}
+                        {dateFilter === 'custom' && (
+                            <>
+                                <input
+                                    type="date"
+                                    value={customStartDate}
+                                    onChange={(e) => setCustomStartDate(e.target.value)}
+                                    className="gallery-filter-select"
+                                    style={{ width: 'auto', minWidth: '120px' }}
+                                />
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>~</span>
+                                <input
+                                    type="date"
+                                    value={customEndDate}
+                                    onChange={(e) => setCustomEndDate(e.target.value)}
+                                    className="gallery-filter-select"
+                                    style={{ width: 'auto', minWidth: '120px' }}
+                                />
+                            </>
+                        )}
+                    </div>
 
-                                    <button
-                                        onClick={() => handleBatchShare(true)}
-                                        className="batch-btn"
-                                        disabled={selectedIds.size === 0}
-                                        title="公开所选"
-                                    >
-                                        🔗 {selectedIds.size > 0 && <span className="btn-badge">{selectedIds.size}</span>}
-                                    </button>
-                                    <button
-                                        onClick={() => handleBatchShare(false)}
-                                        className="batch-btn"
-                                        disabled={selectedIds.size === 0}
-                                        title="私有化所选"
-                                    >
-                                        🔒
-                                    </button>
-                                    <button
-                                        onClick={handleBatchDelete}
-                                        className="batch-btn delete"
-                                        disabled={selectedIds.size === 0}
-                                        title="删除所选"
-                                    >
-                                        🗑️
-                                    </button>
-                                </>
-                            )}
-                        </>
-                    )}
+                    {/* Actions - Right Aligned */}
+                    <div className="batch-actions">
+                        <button onClick={handleRefresh} className="batch-btn" title="刷新列表">
+                            🔄
+                        </button>
+                        {userRole === 'admin' && (
+                            <>
+                                <button
+                                    onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+                                    className={`batch-btn ${selectMode ? 'active' : ''}`}
+                                    title={selectMode ? "退出选择" : "批量管理"}
+                                >
+                                    {selectMode ? '✕' : '☑️'}
+                                </button>
+
+                                {selectMode && (
+                                    <>
+                                        <div className="batch-separator" />
+
+                                        <button onClick={toggleSelectAll} className="batch-btn text-btn" title="全选/取消">
+                                            {selectedIds.size === (activeTab === 'images' ? images.length : videos.length) ? '🚫' : '✅'}
+                                        </button>
+
+                                        <button
+                                            onClick={() => handleBatchShare(true)}
+                                            className="batch-btn"
+                                            disabled={selectedIds.size === 0}
+                                            title="公开所选"
+                                        >
+                                            🔗 {selectedIds.size > 0 && <span className="btn-badge">{selectedIds.size}</span>}
+                                        </button>
+                                        <button
+                                            onClick={() => handleBatchShare(false)}
+                                            className="batch-btn"
+                                            disabled={selectedIds.size === 0}
+                                            title="私有化所选"
+                                        >
+                                            🔒
+                                        </button>
+                                        <button
+                                            onClick={handleBatchDelete}
+                                            className="batch-btn delete"
+                                            disabled={selectedIds.size === 0}
+                                            title="删除所选"
+                                        >
+                                            🗑️
+                                        </button>
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
