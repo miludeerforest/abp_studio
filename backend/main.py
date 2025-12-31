@@ -2759,11 +2759,10 @@ def detect_api_error_cn(response_content: str) -> str:
 
 async def convert_sora_to_watermark_free(sora_url: str) -> str:
     """
-    Placeholder for watermark removal - currently disabled.
-    The dyysy.com service was removed as it returns HTML instead of video for sora.codeedu.de URLs.
-    Watermark removal needs to be handled at the API provider level (74.48.17.33).
+    Watermark removal is handled by sora2api container with aitalk.works service.
+    This function is a passthrough - sora2api should return watermark-free URLs directly.
     """
-    # Watermark removal disabled - return original URL
+    # Watermark removal handled at sora2api level - return original URL
     return sora_url
 
 async def process_video_background(item_id: str, video_api_url: str, video_api_key: str, video_model_name: str):
@@ -4021,6 +4020,12 @@ async def analyze_fission_branches(
     
     fission_prompt = f"""Role: 你是一位资深创意总监 + 产品摄影专家，负责将一张产品图片裂变成多个灵动、有表现力的故事分支。
 
+=== 🔴 最高优先级：产品外观一致性 ===
+**绝对铁律**：生成的所有图片和视频中，产品必须与输入图片中的产品**100%一致**
+- 保持产品的形状、颜色、材质、比例、品牌标识、所有细节不变
+- 只改变场景、灯光、背景、氛围，**绝不能改变产品本身的任何外观特征**
+- 如果输入图片中产品是白色，输出必须也是白色；如果有特定 logo，必须保留
+
 === 产品品类指引 ===
 **品类**: {category_hint}
 请根据以上品类特点，调整场景选择、灯光风格和放置方式。
@@ -4037,13 +4042,17 @@ async def analyze_fission_branches(
 
 === 分支创作要求 ===
 1. 每个分支必须**突出产品的一个独特卖点或使用场景**
-2. **灵动镜头**：避免静态呆板，加入动态元素：
+2. **产品外观一致性（最高优先级）**：
+   - 产品必须与输入图片中的产品**完全一致**，不允许任何外观变化
+   - 保持产品的形状、颜色、材质、比例、品牌标识不变
+   - 只改变场景、灯光、氛围，**绝不改变产品本身**
+3. **灵动镜头**：避免静态呆板，加入动态元素：
    - 手部交互（触摸、按压、滑动）
    - 环境动态（光线变化、烟雾、水流、粒子）
    - 产品自身动态（旋转、展开、发光、工作状态）
-3. **特写与全景结合**：每个分支中既有产品全貌，也有局部特写细节
-4. **感官描述**：描述材质触感、光泽反射、声音暗示（如按键声、流水声）
-5. 产品始终作为**视觉焦点**，占画面30-70%
+4. **特写与全景结合**：每个分支中既有产品全貌，也有局部特写细节
+5. **感官描述**：描述材质触感、光泽反射、声音暗示（如按键声、流水声）
+6. 产品始终作为**视觉焦点**，占画面30-70%
 
 === 视觉风格 ===
 {visual_style_prompt or 'Cinematic realism, natural lighting, soft bokeh, 35mm lens, rich textures.'}
@@ -4070,8 +4079,8 @@ material reflection, smooth sliding, button pressing, liquid pouring
     "scene_name": "场景名称（中文，如：晨光中的唤醒仪式）",
     "theme": "主题描述（中文，2-3句话，描述这个场景要传达的产品卖点和情感）",
     "product_focus": "该分支突出的产品特点（中文，如：按键触感、材质光泽、使用便捷性）",
-    "image_prompt": "详细的图片生成 prompt（英文），包含：主体描述、特写细节、光影氛围、动态元素暗示",
-    "video_prompt": "详细的视频生成 prompt（英文），必须包含：具体的动态动作、运动元素、光影变化、情绪氛围",
+    "image_prompt": "CRITICAL: Preserve the EXACT product appearance from the input image. Do not modify product shape, color, or design. [然后是详细的图片生成 prompt（英文），包含：主体描述、场景环境、光影氛围、动态元素]",
+    "video_prompt": "The product must remain FULLY VISIBLE and maintain its original appearance throughout the video. [然后是详细的视频生成 prompt（英文），包含：具体的动态动作、运动元素、光影变化、情绪氛围]",
     "camera_movement": "推荐运镜（从上述选项中选择）"
   }},
   ...
@@ -4496,6 +4505,30 @@ async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_
         status["phase"] = "generating_images"
         os.makedirs("/app/uploads/queue", exist_ok=True)
         
+        # 🆕 First branch uses original image directly (no generation needed)
+        image_paths = {}
+        if len(branches) > 0:
+            first_branch_id = branches[0].get("branch_id", 1)
+            first_branch_path = f"/app/uploads/queue/fission_{fission_id}_branch_{first_branch_id}.jpg"
+            
+            # Decode and save original image for first branch
+            from PIL import Image
+            from io import BytesIO
+            original_img_data = base64.b64decode(original_b64)
+            original_img = Image.open(BytesIO(original_img_data))
+            if original_img.mode in ('RGBA', 'P', 'LA'):
+                original_img = original_img.convert('RGB')
+            original_img.save(first_branch_path, 'JPEG', quality=95)
+            
+            # Record first branch as complete
+            image_paths[first_branch_id] = first_branch_path
+            status["branches"][0]["status"] = "image_done"
+            status["branches"][0]["image_url"] = f"/uploads/queue/fission_{fission_id}_branch_{first_branch_id}.jpg"
+            logging.info(f"Fission {fission_id}: Branch {first_branch_id} using original image directly")
+        
+        # Only generate images for remaining branches (skip first)
+        branches_to_process_for_images = branches[1:] if len(branches) > 1 else []
+        
         # Get concurrency settings
         concurrency_config = await get_concurrency_config()
         # Default to 5 if not set
@@ -4536,12 +4569,12 @@ async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_
         MAX_RETRY_ROUNDS = 3
         RETRY_DELAY = 5  # seconds between retry rounds
         
-        image_paths = {}
-        branches_to_process = branches.copy()  # Start with all branches
+        branches_to_process = branches_to_process_for_images.copy()  # Start with branches except first
         retry_round = 0
         
         # Create semaphore for sliding window concurrency control
         semaphore = asyncio.Semaphore(concurrent_limit)
+
         
         async def generate_with_semaphore(branch, branch_index_in_batch):
             """Wrapper using semaphore for true sliding window behavior"""
@@ -4635,127 +4668,98 @@ async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_
                 status["status"] = "partial_failure"
                 # Don't break - continue to video generation with available images
         
-        # Step 4: Generate videos in batches (Dynamic Batch Size + Global Concurrency Limit)
+        # Step 4: Generate videos SEQUENTIALLY with tail-frame continuation
+        # 🆕 Changed from parallel to sequential to enable visual continuity between shots
         status["phase"] = "generating_videos"
+        logging.info(f"Fission {fission_id}: Starting SEQUENTIAL video generation with tail-frame continuation")
         
-        # Get video concurrent limit
+        # Get video concurrent limit (still used for global slot acquisition)
         video_limit = int(concurrency_config.get("max_concurrent_video", 3))
-        logging.info(f"Fission {fission_id}: Using dynamic video concurrency limit: {video_limit}")
-
-        async def generate_video_with_limit(b, img_path):
-             branch_id = b.get("branch_id")
-             
-             # Intelligent retry mechanism for acquiring global slot
-             # With progressive delay to avoid CF rate limiting
-             max_retries = 5
-             VIDEO_RETRY_BASE_DELAY = 10  # Base delay for video retries (seconds)
-             
-             for attempt in range(max_retries):
-                 # Progressive delay on retries (not on first attempt)
-                 if attempt > 0:
-                     retry_delay = VIDEO_RETRY_BASE_DELAY * (1.5 ** (attempt - 1)) + random.uniform(3, 8)
-                     logging.info(f"Fission {fission_id}: Branch {branch_id} waiting {retry_delay:.1f}s before retry (anti-CF)")
-                     await asyncio.sleep(retry_delay)
-                 
-                 # Apply global throttling before video API call
-                 await throttle_request()
-                 
-                 # Try to acquire global slot (30-second timeout per attempt)
-                 acquired = await limiter.acquire_global("video_gen", timeout=30)
-                 
-                 if acquired:
-                     # Successfully acquired slot
-                     try:
-                         logging.info(f"Fission {fission_id}: Branch {branch_id} acquired slot (attempt {attempt + 1})")
-                         return await generate_branch_video(
-                            b, img_path, fission_id,
-                            video_api_url, video_api_key, video_model, user_id, req.category
-                        )
-                     finally:
-                         await limiter.release_global("video_gen")
-                 else:
-                     # Slot not available
-                     if attempt < max_retries - 1:
-                         logging.info(f"Fission {fission_id}: Branch {branch_id} slot busy (attempt {attempt + 1}/{max_retries})")
-                     else:
-                         logging.error(f"Fission {fission_id}: Branch {branch_id} failed after {max_retries} attempts")
-                         return {"branch_id": branch_id, "status": "error", "error": f"Failed to acquire slot after {max_retries} retries"}
-             
-             # Should never reach here, but just in case
-             return {"branch_id": branch_id, "status": "error", "error": "Unexpected retry loop exit"}
-
-        # Use Semaphore sliding window for video generation (same as image)
-        video_semaphore = asyncio.Semaphore(video_limit)
         
-        async def generate_video_with_semaphore(b, img_path, task_index):
-            """Wrapper using semaphore for true sliding window behavior"""
-            async with video_semaphore:
-                branch_id = b.get("branch_id")
-                
-                # Add spacing to prevent CF rate limiting
-                if task_index > 0:
-                    spacing_delay = random.uniform(0.5, 1.5) * min(task_index, 3)
-                    await asyncio.sleep(spacing_delay)
+        import shutil
+        
+        # Track current input image for each branch (starts with branch's own image, then uses tail frame)
+        current_tail_frame = None
+        
+        for idx, branch in enumerate(branches):
+            branch_id = branch.get("branch_id", idx + 1)
+            
+            # Check if this branch has an image
+            if branch_id not in image_paths:
+                logging.warning(f"Fission {fission_id}: Skipping branch {branch_id} - no input image")
+                continue
+            
+            # Determine input image for this branch
+            if idx > 0 and current_tail_frame and os.path.exists(current_tail_frame):
+                # Use tail frame from previous video as input
+                input_img_path = f"/app/uploads/queue/fission_{fission_id}_branch_{branch_id}_input_from_tail.jpg"
+                shutil.copy(current_tail_frame, input_img_path)
+                logging.info(f"Fission {fission_id}: Branch {branch_id} using tail frame from previous branch")
+            else:
+                # Use branch's own generated/original image
+                input_img_path = image_paths[branch_id]
+            
+            # Generate video (sequential execution with retry)
+            logging.info(f"Fission {fission_id}: Generating video for branch {branch_id} ({idx+1}/{len(branches)})")
+            
+            max_retries = 5
+            VIDEO_RETRY_BASE_DELAY = 10
+            result = None
+            
+            for attempt in range(max_retries):
+                if attempt > 0:
+                    retry_delay = VIDEO_RETRY_BASE_DELAY * (1.5 ** (attempt - 1)) + random.uniform(3, 8)
+                    logging.info(f"Fission {fission_id}: Branch {branch_id} waiting {retry_delay:.1f}s before retry (anti-CF)")
+                    await asyncio.sleep(retry_delay)
                 
                 # Apply global throttling
                 await throttle_request()
                 
-                # Acquire global slot with retry
-                max_retries = 5
-                VIDEO_RETRY_BASE_DELAY = 10
+                # Try to acquire global slot
+                acquired = await limiter.acquire_global("video_gen", timeout=60)
                 
-                for attempt in range(max_retries):
-                    if attempt > 0:
-                        retry_delay = VIDEO_RETRY_BASE_DELAY * (1.5 ** (attempt - 1)) + random.uniform(3, 8)
-                        logging.info(f"Fission {fission_id}: Branch {branch_id} waiting {retry_delay:.1f}s before retry (anti-CF)")
-                        await asyncio.sleep(retry_delay)
-                        await throttle_request()
-                    
-                    acquired = await limiter.acquire_global("video_gen", timeout=30)
-                    
-                    if acquired:
-                        try:
-                            logging.info(f"Fission {fission_id}: Branch {branch_id} acquired slot (attempt {attempt + 1})")
-                            return await generate_branch_video(
-                                b, img_path, fission_id,
-                                video_api_url, video_api_key, video_model, user_id, req.category
-                            )
-                        finally:
-                            await limiter.release_global("video_gen")
+                if acquired:
+                    try:
+                        logging.info(f"Fission {fission_id}: Branch {branch_id} acquired slot (attempt {attempt + 1})")
+                        result = await generate_branch_video(
+                            branch, input_img_path, fission_id,
+                            video_api_url, video_api_key, video_model, user_id, req.category
+                        )
+                        break  # Success, exit retry loop
+                    finally:
+                        await limiter.release_global("video_gen")
+                else:
+                    if attempt < max_retries - 1:
+                        logging.info(f"Fission {fission_id}: Branch {branch_id} slot busy (attempt {attempt + 1}/{max_retries})")
                     else:
-                        if attempt < max_retries - 1:
-                            logging.info(f"Fission {fission_id}: Branch {branch_id} slot busy (attempt {attempt + 1}/{max_retries})")
-                        else:
-                            logging.error(f"Fission {fission_id}: Branch {branch_id} failed after {max_retries} attempts")
-                            return {"branch_id": branch_id, "status": "error", "error": f"Failed to acquire slot after {max_retries} retries"}
-                
-                return {"branch_id": branch_id, "status": "error", "error": "Unexpected retry loop exit"}
-        
-        # Prepare tasks for all branches with images
-        video_tasks = []
-        task_index = 0
-        for b in branches:
-            branch_id = b.get("branch_id", 0)
-            if branch_id in image_paths:
-                video_tasks.append(generate_video_with_semaphore(b, image_paths[branch_id], task_index))
-                task_index += 1
-        
-        if video_tasks:
-            logging.info(f"Fission {fission_id}: Starting {len(video_tasks)} video tasks with sliding window (limit={video_limit})")
-            results = await asyncio.gather(*video_tasks, return_exceptions=True)
+                        logging.error(f"Fission {fission_id}: Branch {branch_id} failed after {max_retries} attempts")
+                        result = {"branch_id": branch_id, "status": "error", "error": f"Failed to acquire slot after {max_retries} retries"}
             
-            for result in results:
-                if isinstance(result, Exception):
-                    logging.error(f"Fission {fission_id}: Video error: {result}")
-                elif isinstance(result, dict):
-                    branch_id = result.get("branch_id", 0)
-                    # Find and update the branch status
-                    for bi, bs in enumerate(status["branches"]):
-                        if bs.get("branch_id") == branch_id:
-                            status["branches"][bi].update(result)
-                            if result.get("status") == "done":
-                                status["completed_branches"] += 1
-                            break
+            if result is None:
+                result = {"branch_id": branch_id, "status": "error", "error": "Unexpected retry loop exit"}
+            
+            # Update branch status
+            for bi, bs in enumerate(status["branches"]):
+                if bs.get("branch_id") == branch_id:
+                    status["branches"][bi].update(result)
+                    if result.get("status") == "done":
+                        status["completed_branches"] += 1
+                    break
+            
+            # 🆕 Extract tail frame for next branch (only if this video succeeded and not the last branch)
+            if result.get("status") == "done" and idx < len(branches) - 1:
+                video_path = result.get("local_video_path") or result.get("video_url", "")
+                if video_path:
+                    tail_frame_path = extract_last_frame(video_path)
+                    if tail_frame_path and os.path.exists(tail_frame_path):
+                        current_tail_frame = tail_frame_path
+                        logging.info(f"Fission {fission_id}: Extracted tail frame from branch {branch_id} -> {tail_frame_path}")
+                    else:
+                        logging.warning(f"Fission {fission_id}: Failed to extract tail frame from branch {branch_id}, next branch will use its own image")
+                        current_tail_frame = None
+                else:
+                    logging.warning(f"Fission {fission_id}: No video path available for branch {branch_id}")
+                    current_tail_frame = None
         
         # Step 5: Merge all successful videos into one
         status["phase"] = "merging"

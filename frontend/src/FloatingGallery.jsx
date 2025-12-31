@@ -220,8 +220,6 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
 
     const handleBatchDelete = async () => {
         if (selectedIds.size === 0) return;
-        if (!window.confirm(`确定要删除选中的 ${selectedIds.size} 个项目吗？`)) return;
-        if (!window.confirm(`再次确认：删除后无法恢复，是否继续？`)) return;
 
         const token = localStorage.getItem('token');
         const endpoint = activeTab === 'images'
@@ -239,8 +237,6 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
             });
 
             if (res.ok) {
-                const data = await res.json();
-                alert(`成功删除 ${data.deleted} 个项目`);
                 setSelectedIds(new Set());
                 setSelectMode(false);
                 handleRefresh();

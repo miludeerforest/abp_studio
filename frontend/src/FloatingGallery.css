@@ -6,7 +6,7 @@
     inset: 0;
     background: rgba(0, 0, 0, 0.3);
     z-index: 1000;
-    animation: fadeIn 0.3s ease-out;
+    animation: fadeIn 0.12s ease-out;
 }
 
 /* Drawer 抽屉容器 */
@@ -14,7 +14,7 @@
     position: fixed;
     top: 0;
     right: 0;
-    width: 480px;
+    width: 600px;
     max-width: 100vw;
     height: 100vh;
     background: var(--bg-color, #ffffff);
@@ -22,7 +22,7 @@
     z-index: 1001;
     display: flex;
     flex-direction: column;
-    animation: slideInRight 0.3s ease-out;
+    animation: slideInRight 0.12s ease-out;
 }
 
 html[data-theme="dark"] .floating-gallery-drawer {
