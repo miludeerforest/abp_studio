@@ -179,6 +179,11 @@ class VideoQueueItem(Base):
     _preview_url = Column("preview_url", String, nullable=True)  # Custom preview URL
     retry_count = Column(Integer, default=0)  # 累计重试次数
     last_retry_at = Column(DateTime, nullable=True)  # 上次重试/处理时间
+    # Video Quality Review Fields
+    review_score = Column(Integer, nullable=True)      # AI感评分 1-10 (越低越自然)
+    review_result = Column(Text, nullable=True)        # 详细审查结果 JSON
+    review_status = Column(String, nullable=True)      # pending/done/error
+    reviewed_at = Column(DateTime, nullable=True)      # 审查时间
 
     @property
     def preview_url(self):
@@ -249,6 +254,19 @@ class ConfigItem(BaseModel):
     max_concurrent_video: Optional[int] = 3    # 视频生成全局并发数
     max_concurrent_story: Optional[int] = 2    # Story Chain 全局并发数
     max_concurrent_per_user: Optional[int] = 2 # 每用户并发上限
+    # Thai Dubbing - Gemini Flash (Video Analysis)
+    gemini_flash_api_url: Optional[str] = None
+    gemini_flash_api_key: Optional[str] = None
+    gemini_flash_model_name: Optional[str] = "gemini-2.0-flash"
+    # Thai Dubbing - Gemini TTS (Speech Synthesis)
+    gemini_tts_api_url: Optional[str] = None
+    gemini_tts_api_key: Optional[str] = None
+    gemini_tts_model_name: Optional[str] = "gemini-2.5-flash-preview-tts"
+    # Video Quality Review (OAI Compatible API)
+    review_api_url: Optional[str] = None           # 审查服务地址
+    review_api_key: Optional[str] = None           # API 密钥
+    review_model_name: Optional[str] = "gpt-4o"    # 模型名称
+    review_enabled: Optional[bool] = False         # 是否启用自动审查
 
 
 
@@ -757,6 +775,19 @@ def get_config(db: Session = Depends(get_db), token: str = Depends(verify_token)
         "max_concurrent_video": int(os.getenv("MAX_CONCURRENT_VIDEO", "3")),
         "max_concurrent_story": int(os.getenv("MAX_CONCURRENT_STORY", "2")),
         "max_concurrent_per_user": int(os.getenv("MAX_CONCURRENT_PER_USER", "2")),
+        # Thai Dubbing - Gemini Flash (Video Analysis)
+        "gemini_flash_api_url": os.getenv("GEMINI_FLASH_API_URL", "https://generativelanguage.googleapis.com"),
+        "gemini_flash_api_key": os.getenv("GEMINI_FLASH_API_KEY", ""),
+        "gemini_flash_model_name": os.getenv("GEMINI_FLASH_MODEL_NAME", "gemini-2.0-flash"),
+        # Thai Dubbing - Gemini TTS (Speech Synthesis)
+        "gemini_tts_api_url": os.getenv("GEMINI_TTS_API_URL", "https://generativelanguage.googleapis.com"),
+        "gemini_tts_api_key": os.getenv("GEMINI_TTS_API_KEY", ""),
+        "gemini_tts_model_name": os.getenv("GEMINI_TTS_MODEL_NAME", "gemini-2.5-flash-preview-tts"),
+        # Video Quality Review (OAI Compatible API)
+        "review_api_url": os.getenv("REVIEW_API_URL", ""),
+        "review_api_key": os.getenv("REVIEW_API_KEY", ""),
+        "review_model_name": os.getenv("REVIEW_MODEL_NAME", "gpt-4o"),
+        "review_enabled": os.getenv("REVIEW_ENABLED", "false").lower() == "true",
     }
     
     # Check if DB is empty for these keys, if so, seed them
@@ -1011,26 +1042,77 @@ async def analyze_product_scene(
     gen_count: int = 9  # User-selected number of scripts
 ) -> AnalyzeResponse:
     
-    system_instruction = (
-        "You are a professional commercial photographer and art director. "
-        "Your task is to analyze a product image and a style reference image to plan a photoshoot."
-    )
-    
+    # Enhanced system instruction with structured prompt engineering framework
+    system_instruction = """Role: You are an elite commercial photographer, art director, and prompt engineer with expertise in:
+- Product photography & styling across all categories
+- Lighting design (natural, studio, dramatic, ambient, cinematic)
+- Composition principles (rule of thirds, golden ratio, leading lines, negative space)
+- Visual storytelling through angles, environments, and mood
+
+=== ANALYSIS METHODOLOGY ===
+When analyzing product and reference images, apply this framework:
+
+1. PRODUCT IDENTITY EXTRACTION
+   - Core visual DNA: shape, silhouette, primary materials
+   - Surface properties: texture, reflectivity, transparency, color palette
+   - Brand positioning: luxury/mass-market, modern/classic, minimal/expressive
+
+2. STYLE REFERENCE ANALYSIS
+   - Mood transfer elements: color temperature, contrast ratio, saturation
+   - Lighting signature: direction, quality (soft/hard), color cast
+   - Environmental textures and atmospheric elements
+
+3. PLACEMENT LOGIC ENGINE
+   - Tech/Electronics → Minimalist surfaces, floating, sleek environments
+   - Beauty/Cosmetics → Soft textures, organic materials, lifestyle contexts
+   - Food/Beverage → Natural settings, appetite-appeal lighting
+   - Fashion → Editorial styling, dramatic lighting, dynamic poses
+   - Home/Furniture → Contextual interior scenes, warm lighting
+   - Industrial/Security → Professional environments, technical precision
+
+4. DIVERSITY MATRIX
+   Generate scripts that maximize variation across these axes:
+   - Lighting: Natural daylight | Golden hour | Studio softbox | Neon/Colored | Dramatic rim light | Ambient glow
+   - Environment: Indoor minimal | Outdoor nature | Urban texture | Abstract gradient | Lifestyle context | Studio infinity
+   - Composition: Hero center | Dynamic diagonal | Extreme close-up | Environmental wide | Floating/levitation | Pattern/repetition
+   - Mood: Clean professional | Warm inviting | Cool modern | Dramatic cinematic | Playful vibrant | Serene meditative
+
+=== SCRIPT QUALITY REQUIREMENTS ===
+Each script must be a production-ready photography brief containing:
+- Specific lighting setup with direction and quality descriptors
+- Detailed environment description with textures and props
+- Mood and atmosphere keywords for consistent generation
+- Composition guidance with framing and depth of field
+- Avoid generic descriptions; be specific and evocative"""
+
     product_identity_prompt = "1. Identify the product in the first image."
     if custom_product_name:
-        product_identity_prompt = f"1. The user has identified this product as: '{custom_product_name}'. Verify this and describe its key visual features."
+        product_identity_prompt = f"1. The user has identified this product as: '{custom_product_name}'. Verify this and describe its key visual features (shape, materials, colors, unique characteristics)."
 
     prompt = (
-        f"Category: {category}.\n"
-        f"{product_identity_prompt}\n"
-        "2. Analyze the geometry and environment of the second image (style reference). Is it a wall, a table, outdoor, abstract?\n"
-        "3. Determine the best 'Placement Mode' (e.g., Wall-mounted, Tabletop, Floating, Floor-standing). "
-        "   - Logic: If it's a CCTV camera and the background is a wall, use Wall-mounted. If it's a bottle, use Tabletop.\n"
-        f"4. Generate exactly {gen_count} distinct photography scripts (prompts) for generating this product in this style.\n"
-        "   - The scripts must vary significantly in lighting (Natural, Studio, Neon, Sunset, etc.), environment (Indoor, Outdoor, Abstract, Texture), and composition.\n"
-        "   - Avoid repetitive backgrounds. Each script should feel like a distinct photoshoot.\n"
-        "   - The scripts must strictly follow the 'Placement Mode' logic.\n"
-        "Return JSON format ONLY: "
+        f"Product Category: {category}\n\n"
+        f"{product_identity_prompt}\n\n"
+        "2. STYLE REFERENCE ANALYSIS:\n"
+        "   - What is the dominant mood and color palette?\n"
+        "   - Identify the lighting setup (direction, quality, color temperature)\n"
+        "   - Describe the environment/background (geometric, organic, textured, minimal?)\n\n"
+        "3. PLACEMENT MODE DETERMINATION:\n"
+        "   Analyze product type + reference environment to determine optimal placement:\n"
+        "   - Wall-mounted: cameras, sensors, displays (when reference shows vertical surfaces)\n"
+        "   - Tabletop: bottles, cosmetics, electronics, small items\n"
+        "   - Floor-standing: large appliances, furniture, equipment\n"
+        "   - Floating/Levitation: tech products, premium items for dramatic effect\n"
+        "   - Embedded/Contextual: lifestyle products shown in use-case environments\n\n"
+        f"4. Generate exactly {gen_count} DISTINCT photography scripts.\n\n"
+        "   DIVERSITY REQUIREMENTS:\n"
+        "   - Each script MUST explore a unique combination from the Diversity Matrix\n"
+        "   - NO two scripts should share the same lighting + environment combination\n"
+        "   - Include at least: 2 natural light, 2 studio light, 2 dramatic/creative light scenarios\n"
+        "   - Vary composition: mix hero shots, close-ups, environmental shots, and creative angles\n\n"
+        "   SCRIPT CONTENT:\n"
+        "   - angle_name: A short, descriptive title (e.g., 'Golden Hour Warmth', 'Studio Minimal', 'Urban Texture')\n"
+        "   - script: A detailed 40-60 word prompt with specific lighting, environment, mood, and composition guidance\n\n"
+        "Return JSON format ONLY:\n"
         "{ \"product_description\": \"...\", \"environment_analysis\": \"...\", \"placement_mode\": \"...\", \"scripts\": [ {\"angle_name\": \"...\", \"script\": \"...\"}, ... ] }"
     )
 
@@ -1421,6 +1503,7 @@ async def analyze_storyboard_endpoint(
     image: UploadFile = File(...),
     topic: str = Form("一个产品的故事"), # Default topic if missing
     shot_count: int = Form(5), # Default 5 shots
+    category: str = Form("other"),  # Product category for tailored prompts
     api_url: str = Form(None),
     gemini_api_key: str = Form(None),
     model_name: str = Form(None),
@@ -1440,12 +1523,27 @@ async def analyze_storyboard_endpoint(
     # Read Image
     image_bytes = await file_to_base64(image)
     
+    # Category-specific placement logic (matching batch scene generation)
+    category_guidance = {
+        "security": "Security/Surveillance - Wall-mounted scenes, professional spaces (control rooms, corridors, building exteriors), technical precision, night vision/IR effects implied, industrial-grade aesthetics",
+        "daily": "Daily Essentials - Home living scenes, natural lighting, warm atmosphere, human daily use interactions, organization/storage contexts",
+        "beauty": "Beauty/Cosmetics - Soft textured backgrounds, organic materials (petals, silk, water droplets), feminine aesthetics, delicate close-ups, skin texture implied",
+        "electronics": "Electronics/Tech - Minimalist surfaces, tech atmosphere, floating product effects, LED lighting, screen displays, metallic reflections",
+        "other": "General Product - Flexibly choose scenes based on product characteristics"
+    }
+    category_hint = category_guidance.get(category, category_guidance["other"])
+    
     # Construct System Prompt with VideoGenerationPromptGuide integration
     system_prompt = f"""Role: You are a specialized assistant combining the skills of:
 - A film storyboard artist creating continuous visual narratives
 - A prompt engineer crafting clear, structured video generation prompts  
 - A creative director ensuring coherent storytelling and strong visuals
 - A safety reviewer ensuring strict policy compliance
+
+=== PRODUCT CATEGORY GUIDANCE ===
+**Category**: {category_hint}
+Use this category to guide scene selection, lighting styles, and product placement.
+Tailor your storyboard shots to match the expected environment and aesthetic for this product type.
 
 === SAFETY CONSTRAINTS (HIGHEST PRIORITY) ===
 Prohibited content - NEVER include:
@@ -1491,6 +1589,18 @@ Each prompt must implicitly contain:
    - Examples: particles floating, steam rising, reflections changing, hands interacting with product
    - Environmental motion: leaves, wind effects, light rays, shadows shifting
    - Avoid: static scenes where only the camera moves while everything else is frozen
+   
+   *** MANDATORY DYNAMIC REQUIREMENTS ***
+   - Minimum 2 distinct motion elements per shot
+   - Motion type categories (use at least 2 per shot):
+     * AMBIENT: dust particles, motes of light, gentle haze, floating elements
+     * ENVIRONMENTAL: wind ripples, water reflections, foliage movement, fabric flutter
+     * SUBJECT: product interaction, hand gestures, expression changes, posture shifts
+     * LIGHT: ray movement, caustics, shadow rotation, highlight shimmer
+   - Intensity progression through story arc:
+     * Opening shots: subtle, establishing motion
+     * Middle shots: increased dynamics, peak action
+     * Closing shots: calming motion, resolution feel
 
 7. Visual Style:
    - Lighting: natural/artificial, mood (soft, dramatic, moody)
@@ -1631,11 +1741,39 @@ async def generate_video_prompt_endpoint(
 
     image_b64 = await file_to_base64(image)
 
-    system_instruction = (
-        "You are an AI video director. Analyze this product image and generate a concise, high-quality text-to-video prompt "
-        "(max 40 words) describing a cinematic camera movement (e.g., slow orbit, pan, zoom in) that best suits this specific angle and composition. "
-        "Output ONLY the prompt in English."
-    )
+    # Enhanced video prompt generation with structured framework
+    system_instruction = """Role: You are a cinematic video director, motion graphics specialist, and visual effects artist.
+
+=== VIDEO GENERATION FRAMEWORK ===
+Analyze the product image and generate a detailed text-to-video prompt (60-80 words) that captures:
+
+1. SUBJECT FOCUS
+   - What is the visual center of attention?
+   - Key visual characteristics that must be preserved
+
+2. CAMERA MOTION (Primary)
+   - Choose ONE primary movement: slow orbit, dolly in/out, crane sweep, push-in, pull-back, tracking shot, static with subtle sway
+   - Specify direction, speed, and arc
+
+3. DYNAMIC SCENE ELEMENTS (Required - Beyond Camera!)
+   - Ambient motion: dust particles, light rays, subtle reflections
+   - Environmental: gentle air flow, fabric movement, liquid ripples
+   - Subject interaction: product rotation, gentle vibration, surface highlights shifting
+
+4. LIGHTING EVOLUTION
+   - How light behaves during the clip: stable, slowly shifting, pulsing, flickering
+   - Highlight and shadow movement
+
+5. ATMOSPHERE & DEPTH
+   - Bokeh quality, haze, lens flares, depth layers
+   - Color mood: warm, cool, neutral, dramatic
+
+=== OUTPUT CONSTRAINTS ===
+- 60-80 words, English only
+- Cinematic 24fps aesthetic with subtle film grain
+- Smooth, professional camera movement
+- Rich depth of field with product in sharp focus
+- NO markdown, NO formatting, NO quotes - just the prompt text"""
     
     payload = {
         "model": model_name,
@@ -1644,12 +1782,12 @@ async def generate_video_prompt_endpoint(
             {
                 "role": "user", 
                 "content": [
-                    {"type": "text", "text": "Generate video prompt."},
+                    {"type": "text", "text": "Analyze this product image and generate a cinematic video prompt with camera movement, dynamic elements, and atmospheric details."},
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
                 ]
             }
         ],
-        "max_tokens": 100
+        "max_tokens": 200
     }
     
     headers = {
@@ -1801,6 +1939,8 @@ def get_gallery_images(
     offset: int = 0,
     category: str = None,  # Filter by category
     view_mode: str = "own",  # "own" | "all" (admin only)
+    start_date: str = None,  # Filter by start date (ISO format: YYYY-MM-DD)
+    end_date: str = None,    # Filter by end date (ISO format: YYYY-MM-DD)
     db: Session = Depends(get_db), 
     user: User = Depends(get_current_user)
 ):
@@ -1809,6 +1949,7 @@ def get_gallery_images(
     - Admin with view_mode='all': All images from all users
     - Admin with view_mode='own': Only admin's own images
     - Regular user: Own images + shared images (is_shared=True)
+    - start_date/end_date: Filter by creation date (ISO format: YYYY-MM-DD)
     """
     from sqlalchemy import or_
     
@@ -1826,6 +1967,22 @@ def get_gallery_images(
     # Apply category filter if provided
     if category and category != "all":
         query = query.filter(SavedImage.category == category)
+    
+    # Apply date filters if provided
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            query = query.filter(SavedImage.created_at >= start_dt)
+        except ValueError:
+            pass  # Invalid date format, skip filter
+    
+    if end_date:
+        try:
+            # Add one day to include the end date fully
+            end_dt = datetime.fromisoformat(end_date) + timedelta(days=1)
+            query = query.filter(SavedImage.created_at < end_dt)
+        except ValueError:
+            pass  # Invalid date format, skip filter
         
     total = query.count()
     images = query.order_by(SavedImage.created_at.desc()).limit(limit).offset(offset).all()
@@ -1941,6 +2098,8 @@ def get_gallery_videos(
     offset: int = 0,
     category: str = None,  # Filter by category
     view_mode: str = "own",  # "own" | "all" (admin only)
+    start_date: str = None,  # Filter by start date (ISO format: YYYY-MM-DD)
+    end_date: str = None,    # Filter by end date (ISO format: YYYY-MM-DD)
     db: Session = Depends(get_db), 
     user: User = Depends(get_current_user)
 ):
@@ -1949,6 +2108,7 @@ def get_gallery_videos(
     - Admin with view_mode='all': All completed videos from all users
     - Admin with view_mode='own': Only admin's own completed videos
     - Regular user: Own videos + shared videos (is_shared=True)
+    - start_date/end_date: Filter by creation date (ISO format: YYYY-MM-DD)
     """
     from sqlalchemy import or_, and_
     
@@ -1975,6 +2135,22 @@ def get_gallery_videos(
     if category and category != "all":
         query = query.filter(VideoQueueItem.category == category)
     
+    # Apply date filters if provided
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            query = query.filter(VideoQueueItem.created_at >= start_dt)
+        except ValueError:
+            pass  # Invalid date format, skip filter
+    
+    if end_date:
+        try:
+            # Add one day to include the end date fully
+            end_dt = datetime.fromisoformat(end_date) + timedelta(days=1)
+            query = query.filter(VideoQueueItem.created_at < end_dt)
+        except ValueError:
+            pass  # Invalid date format, skip filter
+    
     total = query.count()
     videos = query.order_by(VideoQueueItem.created_at.desc()).limit(limit).offset(offset).all()
     
@@ -1996,10 +2172,82 @@ def get_gallery_videos(
             "category": vid.category or "other",
             "is_merged": vid.is_merged or False,
             "is_shared": vid.is_shared,
-            "created_at": vid.created_at
+            "created_at": vid.created_at,
+            # Review fields
+            "review_score": vid.review_score,
+            "review_status": vid.review_status,
+            "reviewed_at": vid.reviewed_at
         })
     
     return {"total": total, "items": result_items}
+
+# --- Video Review Endpoints ---
+
+@app.get("/api/v1/gallery/videos/{video_id}/review")
+def get_video_review(
+    video_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """Get detailed review result for a video."""
+    video = db.query(VideoQueueItem).filter(VideoQueueItem.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Check access permission
+    if user.role != "admin" and video.user_id != user.id and not video.is_shared:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    review_details = None
+    if video.review_result:
+        try:
+            review_details = json.loads(video.review_result)
+        except:
+            review_details = {"raw": video.review_result}
+    
+    return {
+        "video_id": video_id,
+        "review_score": video.review_score,
+        "review_status": video.review_status,
+        "reviewed_at": video.reviewed_at,
+        "details": review_details
+    }
+
+@app.post("/api/v1/gallery/videos/{video_id}/review")
+async def trigger_video_review_api(
+    video_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    """Manually trigger video review (admin only)."""
+    video = db.query(VideoQueueItem).filter(VideoQueueItem.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    if video.status != "done":
+        raise HTTPException(status_code=400, detail="Video must be completed before review")
+    
+    # Check if video file exists
+    local_path = f"/app/uploads/queue/video_{video_id}.mp4"
+    if not os.path.exists(local_path):
+        raise HTTPException(status_code=400, detail="Video file not found locally")
+    
+    # Trigger review
+    try:
+        from video_reviewer import trigger_video_review
+        asyncio.create_task(
+            trigger_video_review(
+                video_id=video_id,
+                video_path=local_path,
+                video_prompt=video.prompt,
+                db_session=SessionLocal,
+                VideoQueueItem_model=VideoQueueItem
+            )
+        )
+        return {"message": "Review triggered", "video_id": video_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to trigger review: {str(e)}")
 
 # --- Share Toggle Endpoints ---
 
@@ -2698,6 +2946,24 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
                                 await connection_manager.update_user_activity(item.user_id, "空闲")
                             except Exception as act_err:
                                 logger.warning(f"Failed to log video completion: {act_err}")
+                            
+                            # Trigger video quality review (async, non-blocking)
+                            try:
+                                from video_reviewer import trigger_video_review
+                                video_local_path = local_path if 'local_path' in dir() and os.path.exists(local_path) else None
+                                if video_local_path:
+                                    asyncio.create_task(
+                                        trigger_video_review(
+                                            video_id=item_id,
+                                            video_path=video_local_path,
+                                            video_prompt=item.prompt,
+                                            db_session=SessionLocal,
+                                            VideoQueueItem_model=VideoQueueItem
+                                        )
+                                    )
+                                    logger.info(f"Video review task triggered for {item_id}")
+                            except Exception as review_err:
+                                logger.warning(f"Failed to trigger video review: {review_err}")
                         else:
                             logger.warning(f"No URL found in video response: {full_content[:200]}")
                             # 智能错误检测 - 将API返回的错误翻译为中文提示
@@ -2755,6 +3021,15 @@ async def process_video_with_auto_retry(item_id: str, video_api_url: str, video_
                 return
         
         start_attempt = item.retry_count + 1  # 从持久化的计数继续
+        
+        # 如果已经超过最大重试次数，直接标记为失败并返回
+        if start_attempt > MAX_AUTO_RETRIES:
+            logger.error(f"Video {item_id}: Already exceeded max retries ({item.retry_count}/{MAX_AUTO_RETRIES}), marking as failed")
+            if item.status != "error":
+                item.status = "error"
+                item.error_msg = item.error_msg or f"重试次数已达上限 ({MAX_AUTO_RETRIES}次)"
+                db.commit()
+            return
     finally:
         db.close()
     
@@ -2853,7 +3128,11 @@ async def process_video_with_auto_retry(item_id: str, video_api_url: str, video_
                         db.commit()
                         should_retry = True
                     else:
+                        # 最后一次重试也失败了，确保状态为 error 并保留错误信息
                         logger.error(f"Video {item_id}: All {MAX_AUTO_RETRIES} attempts failed")
+                        item.status = "error"
+                        item.error_msg = f"重试 {MAX_AUTO_RETRIES} 次后仍失败: {error_msg[:100]}"
+                        db.commit()
                         return
             finally:
                 db.close()  # CRITICAL: Close connection BEFORE sleep to avoid pool exhaustion
@@ -3725,11 +4004,26 @@ async def analyze_fission_branches(
     visual_style_prompt: str,
     api_url: str,
     api_key: str,
-    model_name: str
+    model_name: str,
+    category: str = "other"  # Product category for tailored prompts
 ) -> List[dict]:
     """Analyze image and generate multiple story branches."""
     
+    # Category-specific placement logic (matching batch scene generation)
+    category_guidance = {
+        "security": "安防监控产品 - 适合：墙面安装场景、专业空间（如监控室、走廊、建筑外墙）、技术精度展示、夜视/红外效果暗示、工业级质感",
+        "daily": "日用百货 - 适合：居家生活场景、自然光线、温馨氛围、人物日常使用、收纳/整理情境",
+        "beauty": "美妆护肤 - 适合：柔和纹理背景、有机材料（花瓣、丝绸、水滴）、女性审美、精致特写、肌肤质感暗示",
+        "electronics": "数码3C - 适合：极简表面、科技感氛围、产品悬浮效果、LED灯光、屏幕显示、金属质感反射",
+        "other": "通用产品 - 根据产品特性灵活选择场景"
+    }
+    category_hint = category_guidance.get(category, category_guidance["other"])
+    
     fission_prompt = f"""Role: 你是一位资深创意总监 + 产品摄影专家，负责将一张产品图片裂变成多个灵动、有表现力的故事分支。
+
+=== 产品品类指引 ===
+**品类**: {category_hint}
+请根据以上品类特点，调整场景选择、灯光风格和放置方式。
 
 === 第一步：产品深度分析 ===
 首先，仔细观察图片中的产品，识别并分析：
@@ -4191,7 +4485,8 @@ async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_
             req.visual_style_prompt or "",
             image_api_url,
             image_api_key,
-            analysis_model
+            analysis_model,
+            req.category  # Pass category for tailored prompts
         )
         
         logging.info(f"Fission {fission_id}: Generated {len(branches)} branch scripts")
@@ -4624,6 +4919,226 @@ async def get_story_fission_status(fission_id: str):
     if not status:
         raise HTTPException(status_code=404, detail="Fission not found")
     return status
+
+
+class RetryBranchRequest(BaseModel):
+    """Request body for retrying a single branch."""
+    pass  # No additional fields needed for now
+
+
+@app.post("/api/v1/story-fission/{fission_id}/branch/{branch_id}/retry")
+async def retry_fission_branch(
+    fission_id: str,
+    branch_id: int,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user)
+):
+    """Retry video generation for a failed branch."""
+    status = STORY_FISSION_STATUS.get(fission_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Fission not found")
+    
+    # Find the failed branch
+    branch_data = None
+    branch_idx = None
+    for idx, b in enumerate(status.get("branches", [])):
+        if b.get("branch_id") == branch_id:
+            branch_data = b
+            branch_idx = idx
+            break
+    
+    if branch_data is None:
+        raise HTTPException(status_code=404, detail=f"Branch {branch_id} not found")
+    
+    # Check if branch has an image
+    image_url = branch_data.get("image_url", "")
+    if not image_url:
+        raise HTTPException(status_code=400, detail="Branch has no image, cannot retry video")
+    
+    # Get config
+    db = SessionLocal()
+    db_config_list = db.query(SystemConfig).all()
+    config_dict = {item.key: item.value for item in db_config_list}
+    db.close()
+    
+    video_api_url = config_dict.get("video_api_url", "")
+    video_api_key = config_dict.get("video_api_key", "")
+    video_model = config_dict.get("video_model_name", "sora-video-portrait")
+    category = branch_data.get("category", "other")
+    
+    # Construct image path
+    image_path = f"/app{image_url}" if image_url.startswith("/uploads") else image_url
+    
+    if not os.path.exists(image_path):
+        raise HTTPException(status_code=400, detail=f"Image file not found: {image_path}")
+    
+    # Prepare branch dict for video generation
+    branch = {
+        "branch_id": branch_id,
+        "video_prompt": branch_data.get("video_prompt", ""),
+        "camera_movement": branch_data.get("camera_movement", ""),
+    }
+    
+    # Update status to processing
+    status["branches"][branch_idx]["status"] = "processing"
+    status["branches"][branch_idx]["error"] = None
+    
+    async def retry_video_task():
+        try:
+            result = await generate_branch_video(
+                branch, image_path, fission_id,
+                video_api_url, video_api_key, video_model, user.id, category
+            )
+            
+            if result.get("status") == "done":
+                status["branches"][branch_idx].update(result)
+                status["completed_branches"] = sum(1 for b in status["branches"] if b.get("status") == "done")
+                logging.info(f"Fission {fission_id}: Branch {branch_id} retry succeeded")
+            else:
+                status["branches"][branch_idx]["status"] = "video_error"
+                status["branches"][branch_idx]["error"] = result.get("error", "Unknown error")
+                logging.warning(f"Fission {fission_id}: Branch {branch_id} retry failed: {result.get('error')}")
+        except Exception as e:
+            status["branches"][branch_idx]["status"] = "video_error"
+            status["branches"][branch_idx]["error"] = str(e)
+            logging.error(f"Fission {fission_id}: Branch {branch_id} retry exception: {e}")
+    
+    background_tasks.add_task(retry_video_task)
+    
+    return {"status": "retrying", "branch_id": branch_id}
+
+
+@app.post("/api/v1/story-fission/{fission_id}/remerge")
+async def remerge_fission_story(
+    fission_id: str,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user)
+):
+    """Re-merge all successful branch videos into the final story video."""
+    status = STORY_FISSION_STATUS.get(fission_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Fission not found")
+    
+    # Collect successful video paths
+    video_inputs = []
+    for branch in status.get("branches", []):
+        if branch.get("status") == "done":
+            local_path = branch.get("local_video_path")
+            if local_path and os.path.exists(local_path):
+                video_inputs.append(local_path)
+            else:
+                video_url = branch.get("video_url", "")
+                if video_url.startswith("/uploads"):
+                    full_path = f"/app{video_url}"
+                    if os.path.exists(full_path):
+                        video_inputs.append(full_path)
+    
+    if len(video_inputs) == 0:
+        raise HTTPException(status_code=400, detail="No successful videos to merge")
+    
+    logging.info(f"Fission {fission_id}: Remerging {len(video_inputs)} videos")
+    
+    async def remerge_task():
+        try:
+            # Create concat list file
+            concat_list_path = f"/app/uploads/queue/fission_{fission_id}_concat.txt"
+            with open(concat_list_path, "w") as f:
+                for path in video_inputs:
+                    f.write(f"file '{path}'\n")
+            
+            output_filename = f"story_fission_{fission_id}.mp4"
+            output_path = f"/app/uploads/queue/{output_filename}"
+            
+            # Try fast copy first
+            merge_cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_list_path,
+                "-c", "copy",
+                output_path
+            ]
+            result = subprocess.run(merge_cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                logging.warning(f"Fission {fission_id}: Fast merge failed, trying re-encode")
+                merge_cmd_reencode = [
+                    "ffmpeg", "-y",
+                    "-f", "concat",
+                    "-safe", "0",
+                    "-i", concat_list_path,
+                    "-c:v", "libx264",
+                    "-c:a", "aac",
+                    "-preset", "fast",
+                    output_path
+                ]
+                subprocess.run(merge_cmd_reencode, check=True, capture_output=True)
+            
+            if os.path.exists(output_path):
+                final_result_url = f"/uploads/queue/{output_filename}"
+                status["merged_video_url"] = final_result_url
+                
+                # Update thumbnail
+                thumbnail_filename = f"story_fission_{fission_id}_thumb.jpg"
+                thumbnail_path = f"/app/uploads/queue/{thumbnail_filename}"
+                try:
+                    thumb_cmd = [
+                        "ffmpeg", "-y",
+                        "-i", output_path,
+                        "-ss", "00:00:00.500",
+                        "-vframes", "1",
+                        "-q:v", "2",
+                        thumbnail_path
+                    ]
+                    subprocess.run(thumb_cmd, check=True, capture_output=True)
+                    status["thumbnail_url"] = f"/uploads/queue/{thumbnail_filename}"
+                except Exception:
+                    pass
+                
+                # Update or create queue item
+                db = SessionLocal()
+                try:
+                    # Find existing merged item
+                    existing = db.query(VideoQueueItem).filter(
+                        VideoQueueItem.filename == output_filename
+                    ).first()
+                    
+                    if existing:
+                        existing.result_url = final_result_url
+                        existing.status = "done"
+                        if status.get("thumbnail_url"):
+                            existing.preview_url = status["thumbnail_url"]
+                    else:
+                        merged_item = VideoQueueItem(
+                            id=str(int(uuid.uuid4().int))[:18],
+                            filename=output_filename,
+                            file_path=output_path,
+                            prompt=f"Story Fission {fission_id} (Remerged)",
+                            status="done",
+                            result_url=final_result_url,
+                            user_id=user.id,
+                            is_merged=True
+                        )
+                        if status.get("thumbnail_url"):
+                            merged_item.preview_url = status["thumbnail_url"]
+                        db.add(merged_item)
+                    
+                    db.commit()
+                finally:
+                    db.close()
+                
+                logging.info(f"Fission {fission_id}: Remerge completed: {final_result_url}")
+            else:
+                logging.error(f"Fission {fission_id}: Remerge failed - output file not created")
+                status["error"] = "Remerge failed: output file not created"
+                
+        except Exception as e:
+            logging.error(f"Fission {fission_id}: Remerge exception: {e}")
+            status["error"] = f"Remerge failed: {str(e)}"
+    
+    background_tasks.add_task(remerge_task)
+    
+    return {"status": "remerging", "video_count": len(video_inputs)}
 
 
 # =============================================================================

@@ -5,7 +5,7 @@ import Login from './Login'
 import Settings from './Settings';
 import StoryGenerator from './StoryGenerator';
 import UserManagement from './UserManagement';
-import Gallery from './Gallery';
+import FloatingGallery from './FloatingGallery';
 import AdminDashboard from './AdminDashboard';
 import PublicGallery from './PublicGallery';
 import ProfileSettings from './ProfileSettings';
@@ -40,8 +40,11 @@ function App() {
     }
   };
 
-  // Tabs: 'image', 'video', 'story', 'gallery', 'settings', 'users'
-  const [activeTab, setActiveTab] = useState('gallery')
+  // Tabs: 'image', 'video', 'story', 'settings', 'users'
+  const [activeTab, setActiveTab] = useState('batch')
+
+  // Floating Gallery state
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false)
 
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -118,7 +121,7 @@ function App() {
     setUserRole(role)
     setUsername(user)
     setIsLoggedIn(true)
-    setActiveTab('gallery')  // Redirect to gallery after login for all users
+    setActiveTab('batch')  // Redirect to batch generator after login
     fetchConfig(t)
   }
 
@@ -230,12 +233,12 @@ function App() {
             {!sidebarCollapsed && <span className="label">故事模式</span>}
           </button>
           <button
-            className={`sidebar-item ${activeTab === 'gallery' ? 'active' : ''}`}
-            onClick={() => setActiveTab('gallery')}
-            title="画廊"
+            className="sidebar-item"
+            onClick={() => window.open('https://ai.studio/apps/drive/1geV5jJXX0ddsg-Fw5ovXe-B-2GYxQUso?fullscreenApplet=true', '_blank')}
+            title="泰语配音"
           >
-            <span className="icon">🖼️</span>
-            {!sidebarCollapsed && <span className="label">画廊</span>}
+            <span className="icon">🎙️</span>
+            {!sidebarCollapsed && <span className="label">泰语配音</span>}
           </button>
 
           {/* Profile - All Users */}
@@ -356,9 +359,7 @@ function App() {
           />
         </div>
 
-        <div style={{ display: activeTab === 'gallery' ? 'block' : 'none', height: '100%' }}>
-          <Gallery onSelectForVideo={handleSelectForVideo} />
-        </div>
+        {/* FloatingGallery is rendered at root level, not here */}
 
         <div style={{ display: activeTab === 'profile' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
           <ProfileSettings token={token} onProfileUpdate={() => { }} />
@@ -383,6 +384,23 @@ function App() {
           </>
         )}
       </main>
+
+      {/* Floating Gallery Trigger Button - Right Side */}
+      <button
+        className={`gallery-trigger-btn ${isGalleryOpen ? 'active' : ''}`}
+        onClick={() => setIsGalleryOpen(!isGalleryOpen)}
+        title="打开画廊"
+      >
+        <span className="gallery-trigger-icon">🖼️</span>
+        <span className="gallery-trigger-arrow">{isGalleryOpen ? '›' : '‹'}</span>
+      </button>
+
+      {/* Floating Gallery Drawer */}
+      <FloatingGallery
+        isOpen={isGalleryOpen}
+        onClose={() => setIsGalleryOpen(false)}
+        onSelectForVideo={handleSelectForVideo}
+      />
     </div>
   )
 }
