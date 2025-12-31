@@ -872,10 +872,11 @@ async def call_openai_compatible_api(
     
     system_instruction = (
         "You are a professional product photographer. "
-        "Your task is to generate a high-quality product image based on the input product image "
-        "and blend it seamlessly into the style of the reference background image. "
-        "Maintain the product's identity strictly. "
-        "Return ONLY the generated image or a description of it."
+        "🔴 CRITICAL RULE: The product in your output MUST be IDENTICAL to the product in the input image. "
+        "Do NOT change the product's shape, color, material, size, brand logo, or any visual details. "
+        "Only change the environment, lighting, and background around the product. "
+        "The product itself must remain 100% visually unchanged - as if you took the SAME product and placed it in a new scene. "
+        "Return ONLY the generated image."
     )
     
     payload = {
@@ -4187,12 +4188,20 @@ async def generate_branch_image(
             logging.info(f"Fission {fission_id}: Generating image for branch {branch_id} (attempt {attempt}/{max_retries})")
             
             async with httpx.AsyncClient(timeout=300) as client:  # Increased timeout to 5 min
+                # 强化产品一致性约束 - 添加强制性前缀
+                enhanced_prompt = (
+                    "🔴 MANDATORY: Keep the product EXACTLY as shown in the input image - "
+                    "same shape, color, material, brand logo, and all visual details MUST remain unchanged. "
+                    "Only modify the scene/lighting/background around it. "
+                    f"{image_prompt}"
+                )
+                
                 result = await call_openai_compatible_api(
                     client, image_api_url, image_api_key,
                     original_b64,  # Input image
                     original_b64,  # Reference image
                     f"Branch_{branch_id}",
-                    image_prompt,
+                    enhanced_prompt,  # 使用强化后的 prompt
                     image_model
                 )
                 
