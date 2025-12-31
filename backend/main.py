@@ -4005,19 +4005,12 @@ async def analyze_fission_branches(
     api_url: str,
     api_key: str,
     model_name: str,
-    category: str = "other"  # Product category for tailored prompts
+    category: str = "other"  # Product category for classification only (not used in prompts)
 ) -> List[dict]:
     """Analyze image and generate multiple story branches."""
     
-    # Category-specific placement logic (matching batch scene generation)
-    category_guidance = {
-        "security": "安防监控产品 - 适合：墙面安装场景、专业空间（如监控室、走廊、建筑外墙）、技术精度展示、夜视/红外效果暗示、工业级质感",
-        "daily": "日用百货 - 适合：居家生活场景、自然光线、温馨氛围、人物日常使用、收纳/整理情境",
-        "beauty": "美妆护肤 - 适合：柔和纹理背景、有机材料（花瓣、丝绸、水滴）、女性审美、精致特写、肌肤质感暗示",
-        "electronics": "数码3C - 适合：极简表面、科技感氛围、产品悬浮效果、LED灯光、屏幕显示、金属质感反射",
-        "other": "通用产品 - 根据产品特性灵活选择场景"
-    }
-    category_hint = category_guidance.get(category, category_guidance["other"])
+    # NOTE: category is only used for gallery/video classification, NOT for prompt generation
+    # This ensures the AI generates based on the actual product in the image, not assumed category
     
     fission_prompt = f"""Role: 你是一位资深创意总监 + 产品摄影专家，负责将一张产品图片裂变成多个灵动、有表现力的故事分支。
 
@@ -4026,10 +4019,6 @@ async def analyze_fission_branches(
 - 保持产品的形状、颜色、材质、比例、品牌标识、所有细节不变
 - 只改变场景、灯光、背景、氛围，**绝不能改变产品本身的任何外观特征**
 - 如果输入图片中产品是白色，输出必须也是白色；如果有特定 logo，必须保留
-
-=== 产品品类指引 ===
-**品类**: {category_hint}
-请根据以上品类特点，调整场景选择、灯光风格和放置方式。
 
 === 第一步：产品深度分析 ===
 首先，仔细观察图片中的产品，识别并分析：
