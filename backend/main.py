@@ -8,6 +8,9 @@ import subprocess
 import uuid
 import random
 import time
+import zipfile
+import tempfile
+from pathlib import Path
 # Fix for Starlette/python-multipart strict limits
 try:
     # Patch python-multipart (if applicable)
@@ -80,7 +83,7 @@ async def throttle_request():
 
 from fastapi.staticfiles import StaticFiles
 from starlette.staticfiles import StaticFiles as StarletteStaticFiles
-from starlette.responses import Response
+from starlette.responses import Response, FileResponse
 from PIL import Image
 import io
 
@@ -1104,7 +1107,7 @@ Each script must be a production-ready photography brief containing:
         "   - Floor-standing: large appliances, furniture, equipment\n"
         "   - Floating/Levitation: tech products, premium items for dramatic effect\n"
         "   - Embedded/Contextual: lifestyle products shown in use-case environments\n\n"
-        f"4. Generate exactly {gen_count} DISTINCT photography scripts.\n\n"
+        f"4. Generate exactly {gen_count} DISTINCT photography scripts. (CRITICAL: You MUST generate exactly {gen_count} items. Do not generate fewer.)\n\n"
         "   DIVERSITY REQUIREMENTS:\n"
         "   - Each script MUST explore a unique combination from the Diversity Matrix\n"
         "   - NO two scripts should share the same lighting + environment combination\n"
@@ -1170,6 +1173,38 @@ Each script must be a production-ready photography brief containing:
             content = content.split("```")[0].strip()
             
         parsed = json.loads(content)
+        
+        # --- FIX: Ensure exact number of scripts ---
+        scripts = parsed.get("scripts", [])
+        if len(scripts) < gen_count:
+            logger.warning(f"AI generated {len(scripts)} scripts, but user requested {gen_count}. Padding with variants...")
+            
+            original_count = len(scripts)
+            if original_count > 0:
+                import copy
+                needed = gen_count - original_count
+                for i in range(needed):
+                    # Round-robin selection from original scripts
+                    source_script = scripts[i % original_count]
+                    new_script = copy.deepcopy(source_script)
+                    new_script["angle_name"] = f"{source_script['angle_name']} (Var {i+1})"
+                    # Optionally slight tweak to script text could be done here, but simple dup is safer than broken JSON
+                    scripts.append(new_script)
+            else:
+                 # Fallback if 0 scripts returned (rare)
+                 for i in range(gen_count):
+                     scripts.append({
+                         "angle_name": f"Auto Generated {i+1}",
+                         "script": f"Product shot in professional lighting, angle {i+1}, clean composition, high quality."
+                     })
+        
+        # Truncate if too many (rare but possible)
+        if len(scripts) > gen_count:
+            scripts = scripts[:gen_count]
+            
+        parsed["scripts"] = scripts
+        # ---------------------------------------------
+            
         return AnalyzeResponse(**parsed)
     except Exception as e:
         logger.error(f"Failed to parse analysis JSON: {content}")
@@ -1700,6 +1735,39 @@ Required fields per shot:
                 
                 try:
                     shots_data = json.loads(content)
+                    
+                    # --- FIX: Ensure exact number of shots ---
+                    if len(shots_data) < shot_count:
+                        logger.warning(f"AI generated {len(shots_data)} shots, but user requested {shot_count}. Padding...")
+                        
+                        original_count = len(shots_data)
+                        if original_count > 0:
+                            import copy
+                            needed = shot_count - original_count
+                            for i in range(needed):
+                                # Round-robin selection from original shots
+                                source_shot = shots_data[i % original_count]
+                                new_shot = copy.deepcopy(source_shot)
+                                new_shot["shot"] = original_count + i + 1
+                                new_shot["description"] = f"{source_shot.get('description', 'Scene')} (Variation {i+1})"
+                                shots_data.append(new_shot)
+                        else:
+                            # Fallback if 0 shots returned (rare)
+                            for i in range(shot_count):
+                                shots_data.append({
+                                    "shot": i + 1,
+                                    "prompt": f"Product showcase shot {i+1}, professional lighting, clean composition.",
+                                    "duration": 15,
+                                    "description": f"Auto-generated shot {i+1}",
+                                    "shotStory": "Auto-generated content",
+                                    "heroSubject": "Product"
+                                })
+                    
+                    # Truncate if too many (rare but possible)
+                    if len(shots_data) > shot_count:
+                        shots_data = shots_data[:shot_count]
+                    # ---------------------------------------------
+                    
                     return StoryAnalysisResponse(shots=[StoryShot(**s) for s in shots_data])
                 except Exception as e:
                      logger.error(f"Failed to parse JSON: {content} - Error: {e}")
@@ -2364,6 +2432,137 @@ def share_all_videos(
         video.is_shared = request.is_shared
     db.commit()
     return {"updated": len(videos), "is_shared": request.is_shared}
+
+# Batch Download Models
+class BatchDownloadRequest(BaseModel):
+    ids: List[int]
+
+class BatchDownloadVideoRequest(BaseModel):
+    ids: List[str]
+
+@app.post("/api/v1/gallery/images/batch-download")
+async def batch_download_images(
+    request: BatchDownloadRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """批量下载图片 - 打包成 ZIP"""
+    ids = request.ids
+    if not ids:
+        raise HTTPException(status_code=400, detail="未选择任何图片")
+    
+    # 查询图片
+    images = db.query(SavedImage).filter(SavedImage.id.in_(ids)).all()
+    
+    if not images:
+        raise HTTPException(status_code=404, detail="未找到选中的图片")
+    
+    # 权限检查:仅admin或所有者可下载
+    if user.role != "admin":
+        for img in images:
+            if img.user_id != user.id:
+                raise HTTPException(status_code=403, detail="无权下载其他用户的图片")
+    
+    # 创建临时 ZIP 文件
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+        zip_path = tmp.name
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for img in images:
+                file_path = Path(img.file_path)
+                if file_path.exists():
+                    # 使用原文件名,避免重名冲突
+                    arcname = f"{img.id}_{img.filename}"
+                    zipf.write(file_path, arcname=arcname)
+        
+        # 返回文件下载响应,下载后自动删除临时文件
+        background_tasks.add_task(os.remove, zip_path)
+        return FileResponse(
+            path=zip_path,
+            media_type="application/zip",
+            filename=f"images_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        )
+
+@app.post("/api/v1/gallery/videos/batch-download")
+async def batch_download_videos(
+    request: BatchDownloadVideoRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """批量下载视频 - 打包成 ZIP"""
+    ids = request.ids
+    logger.info(f"Batch download videos request: ids={ids}, type={type(ids[0]) if ids else None}")
+    
+    if not ids:
+        raise HTTPException(status_code=400, detail="未选择任何视频")
+    
+    # 查询视频
+    videos = db.query(VideoQueueItem).filter(
+        VideoQueueItem.id.in_(ids),
+        VideoQueueItem.status.in_(["done", "archived"])
+    ).all()
+    
+    logger.info(f"Found {len(videos)} videos for download")
+    
+    if not videos:
+        raise HTTPException(status_code=404, detail="未找到选中的视频")
+    
+    # 权限检查
+    if user.role != "admin":
+        for vid in videos:
+            if vid.user_id != user.id:
+                raise HTTPException(status_code=403, detail="无权下载其他用户的视频")
+    
+    # 创建临时 ZIP 文件
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+        zip_path = tmp.name
+        files_added = 0
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for vid in videos:
+                if not vid.result_url:
+                    logger.warning(f"Video {vid.id} has no result_url")
+                    continue
+                
+                # 构建视频文件的实际路径
+                # result_url格式: /uploads/queue/video_xxx.mp4
+                video_file_path = None
+                
+                # 方法1: 直接使用result_url构建路径
+                if vid.result_url.startswith('/uploads/'):
+                    video_file_path = Path('/app' + vid.result_url)
+                
+                # 方法2: 使用视频ID构建标准路径
+                if not video_file_path or not video_file_path.exists():
+                    video_file_path = Path(f'/app/uploads/queue/video_{vid.id}.mp4')
+                
+                # 检查文件是否存在
+                if video_file_path and video_file_path.exists() and video_file_path.suffix == '.mp4':
+                    # 使用.mp4扩展名,不使用filename字段(因为那是图片名)
+                    base_name = vid.filename.rsplit('.', 1)[0] if vid.filename else f'video_{vid.id}'
+                    arcname = f"{vid.id}_{base_name}.mp4"
+                    
+                    zipf.write(video_file_path, arcname=arcname)
+                    files_added += 1
+                    logger.info(f"Added video {vid.id} from {video_file_path} as {arcname}")
+                else:
+                    logger.warning(f"Video file not found for {vid.id}, tried path: {video_file_path}")
+        
+        logger.info(f"Created ZIP with {files_added} video files at {zip_path}")
+        
+        if files_added == 0:
+            os.remove(zip_path)
+            raise HTTPException(status_code=404, detail="未找到任何视频文件")
+        
+        # 返回文件下载响应,下载后自动删除临时文件
+        background_tasks.add_task(os.remove, zip_path)
+        return FileResponse(
+            path=zip_path,
+            media_type="application/zip",
+            filename=f"videos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        )
 
 # --- Queue APIs ---
 
@@ -3997,6 +4196,99 @@ class FissionBranch(BaseModel):
 STORY_FISSION_STATUS = {}
 
 
+def repair_truncated_json(content: str) -> str:
+    """
+    Attempt to repair a truncated JSON array response from AI.
+    
+    Common truncation patterns:
+    - String interrupted mid-token (Unterminated string)
+    - Object/array not closed
+    
+    Returns repaired JSON string or None if repair fails.
+    """
+    if not content or not content.strip():
+        return None
+    
+    content = content.strip()
+    
+    # If it doesn't look like JSON array, can't repair
+    if not content.startswith('['):
+        return None
+    
+    try:
+        # Already valid JSON
+        json.loads(content)
+        return content
+    except json.JSONDecodeError:
+        pass
+    
+    # Track bracket depth
+    depth_curly = 0
+    depth_square = 0
+    in_string = False
+    escape_next = False
+    last_valid_obj_end = -1
+    
+    for i, char in enumerate(content):
+        if escape_next:
+            escape_next = False
+            continue
+        
+        if char == '\\' and in_string:
+            escape_next = True
+            continue
+        
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        
+        if in_string:
+            continue
+        
+        if char == '{':
+            depth_curly += 1
+        elif char == '}':
+            depth_curly -= 1
+            # Mark when we close a complete object at array level
+            if depth_curly == 0 and depth_square == 1:
+                last_valid_obj_end = i
+        elif char == '[':
+            depth_square += 1
+        elif char == ']':
+            depth_square -= 1
+    
+    # If we found at least one complete object, truncate there and close
+    if last_valid_obj_end > 0:
+        repaired = content[:last_valid_obj_end + 1].rstrip(',').rstrip() + ']'
+        try:
+            parsed = json.loads(repaired)
+            if isinstance(parsed, list) and len(parsed) > 0:
+                logging.info(f"JSON repair succeeded: kept {len(parsed)} complete branches")
+                return repaired
+        except json.JSONDecodeError:
+            pass
+    
+    # Try simply closing unclosed brackets/braces
+    repair_suffix = ''
+    if in_string:
+        repair_suffix += '"'
+    for _ in range(depth_curly):
+        repair_suffix += '}'
+    for _ in range(depth_square):
+        repair_suffix += ']'
+    
+    if repair_suffix:
+        try:
+            parsed = json.loads(content + repair_suffix)
+            if isinstance(parsed, list):
+                logging.info(f"JSON repair by closing brackets: {len(parsed)} branches")
+                return content + repair_suffix
+        except json.JSONDecodeError:
+            pass
+    
+    return None
+
+
 async def analyze_fission_branches(
     image_b64: str,
     topic: str,
@@ -4097,7 +4389,7 @@ material reflection, smooth sliding, button pressing, liquid pouring
                 ]
             }
         ],
-        "max_tokens": 4096
+        "max_tokens": 8192
     }
     headers = {
         "Content-Type": "application/json",
@@ -4109,7 +4401,7 @@ material reflection, smooth sliding, button pressing, liquid pouring
     
     for attempt in range(1, max_retries + 1):
         try:
-            async with httpx.AsyncClient(timeout=120) as client:  # Increased timeout
+            async with httpx.AsyncClient(timeout=180) as client:  # Increased timeout to 3min
                 resp = await client.post(target_url, json=payload, headers=headers)
                 if resp.status_code == 200:
                     data = resp.json()
@@ -4128,7 +4420,54 @@ material reflection, smooth sliding, button pressing, liquid pouring
                     content = re.sub(r',\s*\}', '}', content)
                     content = re.sub(r',\s*\]', ']', content)
                     
-                    branches = json.loads(content)
+                    # 🆕 Enhanced JSON repair for truncated responses
+                    try:
+                        branches = json.loads(content)
+                    except json.JSONDecodeError as parse_err:
+                        logging.warning(f"Fission analysis: Initial JSON parse failed ({parse_err}), attempting repair...")
+                        
+                        # Try to repair truncated JSON
+                        repaired_content = repair_truncated_json(content)
+                        if repaired_content:
+                            branches = json.loads(repaired_content)
+                            logging.info(f"Fission analysis: JSON repair successful")
+                        else:
+                            # Re-raise original error if repair failed
+                            raise parse_err
+                    
+                    # --- FIX: Ensure exact number of branches ---
+                    if len(branches) < branch_count:
+                        logging.warning(f"AI generated {len(branches)} branches, but user requested {branch_count}. Padding...")
+                        
+                        original_count = len(branches)
+                        if original_count > 0:
+                            import copy
+                            needed = branch_count - original_count
+                            for i in range(needed):
+                                # Round-robin selection from original branches
+                                source_branch = branches[i % original_count]
+                                new_branch = copy.deepcopy(source_branch)
+                                new_branch["branch_id"] = original_count + i + 1
+                                new_branch["scene_name"] = f"{source_branch.get('scene_name', 'Scene')} (Variation {i+1})"
+                                branches.append(new_branch)
+                        else:
+                            # Fallback if 0 branches returned (rare)
+                            for i in range(branch_count):
+                                branches.append({
+                                    "branch_id": i + 1,
+                                    "scene_name": f"Auto-generated scene {i+1}",
+                                    "theme": "Auto-generated content",
+                                    "product_focus": "Product showcase",
+                                    "image_prompt": f"Product showcase in professional lighting, scene {i+1}",
+                                    "video_prompt": f"Product presentation with dynamic elements, scene {i+1}",
+                                    "camera_movement": "slow push-in"
+                                })
+                    
+                    # Truncate if too many (rare but possible)
+                    if len(branches) > branch_count:
+                        branches = branches[:branch_count]
+                    # ---------------------------------------------
+                    
                     return branches
                     
                 elif resp.status_code in [502, 503, 504, 429]:
@@ -4481,20 +4820,48 @@ async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_
                 resp = await client.get(req.initial_image_url, timeout=30)
                 original_b64 = base64.b64encode(resp.content).decode('utf-8')
         
-        # Step 2: Analyze and generate branches
-        status["phase"] = "analyzing"
-        logging.info(f"Fission {fission_id}: Analyzing image to generate {req.branch_count} branches")
         
-        branches = await analyze_fission_branches(
-            original_b64,
-            req.topic,
-            req.branch_count,
-            req.visual_style_prompt or "",
-            image_api_url,
-            image_api_key,
-            analysis_model,
-            req.category  # Pass category for tailored prompts
-        )
+        # Step 2: Analyze and generate branches
+        # 🆕 Add global concurrency control for analysis phase to prevent API overload
+        status["phase"] = "waiting_analysis"
+        logging.info(f"Fission {fission_id}: Waiting for analysis slot...")
+        
+        # Get the global limiter
+        limiter = await get_concurrency_limiter()
+        
+        # Wait for analysis slot (max 1-2 concurrent analysis to avoid API queue overflow)
+        analysis_acquired = False
+        max_wait_attempts = 60  # Max 5 minutes waiting (60 * 5s)
+        for wait_attempt in range(max_wait_attempts):
+            analysis_acquired = await limiter.acquire_global("analysis", timeout=600)
+            if analysis_acquired:
+                logging.info(f"Fission {fission_id}: Acquired analysis slot after {wait_attempt * 5}s")
+                break
+            else:
+                # Update status to show waiting
+                status["phase"] = f"waiting_analysis ({wait_attempt + 1})"
+                await asyncio.sleep(5)  # Wait 5 seconds before retry
+        
+        if not analysis_acquired:
+            raise Exception("Analysis queue timeout - too many concurrent tasks")
+        
+        try:
+            status["phase"] = "analyzing"
+            logging.info(f"Fission {fission_id}: Analyzing image to generate {req.branch_count} branches")
+            
+            branches = await analyze_fission_branches(
+                original_b64,
+                req.topic,
+                req.branch_count,
+                req.visual_style_prompt or "",
+                image_api_url,
+                image_api_key,
+                analysis_model,
+                req.category  # Pass category for tailored prompts
+            )
+        finally:
+            # Release analysis slot regardless of success/failure
+            await limiter.release_global("analysis")
         
         logging.info(f"Fission {fission_id}: Generated {len(branches)} branch scripts")
         status["branches"] = [{"branch_id": b.get("branch_id"), "scene_name": b.get("scene_name"), "status": "pending", "retry_count": 0} for b in branches]
