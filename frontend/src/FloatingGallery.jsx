@@ -279,6 +279,44 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
         }
     };
 
+    const handleBatchDownload = async () => {
+        if (selectedIds.size === 0) return;
+
+        const token = localStorage.getItem('token');
+        const endpoint = activeTab === 'images'
+            ? '/api/v1/gallery/images/batch-download'
+            : '/api/v1/gallery/videos/batch-download';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ids: Array.from(selectedIds) })
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gallery_${activeTab}_${Date.now()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } else {
+                const errorText = await res.text();
+                alert(`批量下载失败: ${errorText}`);
+            }
+        } catch (err) {
+            console.error("Batch download failed", err);
+            alert("批量下载失败: " + err.message);
+        }
+    };
+
     const handleDelete = async (e, item, type) => {
         e.stopPropagation();
         if (!window.confirm("确定要删除吗？")) return;
@@ -451,6 +489,9 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                         <button onClick={toggleSelectAll} className="fg-batch-btn">
                             {selectedIds.size === (activeTab === 'images' ? images.length : videos.length) ? '🚫 取消全选' : '✅ 全选'}
                         </button>
+                        <button onClick={handleBatchDownload} className="fg-batch-btn" disabled={selectedIds.size === 0}>
+                            📦 下载 ({selectedIds.size})
+                        </button>
                         <button
                             onClick={() => handleBatchShare(true)}
                             className="fg-batch-btn share"
@@ -599,7 +640,32 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                                                 alt=""
                                                 className="fg-card-img"
                                                 loading="lazy"
+                                                onLoad={(e) => {
+                                                    // Detect portrait orientation
+                                                    if (e.target.naturalHeight > e.target.naturalWidth) {
+                                                        // logic to handle portrait if needed, or just let css handle it
+                                                    }
+                                                }}
                                             />
+                                            {/* Merged/Composite Video Badge */}
+                                            {(vid.is_merged || vid.prompt?.includes('Story Chain') || vid.prompt?.includes('Story Fission') || vid.filename?.includes('story_chain') || vid.filename?.includes('story_fission')) && (
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: '8px',
+                                                    left: '8px',
+                                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '10px',
+                                                    fontWeight: 'bold',
+                                                    color: '#fff',
+                                                    boxShadow: '0 2px 4px rgba(16, 185, 129, 0.4)',
+                                                    border: '1px solid rgba(255,255,255,0.2)',
+                                                    zIndex: 10
+                                                }}>
+                                                    ✨ 合成
+                                                </div>
+                                            )}
                                             <div className="fg-play-icon">▶</div>
                                             <div className="fg-card-overlay">
                                                 <div className="fg-card-actions">

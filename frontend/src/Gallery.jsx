@@ -270,6 +270,45 @@ const Gallery = ({ onSelectForVideo }) => {
         }
     };
 
+    // Batch download
+    const handleBatchDownload = async () => {
+        if (selectedIds.size === 0) return;
+
+        const token = localStorage.getItem('token');
+        const endpoint = activeTab === 'images'
+            ? '/api/v1/gallery/images/batch-download'
+            : '/api/v1/gallery/videos/batch-download';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ids: Array.from(selectedIds) })
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gallery_${activeTab}_${Date.now()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } else {
+                const errorText = await res.text();
+                alert(`批量下载失败: ${errorText}`);
+            }
+        } catch (err) {
+            console.error("Batch download failed", err);
+            alert("批量下载失败: " + err.message);
+        }
+    };
+
     const handleDelete = async (e, item, type) => {
         e.stopPropagation(); // Prevent opening lightbox
         if (!window.confirm("确定要删除吗？")) return;
@@ -453,6 +492,10 @@ const Gallery = ({ onSelectForVideo }) => {
 
                                         <button onClick={toggleSelectAll} className="batch-btn text-btn" title="全选/取消">
                                             {selectedIds.size === (activeTab === 'images' ? images.length : videos.length) ? '🚫' : '✅'}
+                                        </button>
+
+                                        <button onClick={handleBatchDownload} className="batch-btn" disabled={selectedIds.size === 0} title="批量下载">
+                                            📦 {selectedIds.size > 0 && <span className="btn-badge">{selectedIds.size}</span>}
                                         </button>
 
                                         <button
