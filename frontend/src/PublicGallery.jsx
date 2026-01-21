@@ -161,7 +161,7 @@ const VideoCard = ({ video, onClick }) => {
             onMouseLeave={handleMouseLeave}
             onClick={onClick}
         >
-            {video.is_merged && (
+            {(video.is_merged || video.prompt?.includes('Story Chain') || video.prompt?.includes('Story Fission') || video.filename?.includes('story_chain') || video.filename?.includes('story_fission')) && (
                 <span className="merged-badge">✨ 合成</span>
             )}
             {isVisible ? (

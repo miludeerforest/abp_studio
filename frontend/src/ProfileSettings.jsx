@@ -121,18 +121,12 @@ function ProfileSettings({ token, onProfileUpdate }) {
                 <p className="profile-subtitle">管理您的账户信息和偏好设置</p>
             </div>
 
-            {/* Avatar Section */}
+            {/* Avatar Upload Card */}
             <div className="profile-card">
                 <h3>头像</h3>
                 <div className="avatar-section">
                     <div className="avatar-preview">
-                        {profile.avatar ? (
-                            <img src={profile.avatar} alt="Avatar" />
-                        ) : (
-                            <div className="avatar-placeholder">
-                                {(profile.nickname || profile.username).charAt(0).toUpperCase()}
-                            </div>
-                        )}
+                        <img src={profile.avatar || '/default-avatar.jpg'} alt="Avatar" />
                     </div>
                     <div className="avatar-upload">
                         <label className="upload-btn">
@@ -174,16 +168,6 @@ function ProfileSettings({ token, onProfileUpdate }) {
                             placeholder="设置您的显示昵称"
                         />
                         <p className="field-hint">昵称将显示在您的作品中</p>
-                    </div>
-
-                    <div className="form-group">
-                        <label>角色</label>
-                        <input
-                            type="text"
-                            value={profile.role === 'admin' ? '管理员' : '普通用户'}
-                            disabled
-                            className="disabled-input"
-                        />
                     </div>
 
                     <h3 style={{ marginTop: '2rem' }}>隐私设置</h3>

@@ -322,6 +322,7 @@ class ConcurrencyLimiter:
         "image_gen": 5,
         "video_gen": 3,
         "story_chain": 2,
+        "analysis": 2,  # 🆕 Limit concurrent AI analysis calls to prevent API overload
     }
     DEFAULT_USER_LIMIT = 2
     
@@ -364,6 +365,7 @@ class ConcurrencyLimiter:
             "image_gen": int(config.get("max_concurrent_image", self.DEFAULT_LIMITS.get("image_gen", 5))),
             "video_gen": int(config.get("max_concurrent_video", self.DEFAULT_LIMITS.get("video_gen", 3))),
             "story_chain": int(config.get("max_concurrent_story", self.DEFAULT_LIMITS.get("story_chain", 2))),
+            "analysis": int(config.get("max_concurrent_analysis", self.DEFAULT_LIMITS.get("analysis", 2))),  # 🆕
         }
         return limits.get(task_type, 5)
     

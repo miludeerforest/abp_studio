@@ -152,6 +152,10 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(String, default="user") # 'admin', 'user'
     created_at = Column(DateTime, default=get_china_now)
+    # 等级与经验值系统
+    experience = Column(Integer, default=0)           # 经验值
+    level = Column(Integer, default=1)                # 等级 1-5
+    exp_updated_at = Column(DateTime, nullable=True)  # 最后经验值更新时间
 
 class ImageGenerationLog(Base):
     __tablename__ = "image_logs"
@@ -345,6 +349,97 @@ class UserActivity(Base):
     details = Column(Text, nullable=True)
     created_at = Column(DateTime, default=get_china_now)
 
+# --- Experience Log Model (经验值变更记录) ---
+class ExperienceLog(Base):
+    __tablename__ = "experience_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    video_id = Column(String, nullable=True)      # 关联的视频ID
+    score = Column(Integer)                        # 审查评分
+    exp_change = Column(Integer)                   # 经验值变化（可正可负）
+    exp_before = Column(Integer)                   # 变化前经验值
+    exp_after = Column(Integer)                    # 变化后经验值
+    level_before = Column(Integer)                 # 变化前等级
+    level_after = Column(Integer)                  # 变化后等级
+    created_at = Column(DateTime, default=get_china_now)
+
+# --- Level & Experience Constants and Helpers ---
+# 修仙等级体系 (每个境界分前中后期，经验值梯度递增)
+# 共 9 大境界 × 3 阶段 = 27 个小等级
+# 梯度设计：前期境界较易，后期境界大幅提升难度
+LEVEL_THRESHOLDS = [
+    # 凡人境 (总需 500)
+    (1, 0, 99, "凡人前期"),            # 需 100 经验
+    (2, 100, 249, "凡人中期"),         # 需 150 经验
+    (3, 250, 499, "凡人后期"),         # 需 250 经验
+    
+    # 练气境 (总需 1500)
+    (4, 500, 899, "练气前期"),         # 需 400 经验
+    (5, 900, 1399, "练气中期"),        # 需 500 经验
+    (6, 1400, 1999, "练气后期"),       # 需 600 经验
+    
+    # 筑基境 (总需 3000)
+    (7, 2000, 2699, "筑基前期"),       # 需 700 经验
+    (8, 2700, 3599, "筑基中期"),       # 需 900 经验
+    (9, 3600, 4999, "筑基后期"),       # 需 1400 经验
+    
+    # 结丹境 (总需 5000)
+    (10, 5000, 6499, "结丹前期"),      # 需 1500 经验
+    (11, 6500, 8199, "结丹中期"),      # 需 1700 经验
+    (12, 8200, 9999, "结丹后期"),      # 需 1800 经验
+    
+    # 元婴境 (总需 8000)
+    (13, 10000, 12499, "元婴前期"),    # 需 2500 经验
+    (14, 12500, 15199, "元婴中期"),    # 需 2700 经验
+    (15, 15200, 17999, "元婴后期"),    # 需 2800 经验
+    
+    # 化神境 (总需 12000)
+    (16, 18000, 21999, "化神前期"),    # 需 4000 经验
+    (17, 22000, 25999, "化神中期"),    # 需 4000 经验
+    (18, 26000, 29999, "化神后期"),    # 需 4000 经验
+    
+    # 炼虚境 (总需 20000)
+    (19, 30000, 36999, "炼虚前期"),    # 需 7000 经验
+    (20, 37000, 43499, "炼虚中期"),    # 需 6500 经验
+    (21, 43500, 49999, "炼虚后期"),    # 需 6500 经验
+    
+    # 合体境 (总需 30000)
+    (22, 50000, 59999, "合体前期"),    # 需 10000 经验
+    (23, 60000, 69999, "合体中期"),    # 需 10000 经验
+    (24, 70000, 79999, "合体后期"),    # 需 10000 经验
+    
+    # 大乘境 (最高境界)
+    (25, 80000, 94999, "大乘前期"),    # 需 15000 经验
+    (26, 95000, 109999, "大乘中期"),   # 需 15000 经验
+    (27, 110000, float('inf'), "大乘后期")  # 圆满境界
+]
+
+def calculate_level(experience: int) -> tuple:
+    """根据经验值计算等级，返回 (level, name)"""
+    for level, min_exp, max_exp, name in LEVEL_THRESHOLDS:
+        if min_exp <= experience <= max_exp:
+            return level, name
+    return 27, "大乘后期"
+
+def calculate_exp_change(review_score: int) -> int:
+    """根据审查评分计算经验值变化"""
+    if review_score >= 8:
+        return 20  # 优秀
+    elif review_score >= 5:
+        return 10  # 一般
+    else:
+        return -5  # 较差，扣分
+
+def get_level_progress(experience: int) -> float:
+    """计算当前等级进度百分比"""
+    level, _ = calculate_level(experience)
+    for lvl, min_exp, max_exp, name in LEVEL_THRESHOLDS:
+        if lvl == level:
+            if max_exp == float('inf'):
+                return 100.0
+            return ((experience - min_exp) / (max_exp - min_exp + 1)) * 100
+    return 0.0
+
 # Startup: Create Admin and Init Services
 @app.on_event("startup")
 async def startup_event():
@@ -386,6 +481,23 @@ async def startup_event():
             # Ensure role is admin
             user.role = "admin"
             db.commit()
+        
+        # --- 启动时恢复阻滞的视频任务 ---
+        # 将所有 processing 状态的任务重置为 pending，防止重启后任务卡死
+        stale_tasks = db.query(VideoQueueItem).filter(
+            VideoQueueItem.status == "processing"
+        ).all()
+        
+        if stale_tasks:
+            stale_count = len(stale_tasks)
+            for task in stale_tasks:
+                task.status = "pending"
+                task.retry_count = (task.retry_count or 0) + 1
+                task.last_retry_at = get_china_now()
+            db.commit()
+            logger.info(f"[Startup] 已恢复 {stale_count} 个阻滞的视频任务为 pending 状态")
+        else:
+            logger.info("[Startup] 无阻滞任务需要恢复")
     finally:
         db.close()
 
@@ -540,7 +652,10 @@ class UpdateProfileRequest(BaseModel):
 
 @app.get("/api/v1/user/profile")
 def get_user_profile(user: User = Depends(get_current_user)):
-    """Get current user's profile."""
+    """Get current user's profile with level and experience info."""
+    level, level_name = calculate_level(user.experience or 0)
+    level_progress = get_level_progress(user.experience or 0)
+    
     return {
         "id": user.id,
         "username": user.username,
@@ -548,7 +663,12 @@ def get_user_profile(user: User = Depends(get_current_user)):
         "avatar": user.avatar,
         "role": user.role,
         "default_share": user.default_share or False,
-        "created_at": user.created_at
+        "created_at": user.created_at,
+        # 等级与经验值信息
+        "experience": user.experience or 0,
+        "level": level,
+        "level_name": level_name,
+        "level_progress": round(level_progress, 1)
     }
 
 @app.put("/api/v1/user/profile")
@@ -600,6 +720,28 @@ async def upload_avatar(
     
     return {"message": "Avatar uploaded successfully", "avatar": avatar_url}
 
+@app.get("/api/v1/user/experience/history")
+def get_experience_history(
+    limit: int = 20,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取用户经验值变更历史记录"""
+    logs = db.query(ExperienceLog).filter(
+        ExperienceLog.user_id == user.id
+    ).order_by(ExperienceLog.created_at.desc()).limit(limit).all()
+    
+    return [{
+        "video_id": log.video_id,
+        "score": log.score,
+        "exp_change": log.exp_change,
+        "exp_before": log.exp_before,
+        "exp_after": log.exp_after,
+        "level_before": log.level_before,
+        "level_after": log.level_after,
+        "created_at": log.created_at
+    } for log in logs]
+
 # --- User Manage Models ---
 class UserCreate(BaseModel):
     username: str
@@ -616,6 +758,9 @@ class UserOut(BaseModel):
     username: str
     role: str
     created_at: datetime
+    experience: Optional[int] = 0
+    level: Optional[int] = 1
+    level_name: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -627,9 +772,33 @@ class StatsResponse(BaseModel):
 
 # --- Admin Endpoints ---
 
-@app.get("/api/v1/users", response_model=List[UserOut])
+@app.get("/api/v1/users")
 def get_users(db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
-    return db.query(User).all()
+    import random
+    # 负分时显示的随机动物列表
+    NEGATIVE_ANIMALS = ["🐸 蛤蟆", "🐛 毛虫", "🪱 蚯蚓", "🐌 蜗牛", "🦎 蜥蜴", "🐁 老鼠", "🪳 蟑螂", "🦠 变形虫"]
+    
+    users = db.query(User).all()
+    result = []
+    for u in users:
+        exp = u.experience or 0
+        if exp < 0:
+            # 负分用随机动物
+            level_name = random.choice(NEGATIVE_ANIMALS)
+            level = 0
+        else:
+            level, level_name = calculate_level(exp)
+        
+        result.append({
+            "id": u.id,
+            "username": u.username,
+            "role": u.role,
+            "created_at": u.created_at,
+            "experience": exp,
+            "level": level,
+            "level_name": level_name
+        })
+    return result
 
 @app.post("/api/v1/users", response_model=UserOut)
 def create_user(user: UserCreate, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
@@ -1468,7 +1637,8 @@ async def batch_generate_workflow(
                         prompt=r.video_prompt or r.angle_name,  # Fallback
                         width=img_width,
                         height=img_height,
-                        category=category  # Use category from request
+                        category=category,  # Use category from request
+                        is_shared=user.default_share if user.default_share is not None else True
                     )
                     db.add(new_image)
                     saved_count += 1
@@ -2302,11 +2472,11 @@ async def trigger_video_review_api(
     if not os.path.exists(local_path):
         raise HTTPException(status_code=400, detail="Video file not found locally")
     
-    # Trigger review
+    # Trigger review (queued for sequential execution)
     try:
-        from video_reviewer import trigger_video_review
+        from review_queue import enqueue_video_review
         asyncio.create_task(
-            trigger_video_review(
+            enqueue_video_review(
                 video_id=video_id,
                 video_path=local_path,
                 video_prompt=video.prompt,
@@ -2314,9 +2484,9 @@ async def trigger_video_review_api(
                 VideoQueueItem_model=VideoQueueItem
             )
         )
-        return {"message": "Review triggered", "video_id": video_id}
+        return {"message": "Review queued", "video_id": video_id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to trigger review: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to queue review: {str(e)}")
 
 # --- Share Toggle Endpoints ---
 
@@ -2570,28 +2740,23 @@ async def batch_download_videos(
 def get_queue(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     from sqlalchemy import case, func, extract
     
-    # 三级优先级系统 - 使用公平调度算法
-    # redkaytop (最高优先级): 基础权重 0
-    # 15089833871 (中等优先级): 基础权重 300  
-    # 其他用户 (普通优先级): 基础权重 600
+    # 管理员优先队列系统 - 使用公平调度算法
+    # 管理员 (role='admin'): 基础权重 0 (最高优先级)
+    # 普通用户: 基础权重 600
     # 
     # 公平调度规则：
     # 最终分数 = 基础权重 - 等待秒数
     # 等待时间越长，分数越低（越优先）
     # 这样即使是低优先级任务，等待足够久后也会被处理
     
-    # 首先获取所有用户ID和用户名的映射
-    user_id_to_username = {u.id: u.username for u in db.query(User).all()}
-    
-    # 找出特定用户的ID
-    redkaytop_ids = [uid for uid, uname in user_id_to_username.items() if uname == "redkaytop"]
-    user_15089833871_ids = [uid for uid, uname in user_id_to_username.items() if uname == "15089833871"]
+    # 获取所有管理员的ID（基于角色判断，而非硬编码用户名）
+    admin_ids = [u.id for u in db.query(User).filter(User.role == "admin").all()]
     
     # 基础优先级权重（数字越小越优先）
+    # 管理员任务最高优先级，普通用户次之
     base_priority_weight = case(
-        (VideoQueueItem.user_id.in_(redkaytop_ids), 0),          # 最高优先级
-        (VideoQueueItem.user_id.in_(user_15089833871_ids), 300), # 中等优先级（5分钟等待可追平）
-        else_=600                                                 # 普通优先级（10分钟等待可追平）
+        (VideoQueueItem.user_id.in_(admin_ids), 0),  # 管理员最高优先级
+        else_=600                                      # 普通用户
     )
     
     # 计算等待时间（秒）
@@ -2669,7 +2834,8 @@ async def add_to_queue(
         prompt=prompt,
         status="pending",
         user_id=user.id,
-        category=category  # Product category
+        category=category,  # Product category
+        is_shared=user.default_share if user.default_share is not None else True
     )
     db.add(item)
     
@@ -2800,7 +2966,8 @@ async def merge_videos_endpoint(
             prompt="Merged Video: " + ", ".join([v.filename for v in videos]),
             status="done", # Immediately done
             result_url=f"/uploads/queue/{output_filename}",
-            user_id=user.id
+            user_id=user.id,
+            is_shared=user.default_share if user.default_share is not None else True
         )
         db.add(new_item)
         db.commit()
@@ -2856,9 +3023,11 @@ async def retry_queue_item(
     if item.status != "error":
         raise HTTPException(status_code=400, detail="Only failed items can be retried")
     
-    # Reset status and error message
+    # Reset status, error message, and retry counter for fresh retry cycle
     item.status = "pending"
     item.error_msg = None
+    item.retry_count = 0  # Reset retry counter for fresh retry cycle
+    item.last_retry_at = None  # Clear cooldown timer
     db.commit()
     
     # Get config and trigger background task
@@ -3064,13 +3233,19 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
                         
                         # Parse final accumulated content
                         import re
-                        # 1. Markdown Image
+                        # 1. HTML video tag: <video src="{url}" ...></video> (Grok API format)
+                        video_tag_match = re.search(r'<video[^>]+src=["\']([^"\']+)["\'][^>]*>', full_content)
+                        # 2. Markdown Image
                         img_match = re.search(r'!\[.*?\]\((.*?)\)', full_content)
-                        # 2. Raw URL (http...) - Updated to exclude trailing ' and )
-                        url_match = re.search(r'https?://[^\s<>"\'\\)]+|data:image/[^\s<>"\'\\)]+', full_content)
+                        # 3. Raw URL (http...) - Updated to exclude trailing ' and )
+                        url_match = re.search(r'https?://[^\s<>"\'\\\)]+|data:image/[^\s<>"\'\\\)]+', full_content)
                         
                         found_url = None
-                        if img_match:
+                        if video_tag_match:
+                            # HTML video tag format (Grok grok-imagine-0.9 API)
+                            found_url = video_tag_match.group(1)
+                            logger.info(f"Extracted video URL from HTML video tag: {found_url[:100]}...")
+                        elif img_match:
                             found_url = img_match.group(1)
                         elif url_match:
                             found_url = url_match.group(0)
@@ -3096,9 +3271,20 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
                                     local_filename = f"video_{item_id}.mp4"
                                     local_path = f"/app/uploads/queue/{local_filename}"
                                     
+                                    # Prepare headers - Grok videos may need Referer to bypass 403
+                                    download_headers = {}
+                                    if "grok.codeedu.de" in found_url or "codeedu.de" in found_url:
+                                        download_headers["Referer"] = "https://grok.codeedu.de/"
+                                        logger.info(f"Detected Grok cached URL, adding Referer header")
+                                    
                                     logger.info(f"Downloading video from {found_url[:100]}...")
                                     async with httpx.AsyncClient() as download_client:
-                                        video_resp = await download_client.get(found_url, timeout=300.0)
+                                        video_resp = await download_client.get(
+                                            found_url, 
+                                            timeout=300.0,
+                                            headers=download_headers,
+                                            follow_redirects=True
+                                        )
                                         if video_resp.status_code == 200:
                                             with open(local_path, "wb") as f:
                                                 f.write(video_resp.content)
@@ -3121,6 +3307,12 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
                                                 preview_url = f"/uploads/queue/{thumb_filename}"
                                             except Exception as thumb_err:
                                                 logger.warning(f"Failed to generate thumbnail: {thumb_err}")
+                                        elif video_resp.status_code == 403:
+                                            # 403 Forbidden - Grok direct links are restricted
+                                            # Keep the cached URL (grok.codeedu.de) as it should work via browser
+                                            logger.warning(f"Video download 403 Forbidden - keeping remote URL for browser playback: {found_url[:80]}...")
+                                            # For Grok cached URLs, they should still work in browser
+                                            final_url = found_url
                                         else:
                                             logger.warning(f"Failed to download video: HTTP {video_resp.status_code}")
                                 except Exception as dl_err:
@@ -3146,13 +3338,13 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
                             except Exception as act_err:
                                 logger.warning(f"Failed to log video completion: {act_err}")
                             
-                            # Trigger video quality review (async, non-blocking)
+                            # Trigger video quality review (queued for sequential execution)
                             try:
-                                from video_reviewer import trigger_video_review
+                                from review_queue import enqueue_video_review
                                 video_local_path = local_path if 'local_path' in dir() and os.path.exists(local_path) else None
                                 if video_local_path:
                                     asyncio.create_task(
-                                        trigger_video_review(
+                                        enqueue_video_review(
                                             video_id=item_id,
                                             video_path=video_local_path,
                                             video_prompt=item.prompt,
@@ -3160,7 +3352,7 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
                                             VideoQueueItem_model=VideoQueueItem
                                         )
                                     )
-                                    logger.info(f"Video review task triggered for {item_id}")
+                                    logger.info(f"Video review task queued for {item_id}")
                             except Exception as review_err:
                                 logger.warning(f"Failed to trigger video review: {review_err}")
                         else:
@@ -3779,12 +3971,16 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                      with open(queue_file_path, "wb") as f:
                          f.write(data)
                 else:
-                     # URL
+                    # URL
                      async with httpx.AsyncClient() as client:
                          resp = await client.get(current_image_source, timeout=30)
                          with open(queue_file_path, "wb") as f:
                              f.write(resp.content)
                                  
+                # 获取用户的分享设置
+                share_user = db.query(User).filter(User.id == user_id).first()
+                user_default_share = share_user.default_share if share_user and share_user.default_share is not None else True
+                
                 new_item = VideoQueueItem(
                     id=str(int(uuid.uuid4().int))[:18],
                     filename=queue_filename,
@@ -3792,7 +3988,8 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                     prompt=prompt_text,
                     status="pending",
                     user_id=user_id,
-                    category=req.category  # Use user-selected product category
+                    category=req.category,  # Use user-selected product category
+                    is_shared=user_default_share
                 )
                 db.add(new_item)
                 db.commit()
@@ -4108,6 +4305,8 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
             
             # Add merged result to queue with preview
             db = SessionLocal()
+            share_user = db.query(User).filter(User.id == user_id).first()
+            user_default_share = share_user.default_share if share_user and share_user.default_share is not None else True
             merged_item = VideoQueueItem(
                 id=str(int(uuid.uuid4().int))[:18],
                 filename=output_filename,
@@ -4116,7 +4315,8 @@ async def process_story_chain(chain_id: str, req: StoryChainRequest, user_id: in
                 status="done",
                 result_url=final_result_url,
                 user_id=user_id,
-                is_merged=True  # Mark as merged/composite video
+                is_merged=True,  # Mark as merged/composite video
+                is_shared=user_default_share
             )
             # Set preview_url if thumbnail was generated
             if preview_url:
@@ -4630,6 +4830,8 @@ async def generate_branch_image(
                     if user_id:
                         try:
                             db = SessionLocal()
+                            share_user = db.query(User).filter(User.id == user_id).first()
+                            user_default_share = share_user.default_share if share_user and share_user.default_share is not None else True
                             gallery_item = SavedImage(
                                 user_id=user_id,
                                 filename=gallery_filename,
@@ -4638,7 +4840,8 @@ async def generate_branch_image(
                                 prompt=f"[Fission] {scene_name}: {image_prompt[:200]}",
                                 width=img_width,
                                 height=img_height,
-                                category=category  # Use user-selected category instead of hardcoded 'fission'
+                                category=category,  # Use user-selected category instead of hardcoded 'fission'
+                                is_shared=user_default_share
                             )
                             db.add(gallery_item)
                             db.commit()
@@ -4704,6 +4907,10 @@ async def generate_branch_video(
         import shutil
         shutil.copy(image_path, queue_file_path)
         
+        # 获取用户的分享设置
+        share_user = db.query(User).filter(User.id == user_id).first()
+        user_default_share = share_user.default_share if share_user and share_user.default_share is not None else True
+        
         new_item = VideoQueueItem(
             id=str(int(uuid.uuid4().int))[:18],
             filename=queue_filename,
@@ -4711,7 +4918,8 @@ async def generate_branch_video(
             prompt=full_prompt,
             status="pending",
             user_id=user_id,
-            category=category  # Use user-selected category
+            category=category,  # Use user-selected category
+            is_shared=user_default_share
         )
         db.add(new_item)
         db.commit()
@@ -5220,6 +5428,8 @@ async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_
             
             # Add merged result to queue
             db = SessionLocal()
+            share_user = db.query(User).filter(User.id == user_id).first()
+            user_default_share = share_user.default_share if share_user and share_user.default_share is not None else True
             merged_item = VideoQueueItem(
                 id=str(int(uuid.uuid4().int))[:18],
                 filename=output_filename,
@@ -5228,7 +5438,8 @@ async def process_story_fission(fission_id: str, req: StoryFissionRequest, user_
                 status="done",
                 result_url=final_result_url,
                 user_id=user_id,
-                is_merged=True  # Mark as merged/composite video
+                is_merged=True,  # Mark as merged/composite video
+                is_shared=user_default_share
             )
             if status.get("thumbnail_url"):
                 merged_item.preview_url = status["thumbnail_url"]
@@ -5478,6 +5689,7 @@ async def remerge_fission_story(
                         if status.get("thumbnail_url"):
                             existing.preview_url = status["thumbnail_url"]
                     else:
+                        user_default_share = user.default_share if user.default_share is not None else True
                         merged_item = VideoQueueItem(
                             id=str(int(uuid.uuid4().int))[:18],
                             filename=output_filename,
@@ -5486,7 +5698,8 @@ async def remerge_fission_story(
                             status="done",
                             result_url=final_result_url,
                             user_id=user.id,
-                            is_merged=True
+                            is_merged=True,
+                            is_shared=user_default_share
                         )
                         if status.get("thumbnail_url"):
                             merged_item.preview_url = status["thumbnail_url"]
@@ -5770,3 +5983,87 @@ async def log_user_activity(
             "timestamp": datetime.now().isoformat()
         }
     })
+
+
+# ========== Character Video Generation (Proxy) ==========
+
+class CharacterVideoRequest(BaseModel):
+    """角色视频生成请求模型"""
+    video_base64: str  # Base64 编码的视频
+    prompt: str = ""   # 动作提示词（可选，仅保存角色时可为空）
+
+
+@app.post("/api/v1/character/generate")
+async def generate_character_video(
+    request: CharacterVideoRequest,
+    user: User = Depends(get_current_user)
+):
+    """
+    角色视频生成代理端点
+    通过后端代理调用 sora2api，避免前端 CORS 问题
+    使用 SSE 流式返回结果
+    """
+    from starlette.responses import StreamingResponse
+    
+    # 获取配置
+    db = SessionLocal()
+    try:
+        video_api_url = db.query(SystemConfig).filter(SystemConfig.key == "video_api_url").first()
+        video_api_key = db.query(SystemConfig).filter(SystemConfig.key == "video_api_key").first()
+        video_model_name = db.query(SystemConfig).filter(SystemConfig.key == "video_model_name").first()
+        
+        api_url = video_api_url.value if video_api_url else os.getenv("VIDEO_API_URL", "https://sora2.***REDACTED_ADMIN_PASSWORD***.de/v1")
+        api_key = video_api_key.value if video_api_key else os.getenv("VIDEO_API_KEY", "")
+        model_name = video_model_name.value if video_model_name else os.getenv("VIDEO_MODEL_NAME", "sora2-portrait-15s")
+    finally:
+        db.close()
+    
+    # 构建目标 URL
+    target_url = api_url if api_url.endswith("/chat/completions") else f"{api_url.rstrip('/')}/chat/completions"
+    
+    # 构建请求内容
+    content = [{"type": "video_url", "video_url": {"url": request.video_base64}}]
+    if request.prompt.strip():
+        content.append({"type": "text", "text": request.prompt})
+    
+    payload = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": content}],
+        "stream": True
+    }
+    
+    async def stream_response():
+        """流式返回 API 响应"""
+        async with httpx.AsyncClient(timeout=900.0) as client:
+            try:
+                async with client.stream(
+                    "POST",
+                    target_url,
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+                ) as response:
+                    if response.status_code != 200:
+                        error_text = await response.aread()
+                        yield f"data: {json.dumps({'error': f'API Error: {response.status_code}', 'detail': error_text.decode()})}\n\n"
+                        return
+                    
+                    async for line in response.aiter_lines():
+                        if line.strip():
+                            yield f"{line}\n\n"
+                            
+            except Exception as e:
+                logger.error(f"Character video generation error: {e}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    
+    return StreamingResponse(
+        stream_response(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )

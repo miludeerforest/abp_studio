@@ -35,22 +35,32 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
 
     // Visual Art Styles
     const VISUAL_STYLES = [
-        { id: '', label: '不指定风格', prompt: '' },
-        { id: 'cyberpunk', label: '赛博朋克/霓虹', prompt: 'Cyberpunk neon style, vibrant neon lights, futuristic urban aesthetic, high contrast colors, glowing effects.' },
-        { id: 'cinematic', label: '电影写实', prompt: 'Natural realistic style, soft natural daylight, balanced exposure, subtle shadows, true-to-life colors, everyday authenticity, smartphone camera aesthetic.' },
-        { id: 'vlog', label: '生活VLOG', prompt: 'Casual vlog style, handheld camera feel, natural ambient lighting, authentic everyday moments, warm tones, slightly desaturated, real-life atmosphere, no heavy post-processing.' },
-        { id: 'watercolor', label: '水彩画', prompt: 'Watercolor painting style, soft edges, flowing colors, artistic brush strokes.' },
-        { id: 'anime', label: '动漫风', prompt: 'Anime style, clean lines, vibrant colors, Japanese animation aesthetic.' },
-        { id: 'bw_film', label: '黑白胶片', prompt: 'Black and white film photography style, classic noir aesthetic, high contrast, film grain.' },
-        { id: 'ghibli', label: '吉卜力风', prompt: 'Studio Ghibli style, whimsical and dreamy, soft pastel colors, hand-painted look.' },
-        { id: 'oil_painting', label: '油画风', prompt: 'Oil painting style, rich textures, visible brush strokes, classical art aesthetic.' },
-        { id: 'pixar3d', label: '皮克斯3D', prompt: 'Pixar 3D animation style, smooth rendering, vibrant colors, friendly aesthetic.' },
-        { id: 'chinese_ink', label: '水墨国风', prompt: 'Chinese ink wash painting style, traditional brushwork, minimalist elegance.' },
-        { id: 'scifi_future', label: '科幻未来', prompt: 'Sci-fi futuristic style, sleek metallic surfaces, holographic elements.' },
-        { id: 'fantasy_magic', label: '奇幻魔法', prompt: 'Fantasy magical style, ethereal glow, mystical atmosphere, enchanted elements.' },
-        { id: 'vintage_retro', label: '复古怀旧', prompt: 'Vintage retro style, nostalgic color grading, faded tones, 70s/80s vibe.' },
-        { id: 'minimalist', label: '极简主义', prompt: 'Minimalist style, clean composition, negative space, simple forms.' },
-        { id: 'steampunk', label: '蒸汽朋克', prompt: 'Steampunk style, Victorian industrial aesthetic, brass and copper tones.' }
+        { id: '', label: '🎬 不指定风格', prompt: '' },
+        { id: 'cyberpunk', label: '🌃 赛博朋克/霓虹', prompt: 'Cyberpunk neon style, vibrant neon lights, futuristic urban aesthetic, high contrast colors, glowing effects.' },
+        { id: 'cinematic', label: '🎥 电影写实', prompt: 'Natural realistic style, soft natural daylight, balanced exposure, subtle shadows, true-to-life colors, everyday authenticity, smartphone camera aesthetic.' },
+        { id: 'vlog', label: '📹 生活VLOG', prompt: 'Casual vlog style, handheld camera feel, natural ambient lighting, authentic everyday moments, warm tones, slightly desaturated, real-life atmosphere, no heavy post-processing.' },
+        { id: 'watercolor', label: '🎨 水彩画', prompt: 'Watercolor painting style, soft edges, flowing colors, artistic brush strokes.' },
+        { id: 'anime', label: '🌸 动漫风', prompt: '{anime} Anime style, clean lines, vibrant colors, Japanese animation aesthetic.' },
+        { id: 'bw_film', label: '🎞️ 黑白胶片', prompt: 'Black and white film photography style, classic noir aesthetic, high contrast, film grain.' },
+        { id: 'ghibli', label: '🏯 吉卜力风', prompt: 'Studio Ghibli style, whimsical and dreamy, soft pastel colors, hand-painted look.' },
+        { id: 'oil_painting', label: '🖼️ 油画风', prompt: 'Oil painting style, rich textures, visible brush strokes, classical art aesthetic.' },
+        { id: 'pixar3d', label: '🧸 皮克斯3D', prompt: 'Pixar 3D animation style, smooth rendering, vibrant colors, friendly aesthetic.' },
+        { id: 'chinese_ink', label: '🏔️ 水墨国风', prompt: 'Chinese ink wash painting style, traditional brushwork, minimalist elegance.' },
+        { id: 'scifi_future', label: '🚀 科幻未来', prompt: 'Sci-fi futuristic style, sleek metallic surfaces, holographic elements.' },
+        { id: 'fantasy_magic', label: '🔮 奇幻魔法', prompt: 'Fantasy magical style, ethereal glow, mystical atmosphere, enchanted elements.' },
+        { id: 'vintage_retro', label: '📻 复古怀旧', prompt: 'Vintage retro style, nostalgic color grading, faded tones, 70s/80s vibe.' },
+        { id: 'minimalist', label: '⬜ 极简主义', prompt: 'Minimalist style, clean composition, negative space, simple forms.' },
+        { id: 'steampunk', label: '⚙️ 蒸汽朋克', prompt: 'Steampunk style, Victorian industrial aesthetic, brass and copper tones.' },
+        // Sora2API 视频风格标签
+        { id: 'festive', label: '🎉 节日风格', prompt: '{festive} Festive celebration style, holiday atmosphere, colorful decorations, joyful mood.' },
+        { id: 'kakalaka', label: '🐔🦎 混沌风格', prompt: '{kakalaka} Chaotic creative style, unexpected elements, surreal combinations, artistic chaos.' },
+        { id: 'news', label: '📺 新闻风格', prompt: '{news} News broadcast style, professional journalism aesthetic, clean and informative presentation.' },
+        { id: 'selfie', label: '🤳 自拍风格', prompt: '{selfie} Selfie style, front-facing camera perspective, personal and intimate, social media aesthetic.' },
+        { id: 'handheld', label: '📱 手持风格', prompt: '{handheld} Handheld camera style, natural movement, authentic feel, documentary-like.' },
+        { id: 'golden', label: '✨ 金色风格', prompt: '{golden} Golden hour style, warm golden light, luxurious atmosphere, rich golden tones.' },
+        { id: 'retro', label: '📼 复古风格', prompt: '{retro} Retro style, vintage aesthetics, old-school vibes, nostalgic feel.' },
+        { id: 'nostalgic', label: '🌅 怀旧风格', prompt: '{nostalgic} Nostalgic vintage style, warm faded colors, memories of the past, sentimental atmosphere.' },
+        { id: 'comic', label: '💥 漫画风格', prompt: '{comic} Comic book style, bold lines, dynamic panels, pop art colors, action-packed visuals.' }
     ];
 
     // Camera Movement Options

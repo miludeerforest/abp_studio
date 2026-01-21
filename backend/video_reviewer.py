@@ -17,7 +17,9 @@ from typing import Optional, Dict, Any
 logger = logging.getLogger(__name__)
 
 # 审查提示词模板
-REVIEW_PROMPT = """你是一位专业的电商视频质量审核专家，专门评估 AI 生成视频的自然度和商业适用性。
+REVIEW_PROMPT = """**【重要】请务必使用简体中文进行回复，所有评估结论、描述文字均需使用中文。**
+
+你是一位专业的电商视频质量审核专家，专门评估 AI 生成视频的自然度和商业适用性。
 
 ⚠️ **重要提醒 - 关于"视频钩子"(Hook)内容**：
 电商视频常用夸张的"钩子"内容来吸引用户注意力，这是正常的营销技巧，不应误判为敏感内容：
@@ -79,6 +81,8 @@ REVIEW_PROMPT = """你是一位专业的电商视频质量审核专家，专门�
 - overall_score 1-4: 较差，不建议使用 (recommendation: reject)
 
 **综合评分计算时，请特别注意"钩子价值"：如果视频是有效的营销钩子，应适当提高综合评分。**
+
+**再次提醒：summary（总结）、issues（问题列表）、strengths（优点列表）的内容必须使用简体中文书写！**
 """
 
 
@@ -234,23 +238,45 @@ async def review_video(
         # 4. 解析结果
         response_text = api_result.get("choices", [{}])[0].get("message", {}).get("content", "")
         
-        # 提取 JSON
-        json_start = response_text.find("{")
-        json_end = response_text.rfind("}") + 1
+        # 记录原始响应便于调试（截取前500字符）
+        logger.debug(f"Raw API response (first 500 chars): {response_text[:500]}")
         
-        if json_start >= 0 and json_end > json_start:
-            json_str = response_text[json_start:json_end]
-            review_data = json.loads(json_str)
-            
-            result["success"] = True
-            result["ai_score"] = review_data.get("ai_score")
-            result["overall_score"] = review_data.get("overall_score")
-            result["recommendation"] = review_data.get("recommendation")
-            result["summary"] = review_data.get("summary")
-            result["details"] = review_data
+        # 提取 JSON - 支持多种格式
+        json_str = None
+        
+        # 方法1: 尝试提取 Markdown 代码块中的 JSON
+        import re
+        code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
+        if code_block_match:
+            potential_json = code_block_match.group(1).strip()
+            if potential_json.startswith('{'):
+                json_str = potential_json
+        
+        # 方法2: 直接查找 { 和 } 边界
+        if not json_str:
+            json_start = response_text.find("{")
+            json_end = response_text.rfind("}") + 1
+            if json_start >= 0 and json_end > json_start:
+                json_str = response_text[json_start:json_end]
+        
+        if json_str:
+            try:
+                review_data = json.loads(json_str)
+                
+                result["success"] = True
+                result["ai_score"] = review_data.get("ai_score")
+                result["overall_score"] = review_data.get("overall_score")
+                result["recommendation"] = review_data.get("recommendation")
+                result["summary"] = review_data.get("summary")
+                result["details"] = review_data
+            except json.JSONDecodeError as parse_err:
+                result["error"] = f"JSON 解析错误: {parse_err}"
+                result["details"] = {"raw_response": response_text[:1000], "extracted_json": json_str[:500]}
+                logger.warning(f"JSON parse error. Extracted: {json_str[:200]}...")
         else:
             result["error"] = "无法解析API响应中的JSON"
-            result["details"] = {"raw_response": response_text}
+            result["details"] = {"raw_response": response_text[:1000]}
+            logger.warning(f"No JSON found in response: {response_text[:300]}...")
             
     except json.JSONDecodeError as e:
         result["error"] = f"JSON 解析错误: {e}"
@@ -325,6 +351,38 @@ async def trigger_video_review(
                 item.review_result = json.dumps(review_result["details"], ensure_ascii=False)
                 item.review_status = "done"
                 logger.info(f"Video review completed for {video_id}: score={review_result['overall_score']}")
+                
+                # 更新用户经验值
+                if item.user_id:
+                    from main import User, ExperienceLog, calculate_exp_change, calculate_level
+                    
+                    user = db.query(User).filter(User.id == item.user_id).first()
+                    if user:
+                        exp_change = calculate_exp_change(review_result["overall_score"])
+                        exp_before = user.experience or 0
+                        level_before = user.level or 1
+                        
+                        # 更新经验值（不低于0）
+                        user.experience = max(0, exp_before + exp_change)
+                        new_level, _ = calculate_level(user.experience)
+                        user.level = new_level
+                        user.exp_updated_at = get_china_now()
+                        
+                        # 记录变更日志
+                        exp_log = ExperienceLog(
+                            user_id=user.id,
+                            video_id=video_id,
+                            score=review_result["overall_score"],
+                            exp_change=exp_change,
+                            exp_before=exp_before,
+                            exp_after=user.experience,
+                            level_before=level_before,
+                            level_after=new_level
+                        )
+                        db.add(exp_log)
+                        
+                        change_desc = "+" if exp_change > 0 else ""
+                        logger.info(f"User {user.id} exp: {exp_before} -> {user.experience} ({change_desc}{exp_change}), level: {level_before} -> {new_level}")
             else:
                 item.review_result = json.dumps({"error": review_result["error"]}, ensure_ascii=False)
                 item.review_status = "error"

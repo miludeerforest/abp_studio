@@ -20,7 +20,7 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
 
     const [videoApiUrl, setVideoApiUrl] = useState(config.video_api_url || '')
     const [videoApiKey, setVideoApiKey] = useState(config.video_api_key || '')
-    const [videoModelName, setVideoModelName] = useState(config.video_model_name || 'sora-video-portrait')
+    const [videoModelName, setVideoModelName] = useState(config.video_model_name || 'sora2-portrait-15s')
     // 从配置读取并发限制
     const CONCURRENT_LIMIT = config.max_concurrent_video || 3;
 
@@ -780,14 +780,13 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                             ▶️
                                         </button>
                                     )}
-                                    {/* 重试按钮 - 只在超时错误时显示（其他错误自动重试） */}
+                                    {/* 重试按钮 - 所有失败任务都可手动重试 */}
                                     {item.status === 'error' &&
-                                        (item.error_msg?.includes('Timed Out') || item.error_msg?.includes('超时')) &&
                                         (userRole === 'admin' || item.user_id === currentUserId) && (
                                             <button
                                                 onClick={() => retryItem(item.id)}
                                                 className="btn-icon"
-                                                title="超时重试"
+                                                title="手动重试"
                                                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'var(--warning-color, #f59e0b)' }}
                                             >
                                                 🔄

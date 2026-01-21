@@ -19,6 +19,7 @@ function App() {
   // User Info
   const [userRole, setUserRole] = useState(localStorage.getItem('role') || 'user')
   const [username, setUsername] = useState(localStorage.getItem('username') || '')
+  const [userProfile, setUserProfile] = useState(null)
 
   useEffect(() => {
     console.log("App Component Mounted");
@@ -102,8 +103,23 @@ function App() {
   const verifyToken = async (t) => {
     setIsLoggedIn(true)
     fetchConfig(t)
+    fetchUserProfile(t)
     // If we have stored role, use it. In real app, verify endpoint should return it.
   }
+
+  const fetchUserProfile = async (t) => {
+    try {
+      const res = await fetch('/api/v1/user/profile', {
+        headers: { 'Authorization': `Bearer ${t}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserProfile(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch user profile", e);
+    }
+  };
 
   const handleLogin = (data) => {
     // data: { access_token, role, username, user_id, ... }
@@ -123,6 +139,7 @@ function App() {
     setIsLoggedIn(true)
     setActiveTab('batch')  // Redirect to batch generator after login
     fetchConfig(t)
+    fetchUserProfile(t)
   }
 
   const handleLogout = () => {
@@ -232,9 +249,10 @@ function App() {
             <span className="icon">🎬</span>
             {!sidebarCollapsed && <span className="label">故事模式</span>}
           </button>
+
           <button
             className="sidebar-item"
-            onClick={() => window.open('https://ai.studio/apps/drive/1geV5jJXX0ddsg-Fw5ovXe-B-2GYxQUso?fullscreenApplet=true', '_blank')}
+            onClick={() => window.open('https://ai.studio/apps/drive/1yz74ruD7ppy6XwVXm-4NcnU1a09AzATR', '_blank')}
             title="泰语配音"
           >
             <span className="icon">🎙️</span>
@@ -282,6 +300,26 @@ function App() {
             </>
           )}
         </div>
+
+        {/* User Profile in Sidebar */}
+        {!sidebarCollapsed && userProfile && (
+          <div className="sidebar-user-profile">
+            <div className="sidebar-avatar">
+              <img src={userProfile.avatar || '/default-avatar.jpg'} alt="Avatar" />
+            </div>
+            <div className="sidebar-user-info">
+              <span className="sidebar-user-name">{userProfile.nickname || userProfile.username}</span>
+              <span className="sidebar-user-level">Lv.{userProfile.level || 1} {userProfile.level_name || '凡人'}</span>
+            </div>
+            <div className="sidebar-exp-bar">
+              <div
+                className="sidebar-exp-fill"
+                style={{ width: `${userProfile.level_progress || 0}%` }}
+              />
+            </div>
+            <span className="sidebar-exp-text">{userProfile.experience || 0} EXP</span>
+          </div>
+        )}
 
         <div className="sidebar-footer">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -345,6 +383,8 @@ function App() {
             onSelectForVideo={handleSelectForVideo}
           />
         </div>
+
+
 
         <div style={{ display: activeTab === 'video' ? 'block' : 'none' }}>
           <VideoGenerator

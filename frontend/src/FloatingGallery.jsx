@@ -38,6 +38,12 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
     const [dateFilter, setDateFilter] = useState('all');
     const [customStartDate, setCustomStartDate] = useState('');
     const [customEndDate, setCustomEndDate] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');        // 搜索关键词
+    const [shareFilter, setShareFilter] = useState('all');     // 分享状态筛选
+
+    // Download Progress Toast
+    const [downloadToast, setDownloadToast] = useState(null);  // { current, total, status }
+
 
     // Data
     const [images, setImages] = useState([]);
@@ -67,7 +73,7 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
             if (activeTab === 'images') fetchImages();
             else fetchVideos();
         }
-    }, [isOpen, activeTab, imgPage, vidPage, categoryFilter, viewMode, dateFilter, customStartDate, customEndDate]);
+    }, [isOpen, activeTab, imgPage, vidPage, categoryFilter, viewMode, dateFilter, customStartDate, customEndDate, searchQuery, shareFilter]);
 
     // Reset selection on tab/category change
     useEffect(() => {
@@ -157,8 +163,10 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
         const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
         const viewParam = userRole === 'admin' ? `&view_mode=${viewMode}` : '';
         const dateParams = getDateParams();
+        const searchParam = searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : '';
+        const shareParam = shareFilter !== 'all' ? `&is_shared=${shareFilter === 'shared'}` : '';
         try {
-            const res = await fetch(`/api/v1/gallery/images?limit=${LIMIT}&offset=${offset}${categoryParam}${viewParam}${dateParams}`, {
+            const res = await fetch(`/api/v1/gallery/images?limit=${LIMIT}&offset=${offset}${categoryParam}${viewParam}${dateParams}${searchParam}${shareParam}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -180,8 +188,10 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
         const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
         const viewParam = userRole === 'admin' ? `&view_mode=${viewMode}` : '';
         const dateParams = getDateParams();
+        const searchParam = searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : '';
+        const shareParam = shareFilter !== 'all' ? `&is_shared=${shareFilter === 'shared'}` : '';
         try {
-            const res = await fetch(`/api/v1/gallery/videos?limit=${LIMIT}&offset=${offset}${categoryParam}${viewParam}${dateParams}`, {
+            const res = await fetch(`/api/v1/gallery/videos?limit=${LIMIT}&offset=${offset}${categoryParam}${viewParam}${dateParams}${searchParam}${shareParam}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -282,40 +292,53 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
     const handleBatchDownload = async () => {
         if (selectedIds.size === 0) return;
 
-        const token = localStorage.getItem('token');
-        const endpoint = activeTab === 'images'
-            ? '/api/v1/gallery/images/batch-download'
-            : '/api/v1/gallery/videos/batch-download';
+        // 获取当前选中的项目
+        const items = activeTab === 'images' ? images : videos;
+        const selectedItems = items.filter(item => selectedIds.has(item.id));
 
-        try {
-            const res = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ ids: Array.from(selectedIds) })
-            });
-
-            if (res.ok) {
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `gallery_${activeTab}_${Date.now()}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            } else {
-                const errorText = await res.text();
-                alert(`批量下载失败: ${errorText}`);
-            }
-        } catch (err) {
-            console.error("Batch download failed", err);
-            alert("批量下载失败: " + err.message);
+        if (selectedItems.length === 0) {
+            alert("没有找到选中的文件");
+            return;
         }
+
+        const total = selectedItems.length;
+        setDownloadToast({ current: 0, total, status: 'downloading' });
+
+        // 批量单文件下载 - 逐个触发下载
+        let downloadCount = 0;
+        const downloadDelay = 300; // 每个文件之间延迟 300ms，避免浏览器阻止
+
+        for (const item of selectedItems) {
+            const downloadUrl = activeTab === 'images' ? item.url : item.result_url;
+
+            if (!downloadUrl) {
+                console.warn(`Item ${item.id} has no download URL`);
+                continue;
+            }
+
+            // 创建隐藏的 a 标签触发下载
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = ''; // 让浏览器使用默认文件名
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            downloadCount++;
+            setDownloadToast({ current: downloadCount, total, status: 'downloading' });
+
+            // 延迟触发下一个下载
+            if (downloadCount < selectedItems.length) {
+                await new Promise(resolve => setTimeout(resolve, downloadDelay));
+            }
+        }
+
+        // 下载完成提示
+        setDownloadToast({ current: downloadCount, total, status: 'done' });
+        setTimeout(() => setDownloadToast(null), 2000);
     };
+
 
     const handleDelete = async (e, item, type) => {
         e.stopPropagation();
@@ -412,42 +435,86 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                     </button>
                 </div>
 
+                {/* Search Bar */}
+                <div className="fg-search-bar">
+                    <span className="fg-search-icon">🔍</span>
+                    <input
+                        type="text"
+                        placeholder="搜索提示词..."
+                        value={searchQuery}
+                        onChange={(e) => { setSearchQuery(e.target.value); setImgPage(1); setVidPage(1); }}
+                        className="fg-search-input"
+                    />
+                    {searchQuery && (
+                        <button
+                            className="fg-search-clear"
+                            onClick={() => { setSearchQuery(''); setImgPage(1); setVidPage(1); }}
+                        >
+                            ✕
+                        </button>
+                    )}
+                </div>
+
                 {/* Filters */}
                 <div className="fg-filters">
-                    <select
-                        value={categoryFilter}
-                        onChange={(e) => { setCategoryFilter(e.target.value); setImgPage(1); setVidPage(1); }}
-                        className="fg-select"
-                    >
-                        {CATEGORIES.map(cat => (
-                            <option key={cat.value} value={cat.value}>
-                                {cat.icon} {cat.label}
-                            </option>
-                        ))}
-                    </select>
-
-                    {userRole === 'admin' && (
+                    <div className="fg-filter-group">
+                        <label className="fg-filter-label">品类</label>
                         <select
-                            value={viewMode}
-                            onChange={(e) => { setViewMode(e.target.value); setImgPage(1); setVidPage(1); }}
+                            value={categoryFilter}
+                            onChange={(e) => { setCategoryFilter(e.target.value); setImgPage(1); setVidPage(1); }}
                             className="fg-select"
                         >
-                            <option value="own">📁 我的</option>
-                            <option value="all">🌐 全部</option>
+                            {CATEGORIES.map(cat => (
+                                <option key={cat.value} value={cat.value}>
+                                    {cat.icon} {cat.label}
+                                </option>
+                            ))}
                         </select>
+                    </div>
+
+                    {userRole === 'admin' && (
+                        <div className="fg-filter-group">
+                            <label className="fg-filter-label">视角</label>
+                            <select
+                                value={viewMode}
+                                onChange={(e) => { setViewMode(e.target.value); setImgPage(1); setVidPage(1); }}
+                                className="fg-select"
+                            >
+                                <option value="own">📁 我的</option>
+                                <option value="all">🌐 全部</option>
+                            </select>
+                        </div>
                     )}
 
-                    <select
-                        value={dateFilter}
-                        onChange={(e) => { setDateFilter(e.target.value); setImgPage(1); setVidPage(1); }}
-                        className="fg-select"
-                    >
-                        <option value="all">📅 全部</option>
-                        <option value="today">今日</option>
-                        <option value="week">近7天</option>
-                        <option value="month">近30天</option>
-                        <option value="custom">自定义</option>
-                    </select>
+                    <div className="fg-filter-group">
+                        <label className="fg-filter-label">时间</label>
+                        <select
+                            value={dateFilter}
+                            onChange={(e) => { setDateFilter(e.target.value); setImgPage(1); setVidPage(1); }}
+                            className="fg-select"
+                        >
+                            <option value="all">📅 全部</option>
+                            <option value="today">今日</option>
+                            <option value="week">近7天</option>
+                            <option value="month">近30天</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+
+                    {userRole === 'admin' && (
+                        <div className="fg-filter-group">
+                            <label className="fg-filter-label">状态</label>
+                            <select
+                                value={shareFilter}
+                                onChange={(e) => { setShareFilter(e.target.value); setImgPage(1); setVidPage(1); }}
+                                className="fg-select"
+                            >
+                                <option value="all">🔗 全部</option>
+                                <option value="shared">🌐 已公开</option>
+                                <option value="private">🔒 私有</option>
+                            </select>
+                        </div>
+                    )}
 
                     {/* Custom Date Range */}
                     {dateFilter === 'custom' && (
@@ -468,20 +535,35 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                         </div>
                     )}
 
-                    <button onClick={handleRefresh} className="fg-icon-btn" title="刷新">
-                        🔄
-                    </button>
-
-                    {userRole === 'admin' && (
-                        <button
-                            onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
-                            className={`fg-icon-btn ${selectMode ? 'active' : ''}`}
-                            title={selectMode ? "退出选择" : "批量管理"}
-                        >
-                            {selectMode ? '✕' : '☑️'}
+                    <div className="fg-filter-actions">
+                        <button onClick={handleRefresh} className="fg-icon-btn" title="刷新">
+                            🔄
                         </button>
+
+                        {userRole === 'admin' && (
+                            <button
+                                onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+                                className={`fg-icon-btn ${selectMode ? 'active' : ''}`}
+                                title={selectMode ? "退出选择" : "批量管理"}
+                            >
+                                {selectMode ? '✕' : '☑️'}
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Stats Bar */}
+                <div className="fg-stats">
+                    <span className="fg-stats-count">
+                        共 <strong>{activeTab === 'images' ? totalImages : totalVideos}</strong> 项
+                    </span>
+                    {selectedIds.size > 0 && (
+                        <span className="fg-stats-selected">
+                            · 已选 <strong>{selectedIds.size}</strong> 项
+                        </span>
                     )}
                 </div>
+
 
                 {/* Batch Actions */}
                 {selectMode && userRole === 'admin' && (
@@ -545,7 +627,29 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                                                     {selectedIds.has(img.id) && '✓'}
                                                 </div>
                                             )}
+                                            {/* 常驻下载按钮 */}
+                                            <a
+                                                href={img.url}
+                                                download
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="fg-quick-download"
+                                                onClick={(e) => e.stopPropagation()}
+                                                title="下载"
+                                            >
+                                                ⬇️
+                                            </a>
                                             <img src={img.url} alt="" className="fg-card-img" loading="lazy" />
+                                            {/* 常驻底部信息栏 */}
+                                            <div className="fg-card-info">
+                                                <span className="fg-card-category">
+                                                    {CATEGORIES.find(c => c.value === img.category)?.icon || '📦'}
+                                                </span>
+                                                <span className="fg-card-time">
+                                                    {img.created_at ? new Date(img.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}
+                                                </span>
+                                                {img.is_shared && <span className="fg-card-shared">🌐</span>}
+                                            </div>
                                             <div className="fg-card-overlay">
                                                 <div className="fg-card-actions">
                                                     {onSelectForVideo && (
@@ -569,17 +673,6 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                                                             {img.is_shared ? '🔗' : '🔒'}
                                                         </button>
                                                     )}
-                                                    <a
-                                                        href={img.url}
-                                                        download
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="fg-action-btn"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        title="下载"
-                                                    >
-                                                        ⬇️
-                                                    </a>
                                                     {(userRole === 'admin' || img.user_id === currentUserId) && (
                                                         <button
                                                             className="fg-action-btn delete"
@@ -590,10 +683,12 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                                                         </button>
                                                     )}
                                                 </div>
+
                                                 <p className="fg-card-prompt">{img.prompt}</p>
                                             </div>
                                         </div>
                                     ))}
+
                                 </div>
                             )}
                         </>
@@ -666,7 +761,29 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                                                     ✨ 合成
                                                 </div>
                                             )}
+                                            {/* 常驻下载按钮 */}
+                                            <a
+                                                href={vid.result_url}
+                                                download
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="fg-quick-download"
+                                                onClick={(e) => e.stopPropagation()}
+                                                title="下载"
+                                            >
+                                                ⬇️
+                                            </a>
                                             <div className="fg-play-icon">▶</div>
+                                            {/* 常驻底部信息栏 */}
+                                            <div className="fg-card-info">
+                                                <span className="fg-card-category">
+                                                    {CATEGORIES.find(c => c.value === vid.category)?.icon || '📦'}
+                                                </span>
+                                                <span className="fg-card-time">
+                                                    {vid.created_at ? new Date(vid.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}
+                                                </span>
+                                                {vid.is_shared && <span className="fg-card-shared">🌐</span>}
+                                            </div>
                                             <div className="fg-card-overlay">
                                                 <div className="fg-card-actions">
                                                     {userRole === 'admin' && (
@@ -678,17 +795,6 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                                                             {vid.is_shared ? '🔗' : '🔒'}
                                                         </button>
                                                     )}
-                                                    <a
-                                                        href={vid.result_url}
-                                                        download
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="fg-action-btn"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        title="下载"
-                                                    >
-                                                        ⬇️
-                                                    </a>
                                                     {(userRole === 'admin' || vid.user_id === currentUserId) && (
                                                         <button
                                                             className="fg-action-btn delete"
@@ -699,10 +805,12 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                                                         </button>
                                                     )}
                                                 </div>
+
                                                 <p className="fg-card-prompt">{vid.prompt}</p>
                                             </div>
                                         </div>
                                     ))}
+
                                 </div>
                             )}
                         </>
@@ -730,6 +838,27 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                             >
                                 下一页 →
                             </button>
+                            {/* 页码跳转 */}
+                            <div className="fg-page-jump">
+                                <span className="fg-page-jump-label">跳至</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max={totalPagesImg || 1}
+                                    className="fg-page-jump-input"
+                                    placeholder="页码"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            const page = parseInt(e.target.value, 10);
+                                            if (page >= 1 && page <= (totalPagesImg || 1)) {
+                                                setImgPage(page);
+                                                e.target.value = '';
+                                            }
+                                        }
+                                    }}
+                                />
+                                <span className="fg-page-jump-label">页</span>
+                            </div>
                         </>
                     ) : (
                         <>
@@ -750,6 +879,27 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                             >
                                 下一页 →
                             </button>
+                            {/* 页码跳转 */}
+                            <div className="fg-page-jump">
+                                <span className="fg-page-jump-label">跳至</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max={totalPagesVid || 1}
+                                    className="fg-page-jump-input"
+                                    placeholder="页码"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            const page = parseInt(e.target.value, 10);
+                                            if (page >= 1 && page <= (totalPagesVid || 1)) {
+                                                setVidPage(page);
+                                                e.target.value = '';
+                                            }
+                                        }
+                                    }}
+                                />
+                                <span className="fg-page-jump-label">页</span>
+                            </div>
                         </>
                     )}
                 </div>
@@ -868,6 +1018,35 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Download Progress Toast */}
+            {downloadToast && (
+                <div className={`fg-toast ${downloadToast.status}`}>
+                    <div className="fg-toast-content">
+                        {downloadToast.status === 'downloading' ? (
+                            <>
+                                <span className="fg-toast-icon">⬇️</span>
+                                <span className="fg-toast-text">
+                                    下载中 {downloadToast.current}/{downloadToast.total}
+                                </span>
+                                <div className="fg-toast-progress">
+                                    <div
+                                        className="fg-toast-progress-bar"
+                                        style={{ width: `${(downloadToast.current / downloadToast.total) * 100}%` }}
+                                    />
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <span className="fg-toast-icon">✅</span>
+                                <span className="fg-toast-text">
+                                    已完成 {downloadToast.total} 个文件下载
+                                </span>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

@@ -689,6 +689,90 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Sidebar User Profile */
+.sidebar-user-profile {
+  padding: 16px;
+  margin: 0 8px 8px 8px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.08), rgba(255, 165, 0, 0.05));
+  border: 1px solid rgba(255, 165, 0, 0.15);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid var(--primary-color);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.sidebar-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sidebar-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  font-weight: bold;
+  color: #fff;
+}
+
+.sidebar-user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-user-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.sidebar-user-level {
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #ffa500, #ffd700);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.sidebar-exp-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.sidebar-exp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffa500, #ffd700, #ffed4a);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+  box-shadow: 0 0 6px rgba(255, 215, 0, 0.4);
+}
+
+.sidebar-exp-text {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 /* Main Content Area */
 .main-content {
   flex: 1;
