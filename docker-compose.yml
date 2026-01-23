@@ -7,7 +7,8 @@ services:
     networks:
       - default
       - 1panel-network
-      - flow2api_worker_net
+      # 如需连接其他 API 服务的网络，取消下行注释并修改网络名
+      # - external_api_network
     env_file:
       - .env
     environment:
@@ -43,6 +44,8 @@ services:
 networks:
   1panel-network:
     external: true
-  flow2api_worker_net:
-    external: true
+  # 如需连接其他服务的 Docker 网络（例如 API 代理服务），添加以下配置：
+  # external_api_network:
+  #   external: true
+
 

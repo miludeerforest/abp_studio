@@ -138,23 +138,40 @@ docker compose logs -f
 
 ### Docker 网络
 
-默认配置使用两个外部网络：
+项目使用以下 Docker 网络：
+
+| 网络 | 用途 |
+|------|------|
+| `default` | 项目内部通信（frontend ↔ backend） |
+| `1panel-network` | 与 1Panel 管理的服务通信（OpenResty、Redis、PostgreSQL 等） |
+| `外部 API 网络` | **可选** - 如需直接访问其他 Docker 服务（如 API 代理），可添加对应网络 |
+
+**基础配置** (docker-compose.yml):
 
 ```yaml
 networks:
   1panel-network:
     external: true
-  flow2api_worker_net:
+```
+
+**扩展配置** - 如需连接其他服务的 Docker 网络：
+
+```yaml
+# 在 backend 服务的 networks 下添加
+networks:
+  - default
+  - 1panel-network
+  - your_api_service_network  # 添加需要连接的网络
+
+# 在文件底部的 networks 配置中声明
+networks:
+  1panel-network:
+    external: true
+  your_api_service_network:
     external: true
 ```
 
-如果不使用这些网络，请修改 `docker-compose.yml`：
-
-```yaml
-networks:
-  default:
-    driver: bridge
-```
+> 💡 **提示**: 通过共享 Docker 网络，可以使用容器名直接访问服务，无需暴露端口到宿主机。
 
 ### 反向代理 (1Panel OpenResty)
 
