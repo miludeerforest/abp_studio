@@ -1043,12 +1043,27 @@ async def call_openai_compatible_api(
     logger.info(f"Image Generation Prompt for {angle_name}: {angle_prompt[:200]}...")  # Log first 200 chars
     
     system_instruction = (
-        "You are a professional product photographer. "
-        "🔴 CRITICAL RULE: The product in your output MUST be IDENTICAL to the product in the input image. "
-        "Do NOT change the product's shape, color, material, size, brand logo, or any visual details. "
-        "Only change the environment, lighting, and background around the product. "
-        "The product itself must remain 100% visually unchanged - as if you took the SAME product and placed it in a new scene. "
-        "Return ONLY the generated image."
+        "You are a professional product photographer and image compositing expert. "
+        "=== ABSOLUTE PRODUCT FIDELITY RULES (HIGHEST PRIORITY) ===\n"
+        "🔴 The product in the FIRST image is the HERO SUBJECT. Your task is PHOTO COMPOSITING, not reimagining.\n"
+        "🔴 PRESERVE 100%: Exact shape, silhouette, proportions, colors, textures, materials, logos, labels, text, reflections, and every detail.\n"
+        "🔴 FORBIDDEN: Restyling, recoloring, adding/removing features, changing angles, morphing shapes, or ANY visual alteration to the product.\n"
+        "🔴 Think of this as: 'Cut the product from the first image and paste it into a new scene' - NOT 'Draw the product again in a new style'.\n"
+        "\n=== SCENE GENERATION RULES ===\n"
+        "✅ DO: Create new backgrounds, lighting, shadows, reflections consistent with the new environment.\n"
+        "✅ DO: Match the lighting direction on the product to the new scene's light sources.\n"
+        "✅ DO: Use the second (reference) image only for color grading, mood, and atmospheric inspiration.\n"
+        "✅ Return ONLY the final composited image."
+    )
+    
+    # Structured user prompt for clarity
+    user_prompt_text = (
+        f"=== PRODUCT (Image 1) ===\n"
+        f"This is the EXACT product to composite. DO NOT modify it.\n\n"
+        f"=== STYLE REFERENCE (Image 2) ===\n"
+        f"Use this for color grading, mood, and lighting atmosphere only.\n\n"
+        f"=== SCENE INSTRUCTION ===\n"
+        f"{angle_prompt}"
     )
     
     payload = {
@@ -1063,7 +1078,7 @@ async def call_openai_compatible_api(
                 "content": [
                     {
                         "type": "text", 
-                        "text": f"Task: {angle_prompt}. Style Reference: Use the lighting and mood from the second image provided."
+                        "text": user_prompt_text
                     },
                     {
                         "type": "image_url",
@@ -1080,7 +1095,7 @@ async def call_openai_compatible_api(
                 ]
             }
         ],
-        "temperature": 0.4,
+        "temperature": 0.2,
         "max_tokens": 4096
     }
     
@@ -2177,7 +2192,8 @@ def get_gallery_images(
     limit: int = 50, 
     offset: int = 0,
     category: str = None,  # Filter by category
-    view_mode: str = "own",  # "own" | "all" (admin only)
+    view_mode: str = "own",  # "own" | "all" | "user" (admin only)
+    user_id: int = None,     # Filter by specific user (admin only, requires view_mode="user")
     start_date: str = None,  # Filter by start date (ISO format: YYYY-MM-DD)
     end_date: str = None,    # Filter by end date (ISO format: YYYY-MM-DD)
     db: Session = Depends(get_db), 
@@ -2187,13 +2203,17 @@ def get_gallery_images(
     
     - Admin with view_mode='all': All images from all users
     - Admin with view_mode='own': Only admin's own images
+    - Admin with view_mode='user' + user_id: Images from specified user
     - Regular user: Own images + shared images (is_shared=True)
     - start_date/end_date: Filter by creation date (ISO format: YYYY-MM-DD)
     """
     from sqlalchemy import or_
     
     if user.role == "admin":
-        if view_mode == "own":
+        if view_mode == "user" and user_id is not None:
+            # Admin viewing specific user's images
+            query = db.query(SavedImage).filter(SavedImage.user_id == user_id)
+        elif view_mode == "own":
             query = db.query(SavedImage).filter(SavedImage.user_id == user.id)
         else:  # "all" - admin can see everything
             query = db.query(SavedImage)
@@ -2336,7 +2356,8 @@ def get_gallery_videos(
     limit: int = 20,
     offset: int = 0,
     category: str = None,  # Filter by category
-    view_mode: str = "own",  # "own" | "all" (admin only)
+    view_mode: str = "own",  # "own" | "all" | "user" (admin only)
+    user_id: int = None,     # Filter by specific user (admin only, requires view_mode="user")
     start_date: str = None,  # Filter by start date (ISO format: YYYY-MM-DD)
     end_date: str = None,    # Filter by end date (ISO format: YYYY-MM-DD)
     db: Session = Depends(get_db), 
@@ -2346,6 +2367,7 @@ def get_gallery_videos(
     
     - Admin with view_mode='all': All completed videos from all users
     - Admin with view_mode='own': Only admin's own completed videos
+    - Admin with view_mode='user' + user_id: Videos from specified user
     - Regular user: Own videos + shared videos (is_shared=True)
     - start_date/end_date: Filter by creation date (ISO format: YYYY-MM-DD)
     """
@@ -2355,7 +2377,12 @@ def get_gallery_videos(
     base_filter = VideoQueueItem.status.in_(["done", "archived"])
     
     if user.role == "admin":
-        if view_mode == "own":
+        if view_mode == "user" and user_id is not None:
+            # Admin viewing specific user's videos
+            query = db.query(VideoQueueItem).filter(
+                and_(base_filter, VideoQueueItem.user_id == user_id)
+            )
+        elif view_mode == "own":
             query = db.query(VideoQueueItem).filter(
                 and_(base_filter, VideoQueueItem.user_id == user.id)
             )

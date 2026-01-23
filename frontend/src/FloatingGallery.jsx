@@ -26,7 +26,9 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
     const userRole = localStorage.getItem('role') || 'user';
     const currentUserId = parseInt(localStorage.getItem('userId') || '0', 10);
 
-    const [viewMode, setViewMode] = useState(userRole === 'admin' ? 'all' : 'own');
+    const [viewMode, setViewMode] = useState('own'); // 所有用户默认查看自己的内容，管理员可切换到 'all' 或 'user'
+    const [selectedUserId, setSelectedUserId] = useState(null); // 管理员按用户筛选时选中的用户ID
+    const [userList, setUserList] = useState([]); // 用户列表（管理员用）
 
     // Pagination
     const [imgPage, setImgPage] = useState(1);
@@ -73,7 +75,29 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
             if (activeTab === 'images') fetchImages();
             else fetchVideos();
         }
-    }, [isOpen, activeTab, imgPage, vidPage, categoryFilter, viewMode, dateFilter, customStartDate, customEndDate, searchQuery, shareFilter]);
+    }, [isOpen, activeTab, imgPage, vidPage, categoryFilter, viewMode, selectedUserId, dateFilter, customStartDate, customEndDate, searchQuery, shareFilter]);
+
+    // Fetch user list for admin
+    useEffect(() => {
+        if (isOpen && userRole === 'admin' && userList.length === 0) {
+            fetchUserList();
+        }
+    }, [isOpen, userRole]);
+
+    const fetchUserList = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/v1/users', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setUserList(data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch user list', err);
+        }
+    };
 
     // Reset selection on tab/category change
     useEffect(() => {
@@ -161,7 +185,14 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
         const token = localStorage.getItem('token');
         const offset = (imgPage - 1) * LIMIT;
         const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
-        const viewParam = userRole === 'admin' ? `&view_mode=${viewMode}` : '';
+        // 管理员视角: own/all/user
+        let viewParam = '';
+        if (userRole === 'admin') {
+            viewParam = `&view_mode=${viewMode}`;
+            if (viewMode === 'user' && selectedUserId) {
+                viewParam += `&user_id=${selectedUserId}`;
+            }
+        }
         const dateParams = getDateParams();
         const searchParam = searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : '';
         const shareParam = shareFilter !== 'all' ? `&is_shared=${shareFilter === 'shared'}` : '';
@@ -186,7 +217,14 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
         const token = localStorage.getItem('token');
         const offset = (vidPage - 1) * LIMIT;
         const categoryParam = categoryFilter !== 'all' ? `&category=${categoryFilter}` : '';
-        const viewParam = userRole === 'admin' ? `&view_mode=${viewMode}` : '';
+        // 管理员视角: own/all/user
+        let viewParam = '';
+        if (userRole === 'admin') {
+            viewParam = `&view_mode=${viewMode}`;
+            if (viewMode === 'user' && selectedUserId) {
+                viewParam += `&user_id=${selectedUserId}`;
+            }
+        }
         const dateParams = getDateParams();
         const searchParam = searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : '';
         const shareParam = shareFilter !== 'all' ? `&is_shared=${shareFilter === 'shared'}` : '';
@@ -476,12 +514,31 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                         <div className="fg-filter-group">
                             <label className="fg-filter-label">视角</label>
                             <select
-                                value={viewMode}
-                                onChange={(e) => { setViewMode(e.target.value); setImgPage(1); setVidPage(1); }}
+                                value={viewMode === 'user' ? `user_${selectedUserId}` : viewMode}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === 'own' || val === 'all') {
+                                        setViewMode(val);
+                                        setSelectedUserId(null);
+                                    } else if (val.startsWith('user_')) {
+                                        const userId = parseInt(val.replace('user_', ''), 10);
+                                        setViewMode('user');
+                                        setSelectedUserId(userId);
+                                    }
+                                    setImgPage(1);
+                                    setVidPage(1);
+                                }}
                                 className="fg-select"
                             >
                                 <option value="own">📁 我的</option>
                                 <option value="all">🌐 全部</option>
+                                <optgroup label="👤 指定用户">
+                                    {userList.map(u => (
+                                        <option key={u.id} value={`user_${u.id}`}>
+                                            {u.username} {u.role === 'admin' ? '👑' : ''}
+                                        </option>
+                                    ))}
+                                </optgroup>
                             </select>
                         </div>
                     )}
