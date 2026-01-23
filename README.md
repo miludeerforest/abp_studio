@@ -156,43 +156,64 @@ networks:
     driver: bridge
 ```
 
-### 反向代理 (Nginx/Caddy)
+### 反向代理 (1Panel OpenResty)
 
-推荐使用反向代理配置 HTTPS：
+本项目推荐使用 **1Panel** 面板自带的 **OpenResty** 容器配置反向代理和 HTTPS。
+
+#### 1Panel 配置步骤
+
+1. 进入 **1Panel** → **网站** → **创建网站** → **反向代理**
+2. 填写域名，选择 HTTPS (可自动申请 Let's Encrypt 证书)
+3. 代理目标配置如下：
+
+| 路径 | 代理目标 | 说明 |
+|------|----------|------|
+| `/` | `http://frontend:5173` | 前端服务 |
+| `/api/` | `http://backend:8000` | 后端 API |
+| `/uploads/` | `http://backend:8000` | 静态资源 |
+| `/ws` | `http://backend:8000` | WebSocket |
+
+> 💡 **提示**: 由于服务都在 `1panel-network` 网络中，可直接使用容器名作为主机名。
+
+#### OpenResty 配置示例
+
+如果需要手动配置，在 1Panel 的「配置文件」中添加：
 
 ```nginx
-# Nginx 示例
-server {
-    listen 443 ssl;
-    server_name your-domain.com;
-    
-    # 前端
-    location / {
-        proxy_pass http://127.0.0.1:33012;
-        proxy_set_header Host $host;
-    }
-    
-    # 后端 API
-    location /api/ {
-        proxy_pass http://127.0.0.1:33013;
-        proxy_set_header Host $host;
-    }
-    
-    # WebSocket 支持
-    location /ws {
-        proxy_pass http://127.0.0.1:33013;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-    
-    # 静态文件 (图片/视频)
-    location /uploads/ {
-        proxy_pass http://127.0.0.1:33013;
-        proxy_cache_valid 200 7d;
-    }
+# WebSocket 支持
+location /ws {
+    proxy_pass http://backend:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 86400;
+}
+
+# 后端 API
+location /api/ {
+    proxy_pass http://backend:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# 静态文件 (7天缓存)
+location /uploads/ {
+    proxy_pass http://backend:8000;
+    proxy_cache_valid 200 7d;
+    add_header Cache-Control "public, max-age=604800";
+}
+
+# 前端
+location / {
+    proxy_pass http://frontend:5173;
+    proxy_set_header Host $host;
 }
 ```
+
+> ⚠️ **注意**: 确保 `docker-compose.yml` 中的服务已加入 `1panel-network` 网络。
 
 ---
 
