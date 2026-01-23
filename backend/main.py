@@ -461,7 +461,7 @@ async def startup_event():
     try:
 
         admin_user = os.getenv("ADMIN_USER", "admin")
-        admin_pass = os.getenv("ADMIN_PASSWORD", "***REDACTED_ADMIN_PASSWORD***")
+        admin_pass = os.getenv("ADMIN_PASSWORD", "change_this_password")
         
         # Check if admin user exists
         user = db.query(User).filter(User.username == admin_user).first()
@@ -6039,7 +6039,7 @@ async def generate_character_video(
         video_api_key = db.query(SystemConfig).filter(SystemConfig.key == "video_api_key").first()
         video_model_name = db.query(SystemConfig).filter(SystemConfig.key == "video_model_name").first()
         
-        api_url = video_api_url.value if video_api_url else os.getenv("VIDEO_API_URL", "https://sora2.***REDACTED_ADMIN_PASSWORD***.de/v1")
+        api_url = video_api_url.value if video_api_url else os.getenv("VIDEO_API_URL", "")
         api_key = video_api_key.value if video_api_key else os.getenv("VIDEO_API_KEY", "")
         model_name = video_model_name.value if video_model_name else os.getenv("VIDEO_MODEL_NAME", "sora2-portrait-15s")
     finally:

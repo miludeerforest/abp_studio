@@ -1,7 +1,8 @@
 from sqlalchemy import create_engine, text
 import os
 
-DATABASE_URL = "postgresql://YOUR_USER:YOUR_PASSWORD_HERE@YOUR_HOST_HERE:5432/banana_db"
+# 从环境变量读取数据库连接
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/db")
 engine = create_engine(DATABASE_URL)
 
 try:
