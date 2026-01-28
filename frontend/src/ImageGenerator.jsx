@@ -444,8 +444,10 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
         const activeScripts = (scripts && Array.isArray(scripts)) ? scripts.slice(0, genCount) : [];
         console.log("HandleGenerate: Scripts prepared", activeScripts);
 
-        // BATCHING LOGIC: Parallel Concurrency from config
-        const CONCURRENT_LIMIT = config.max_concurrent_image || 3;
+        // Smart concurrency: Manual mode uses lower concurrency to avoid 524 timeouts
+        const CONCURRENT_LIMIT = isAutoMode 
+            ? (config.max_concurrent_image || 3)  // Auto mode: use config
+            : 1;  // Manual mode: single request to avoid API timeout
         const allResults = [];
         // Init AbortController
         if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -511,8 +513,13 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                     batchPromises.push(p);
                 }
 
-                // Wait for this block of 3 to finish
+                // Wait for this block to finish
                 await Promise.all(batchPromises);
+                
+                // Manual mode: add delay between batches to avoid API overload
+                if (!isAutoMode && i + CONCURRENT_LIMIT < activeScripts.length) {
+                    await new Promise(r => setTimeout(r, 800));
+                }
             }
 
             setStep('done')

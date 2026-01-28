@@ -483,19 +483,26 @@ async def startup_event():
             db.commit()
         
         # --- 启动时恢复阻滞的视频任务 ---
-        # 将所有 processing 状态的任务重置为 pending，防止重启后任务卡死
+        MAX_AUTO_RETRIES = 3
         stale_tasks = db.query(VideoQueueItem).filter(
             VideoQueueItem.status == "processing"
         ).all()
         
         if stale_tasks:
-            stale_count = len(stale_tasks)
+            recovered_count = 0
+            failed_count = 0
             for task in stale_tasks:
-                task.status = "pending"
-                task.retry_count = (task.retry_count or 0) + 1
-                task.last_retry_at = get_china_now()
+                if task.retry_count >= MAX_AUTO_RETRIES:
+                    task.status = "error"
+                    task.error_msg = f"启动恢复: 已达最大重试次数 ({task.retry_count}/{MAX_AUTO_RETRIES})"
+                    failed_count += 1
+                else:
+                    task.status = "pending"
+                    # 不增加 retry_count，因为任务被中断而非失败
+                    # 不设置 last_retry_at，避免触发 cooldown
+                    recovered_count += 1
             db.commit()
-            logger.info(f"[Startup] 已恢复 {stale_count} 个阻滞的视频任务为 pending 状态")
+            logger.info(f"[Startup] 恢复 {recovered_count} 个阻滞任务, {failed_count} 个标记为错误")
         else:
             logger.info("[Startup] 无阻滞任务需要恢复")
     finally:
@@ -1049,10 +1056,13 @@ async def call_openai_compatible_api(
         "🔴 PRESERVE 100%: Exact shape, silhouette, proportions, colors, textures, materials, logos, labels, text, reflections, and every detail.\n"
         "🔴 FORBIDDEN: Restyling, recoloring, adding/removing features, changing angles, morphing shapes, or ANY visual alteration to the product.\n"
         "🔴 Think of this as: 'Cut the product from the first image and paste it into a new scene' - NOT 'Draw the product again in a new style'.\n"
-        "\n=== SCENE GENERATION RULES ===\n"
+        "\n=== SCENE GENERATION RULES (STRICT REFERENCE REPLICATION) ===\n"
         "✅ DO: Create new backgrounds, lighting, shadows, reflections consistent with the new environment.\n"
         "✅ DO: Match the lighting direction on the product to the new scene's light sources.\n"
-        "✅ DO: Use the second (reference) image only for color grading, mood, and atmospheric inspiration.\n"
+        "✅ DO: STRICTLY REPLICATE the scene type and environment from the SECOND (reference) image.\n"
+        "✅ DO: If the reference image contains human figures, include similar poses, gestures, and clothing styles.\n"
+        "✅ DO: Copy the overall composition, props, and atmospheric elements from the reference.\n"
+        "✅ DO: Apply the reference image's color grading, mood, and lighting atmosphere.\n"
         "✅ Return ONLY the final composited image."
     )
     
@@ -1060,8 +1070,10 @@ async def call_openai_compatible_api(
     user_prompt_text = (
         f"=== PRODUCT (Image 1) ===\n"
         f"This is the EXACT product to composite. DO NOT modify it.\n\n"
-        f"=== STYLE REFERENCE (Image 2) ===\n"
-        f"Use this for color grading, mood, and lighting atmosphere only.\n\n"
+        f"=== SCENE REFERENCE (Image 2) - STRICT REPLICATION REQUIRED ===\n"
+        f"REPLICATE this scene's environment, props, composition, and atmosphere.\n"
+        f"If human figures are present, include similar poses and styling.\n"
+        f"Apply this image's color grading and lighting mood.\n\n"
         f"=== SCENE INSTRUCTION ===\n"
         f"{angle_prompt}"
     )
@@ -1128,7 +1140,6 @@ async def call_openai_compatible_api(
             async with client.stream("POST", target_url, json=payload, headers=headers, timeout=timeout) as response:
                 if response.status_code == 429:
                     if attempt < max_retries:
-                        # Add Jitter randomization to prevent thundering herd
                         jitter = random.uniform(0.8, 1.5)
                         wait_time = base_delay * (2 ** attempt) * jitter
                         logger.warning(f"Rate limited (429). Retrying in {wait_time:.1f}s with jitter...")
@@ -1138,6 +1149,13 @@ async def call_openai_compatible_api(
                         error_text = await response.aread()
                         logger.error(f"API Error {response.status_code}: {error_text}")
                         return ImageResult(angle_name=angle_name, error=f"Rate Limit Exceeded (429): {error_text.decode('utf-8')}")
+
+                if response.status_code == 524:
+                    logger.warning(f"Cloudflare 524 timeout for {angle_name} (attempt {attempt+1}/{max_retries+1})")
+                    if attempt < max_retries:
+                        await asyncio.sleep(2)
+                        continue
+                    return ImageResult(angle_name=angle_name, error="服务器处理超时，请稍后重试")
 
                 if response.status_code != 200:
                     error_text = await response.aread()
@@ -1245,10 +1263,14 @@ When analyzing product and reference images, apply this framework:
    - Surface properties: texture, reflectivity, transparency, color palette
    - Brand positioning: luxury/mass-market, modern/classic, minimal/expressive
 
-2. STYLE REFERENCE ANALYSIS
+2. STYLE REFERENCE ANALYSIS (CRITICAL - STRICT REPLICATION REQUIRED)
+   - Scene Type: Identify the EXACT scene category (indoor/outdoor, room type, location type)
+   - Scene Elements: List ALL visible objects, furniture, props, architectural features
+   - Human Figures: If present, describe pose, gesture, clothing style, positioning relative to camera
    - Mood transfer elements: color temperature, contrast ratio, saturation
    - Lighting signature: direction, quality (soft/hard), color cast
    - Environmental textures and atmospheric elements
+   - NOTE: The generated scripts MUST replicate this scene's environment and human poses
 
 3. PLACEMENT LOGIC ENGINE
    - Tech/Electronics → Minimalist surfaces, floating, sleek environments
@@ -1280,10 +1302,13 @@ Each script must be a production-ready photography brief containing:
     prompt = (
         f"Product Category: {category}\n\n"
         f"{product_identity_prompt}\n\n"
-        "2. STYLE REFERENCE ANALYSIS:\n"
-        "   - What is the dominant mood and color palette?\n"
-        "   - Identify the lighting setup (direction, quality, color temperature)\n"
-        "   - Describe the environment/background (geometric, organic, textured, minimal?)\n\n"
+        "2. STYLE REFERENCE ANALYSIS (🔴 CRITICAL - STRICT SCENE REPLICATION):\\n"
+        "   - Scene Type: What EXACT type of scene is this? (e.g., modern kitchen, outdoor cafe, studio backdrop, urban street)\\n"
+        "   - Scene Elements: List ALL visible objects, furniture, props, decorations in the reference image\\n"
+        "   - Human Figures: If people are present, describe their EXACT pose, gesture, clothing style, and position\\n"
+        "   - Lighting: Identify direction, quality, color temperature, and any special lighting effects\\n"
+        "   - Color Palette: Dominant colors, mood, and atmospheric elements\\n"
+        "   🔴 IMPORTANT: ALL generated scripts MUST recreate this EXACT scene type and include similar human figures if present\\n\\n"
         "3. PLACEMENT MODE DETERMINATION:\n"
         "   Analyze product type + reference environment to determine optimal placement:\n"
         "   - Wall-mounted: cameras, sensors, displays (when reference shows vertical surfaces)\n"
@@ -1297,9 +1322,13 @@ Each script must be a production-ready photography brief containing:
         "   - NO two scripts should share the same lighting + environment combination\n"
         "   - Include at least: 2 natural light, 2 studio light, 2 dramatic/creative light scenarios\n"
         "   - Vary composition: mix hero shots, close-ups, environmental shots, and creative angles\n\n"
-        "   SCRIPT CONTENT:\n"
-        "   - angle_name: A short, descriptive title (e.g., 'Golden Hour Warmth', 'Studio Minimal', 'Urban Texture')\n"
-        "   - script: A detailed 40-60 word prompt with specific lighting, environment, mood, and composition guidance\n\n"
+        "   SCRIPT CONTENT (🔴 MUST REPLICATE REFERENCE SCENE):\\n"
+        "   - angle_name: A short, descriptive title (e.g., 'Golden Hour Warmth', 'Studio Minimal', 'Urban Texture')\\n"
+        "   - script: A detailed 40-80 word prompt that MUST include:\\n"
+        "     * The EXACT scene type from the reference image (same environment category)\\n"
+        "     * Similar props, furniture, and scene elements as the reference\\n"
+        "     * If reference has human figures: include similar pose, gesture, and clothing style\\n"
+        "     * Specific lighting, mood, and composition guidance\\n\\n"
         "Return JSON format ONLY:\n"
         "{ \"product_description\": \"...\", \"environment_analysis\": \"...\", \"placement_mode\": \"...\", \"scripts\": [ {\"angle_name\": \"...\", \"script\": \"...\"}, ... ] }"
     )
@@ -3630,6 +3659,71 @@ async def generate_queue_item_endpoint(
     return {"status": "processing", "message": "Video generation started in background"}
 
 
+# --- Background Zombie Task Recovery ---
+# Detects "zombie" tasks stuck in processing state and recovers them
+
+ZOMBIE_DETECTION_INTERVAL = 60  # Check every 60 seconds
+ZOMBIE_TIMEOUT_SECONDS = 300  # Task is considered zombie after 5 minutes in processing
+
+async def zombie_task_recovery():
+    """
+    Background task that detects and recovers zombie tasks.
+    A zombie task is one that has been in 'processing' status for too long
+    without completing (e.g., due to container restart or crash).
+    """
+    while True:
+        try:
+            await asyncio.sleep(ZOMBIE_DETECTION_INTERVAL)
+            
+            db = SessionLocal()
+            try:
+                now = get_china_now()
+                cutoff_time = now - timedelta(seconds=ZOMBIE_TIMEOUT_SECONDS)
+                
+                # Find processing tasks that haven't been updated recently
+                zombie_tasks = db.query(VideoQueueItem).filter(
+                    VideoQueueItem.status == "processing",
+                    VideoQueueItem.last_retry_at < cutoff_time
+                ).all()
+                
+                if not zombie_tasks:
+                    continue
+                
+                recovered_count = 0
+                failed_count = 0
+                MAX_AUTO_RETRIES = 3
+                
+                for task in zombie_tasks:
+                    task_age = (now - task.last_retry_at).total_seconds() if task.last_retry_at else 0
+                    
+                    # Check if task has exceeded max retries
+                    if task.retry_count >= MAX_AUTO_RETRIES:
+                        # Mark as error instead of retrying forever
+                        task.status = "error"
+                        task.error_msg = f"任务超时且已达最大重试次数 ({task.retry_count}/{MAX_AUTO_RETRIES})"
+                        failed_count += 1
+                        logger.warning(f"[ZombieRecovery] Task {task.id} exceeded max retries, marked as error")
+                    else:
+                        # Reset to pending for retry
+                        task.status = "pending"
+                        # Don't increment retry_count here - it will be incremented when task is picked up
+                        # Don't set last_retry_at to avoid cooldown - the task was interrupted, not failed
+                        recovered_count += 1
+                        logger.info(f"[ZombieRecovery] Task {task.id} recovered to pending (age: {task_age:.0f}s, retries: {task.retry_count})")
+                
+                db.commit()
+                
+                if recovered_count > 0 or failed_count > 0:
+                    logger.info(f"[ZombieRecovery] Cycle complete: {recovered_count} recovered, {failed_count} marked as error")
+                    
+            finally:
+                db.close()
+                
+        except Exception as e:
+            logger.error(f"[ZombieRecovery] Error in zombie detection: {e}")
+            await asyncio.sleep(10)  # Brief pause on error before retrying
+
+
 # --- Background Cleanup Task ---
 # Legacy env var for backward compatibility, will be overridden by DB config
 CLEANUP_HOURS = int(os.getenv("CLEANUP_HOURS", "168"))  # Default 7 days (168 hours)
@@ -3679,8 +3773,9 @@ async def cleanup_task():
         await asyncio.sleep(3600)
 
 @app.on_event("startup")
-async def startup_event():
+async def start_background_tasks():
     asyncio.create_task(cleanup_task())
+    asyncio.create_task(zombie_task_recovery())
 
 if __name__ == "__main__":
     import uvicorn
