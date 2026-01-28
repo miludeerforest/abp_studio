@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import ImageGenerator from './ImageGenerator'
 import VideoGenerator from './VideoGenerator'
+import SimpleBatchGenerator from './SimpleBatchGenerator'
 import Login from './Login'
 import Settings from './Settings';
 import StoryGenerator from './StoryGenerator';
@@ -249,6 +250,14 @@ function App() {
             <span className="icon">🎬</span>
             {!sidebarCollapsed && <span className="label">故事模式</span>}
           </button>
+          <button
+            className={`sidebar-item ${activeTab === 'simple-batch' ? 'active' : ''}`}
+            onClick={() => setActiveTab('simple-batch')}
+            title="单图批量生成"
+          >
+            <span className="icon">📦</span>
+            {!sidebarCollapsed && <span className="label">单图批量生成</span>}
+          </button>
 
           <button
             className="sidebar-item"
@@ -381,6 +390,14 @@ function App() {
             token={token}
             config={config}
             onSelectForVideo={handleSelectForVideo}
+          />
+        </div>
+
+        <div style={{ display: activeTab === 'simple-batch' ? 'block' : 'none' }}>
+          <SimpleBatchGenerator
+            token={token}
+            config={config}
+            onTabChange={setActiveTab}
           />
         </div>
 
