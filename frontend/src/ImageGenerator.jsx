@@ -435,6 +435,13 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
     // Step 2 -> 3: Generate
     const handleGenerate = async () => {
+        if (!productImg || !refImg) {
+            setError("图片已过期，请重新上传产品图和参考图后再生成")
+            setStep('input')
+            localStorage.removeItem('batchSceneState')
+            return
+        }
+        
         setLoading(true)
         setError(null)
         setStep('generating')
