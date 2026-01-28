@@ -1725,6 +1725,289 @@ async def batch_generate_workflow(
         "results": valid_results
     }
 
+
+# --- Simple Batch Generate (No Reference Image) ---
+async def call_simple_image_gen(
+    client: httpx.AsyncClient,
+    api_url: str,
+    api_key: str,
+    product_b64: str,
+    scene_prompt: str,
+    variation_index: int,
+    model: str = "gemini-3-pro-image-preview"
+) -> ImageResult:
+    """Generate image with product + text prompt only (no reference image)"""
+    angle_name = f"Variation_{variation_index}"
+    logger.info(f"Simple Image Gen for {angle_name}: {scene_prompt[:100]}...")
+    
+    system_instruction = (
+        "You are a professional product photographer and image compositing expert. "
+        "=== ABSOLUTE PRODUCT FIDELITY RULES (HIGHEST PRIORITY) ===\n"
+        "🔴 The product in the image is the HERO SUBJECT. Your task is PHOTO COMPOSITING.\n"
+        "🔴 PRESERVE 100%: Exact shape, silhouette, proportions, colors, textures, materials, logos, labels, text.\n"
+        "🔴 FORBIDDEN: Restyling, recoloring, adding/removing features, changing angles.\n"
+        "\n=== SCENE GENERATION RULES ===\n"
+        "✅ DO: Create new backgrounds, lighting, shadows, reflections based on the text prompt.\n"
+        "✅ DO: Match the lighting direction on the product to the new scene's light sources.\n"
+        "✅ DO: Follow the scene description in the prompt precisely.\n"
+        "✅ Return ONLY the final composited image."
+    )
+    
+    user_prompt_text = (
+        f"=== PRODUCT (Image) ===\n"
+        f"This is the EXACT product to composite. DO NOT modify it.\n\n"
+        f"=== SCENE INSTRUCTION ===\n"
+        f"{scene_prompt}"
+    )
+    
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_instruction},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt_text},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{product_b64}"}}
+                ]
+            }
+        ],
+        "temperature": 0.3,
+        "max_tokens": 4096
+    }
+    
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    max_retries = 3
+    base_delay = 2.0
+    
+    for attempt in range(max_retries + 1):
+        try:
+            logger.info(f"Simple Gen request for {angle_name} (Attempt {attempt+1}/{max_retries+1})")
+            async with client.stream("POST", f"{api_url}/chat/completions", json=payload, headers=headers, timeout=120.0) as response:
+                if response.status_code == 429:
+                    if attempt < max_retries:
+                        wait_time = base_delay * (2 ** attempt) * random.uniform(0.8, 1.5)
+                        logger.warning(f"Rate limited (429). Retrying in {wait_time:.1f}s...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    return ImageResult(angle_name=angle_name, error="Rate Limit Exceeded (429)")
+                
+                if response.status_code == 524:
+                    if attempt < max_retries:
+                        await asyncio.sleep(2)
+                        continue
+                    return ImageResult(angle_name=angle_name, error="服务器处理超时，请稍后重试")
+                
+                if response.status_code != 200:
+                    error_text = await response.aread()
+                    return ImageResult(angle_name=angle_name, error=f"API Error {response.status_code}: {error_text.decode('utf-8')[:200]}")
+                
+                full_content = ""
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            choices = chunk.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {}).get("content", "")
+                                if delta:
+                                    full_content += delta
+                        except:
+                            pass
+                
+                if not full_content:
+                    return ImageResult(angle_name=angle_name, error="No content in response")
+                
+                content_sample = full_content[:50].lower()
+                if content_sample.startswith("<!doctype") or "<html" in content_sample:
+                    if attempt < max_retries:
+                        await asyncio.sleep(2)
+                        continue
+                    return ImageResult(angle_name=angle_name, error="Received HTML error page")
+                
+                img_match = re.search(r'!\[.*?\]\((https?://[^\)]+)\)', full_content)
+                if img_match:
+                    return ImageResult(angle_name=angle_name, image_url=img_match.group(1), video_prompt=scene_prompt)
+                
+                b64_match = re.search(r'data:image/[^;]+;base64,([A-Za-z0-9+/=]+)', full_content)
+                if b64_match:
+                    return ImageResult(angle_name=angle_name, image_base64=b64_match.group(1), video_prompt=scene_prompt)
+                
+                if len(full_content) > 1000 and re.match(r'^[A-Za-z0-9+/=]+$', full_content.strip()):
+                    return ImageResult(angle_name=angle_name, image_base64=full_content.strip(), video_prompt=scene_prompt)
+                
+                return ImageResult(angle_name=angle_name, error=f"Could not extract image from response: {full_content[:100]}")
+                
+        except Exception as e:
+            if attempt < max_retries:
+                await asyncio.sleep(base_delay)
+                continue
+            return ImageResult(angle_name=angle_name, error=str(e))
+    
+    return ImageResult(angle_name=angle_name, error="Max retries exceeded")
+
+
+@app.post("/api/v1/simple-batch-generate", status_code=202)
+async def simple_batch_generate(
+    product_imgs: List[UploadFile] = File(...),
+    prompt: str = Form(...),
+    category: str = Form("other"),
+    aspect_ratio: str = Form("1:1"),
+    scene_style_prompt: str = Form(""),
+    gen_count: int = Form(3),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """
+    Simple batch generate: Upload 1-4 product images, generate N variations each using text prompt only.
+    No reference image needed.
+    """
+    if len(product_imgs) > 4:
+        raise HTTPException(status_code=400, detail="最多只能上传4张产品图")
+    if len(product_imgs) == 0:
+        raise HTTPException(status_code=400, detail="请至少上传1张产品图")
+    if gen_count < 1 or gen_count > 9:
+        raise HTTPException(status_code=400, detail="每图生成数量必须在1-9之间")
+    
+    db_config_list = db.query(SystemConfig).all()
+    config_dict = {item.key: item.value for item in db_config_list}
+    api_url = config_dict.get("api_url")
+    api_key = config_dict.get("api_key")
+    model_name = config_dict.get("model_name", "gemini-3-pro-image-preview")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=400, detail="Missing API Configuration")
+    
+    try:
+        log = ImageGenerationLog(user_id=user.id, count=len(product_imgs) * gen_count)
+        db.add(log)
+        activity = UserActivity(
+            user_id=user.id,
+            action="simple_batch_start",
+            details=f"开始简单批量生成 | {len(product_imgs)}张产品图 × {gen_count}张变体"
+        )
+        db.add(activity)
+        db.commit()
+        await connection_manager.update_user_activity(user.id, f"正在生成 {len(product_imgs) * gen_count} 张图片")
+    except Exception as e:
+        logger.error(f"Failed to log usage: {e}")
+    
+    final_prompt = prompt
+    if scene_style_prompt:
+        final_prompt = f"{prompt}. Visual style: {scene_style_prompt}"
+    if aspect_ratio and aspect_ratio != "1:1":
+        final_prompt = f"{final_prompt} --ar {aspect_ratio}"
+    
+    all_results = []
+    sem = asyncio.Semaphore(2)
+    
+    async def process_single_image(img_index: int, product_file: UploadFile):
+        product_b64 = await file_to_base64(product_file)
+        image_results = []
+        
+        async def generate_variation(var_index: int):
+            async with sem:
+                async with httpx.AsyncClient() as client:
+                    result = await call_simple_image_gen(
+                        client, api_url, api_key, product_b64,
+                        final_prompt, var_index, model_name
+                    )
+                    result.angle_name = f"Product{img_index+1}_Var{var_index+1}"
+                    return result
+        
+        tasks = [generate_variation(i) for i in range(gen_count)]
+        image_results = await asyncio.gather(*tasks)
+        return {"product_index": img_index, "results": image_results}
+    
+    for idx, product_file in enumerate(product_imgs):
+        try:
+            result = await process_single_image(idx, product_file)
+            all_results.append(result)
+        except Exception as e:
+            logger.error(f"Failed to process product image {idx}: {e}")
+            all_results.append({"product_index": idx, "results": [], "error": str(e)})
+    
+    gallery_dir = "/app/uploads/gallery"
+    os.makedirs(gallery_dir, exist_ok=True)
+    saved_count = 0
+    flattened_results = []
+    
+    async with httpx.AsyncClient() as download_client:
+        for product_result in all_results:
+            for r in product_result.get("results", []):
+                if hasattr(r, 'dict'):
+                    r_dict = r.dict()
+                else:
+                    r_dict = r
+                
+                if r.image_base64 or r.image_url:
+                    try:
+                        img_data = None
+                        if r.image_base64:
+                            b64 = r.image_base64
+                            if b64.startswith("data:"):
+                                b64 = b64.split(",", 1)[1]
+                            img_data = base64.b64decode(b64)
+                        elif r.image_url:
+                            resp = await download_client.get(r.image_url, timeout=30.0)
+                            if resp.status_code == 200:
+                                img_data = resp.content
+                        
+                        if img_data:
+                            timestamp = int(time.time() * 1000)
+                            filename = f"simple_batch_{user.id}_{timestamp}_{saved_count}.png"
+                            file_path = os.path.join(gallery_dir, filename)
+                            with open(file_path, "wb") as f:
+                                f.write(img_data)
+                            
+                            img_width, img_height = 1024, 1024
+                            try:
+                                from PIL import Image
+                                with Image.open(file_path) as img:
+                                    img_width, img_height = img.size
+                            except:
+                                pass
+                            
+                            new_image = SavedImage(
+                                user_id=user.id,
+                                filename=filename,
+                                file_path=file_path,
+                                url=f"/uploads/gallery/{filename}",
+                                prompt=r.video_prompt or prompt,
+                                width=img_width,
+                                height=img_height,
+                                category=category,
+                                is_shared=user.default_share if user.default_share is not None else True
+                            )
+                            db.add(new_image)
+                            saved_count += 1
+                            r_dict["saved_url"] = f"/uploads/gallery/{filename}"
+                    except Exception as e:
+                        logger.error(f"Failed to save image: {e}")
+                
+                r_dict["product_index"] = product_result["product_index"]
+                flattened_results.append(r_dict)
+    
+    if saved_count > 0:
+        db.commit()
+    
+    try:
+        await connection_manager.update_user_activity(user.id, "空闲")
+    except:
+        pass
+    
+    return {
+        "status": "completed",
+        "total_products": len(product_imgs),
+        "total_generated": len(flattened_results),
+        "saved_to_gallery": saved_count,
+        "results": flattened_results
+    }
+
+
 # --- Video Queue Models ---
 
 
