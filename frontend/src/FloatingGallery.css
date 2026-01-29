@@ -4,9 +4,23 @@
 .floating-gallery-backdrop {
     position: fixed;
     inset: 0;
+    left: 260px; /* PC端不覆盖侧边栏 */
     background: rgba(0, 0, 0, 0.3);
     z-index: 1000;
     animation: fadeIn 0.12s ease-out;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 侧边栏折叠时调整 */
+.sidebar-collapsed .floating-gallery-backdrop {
+    left: 64px;
+}
+
+/* 移动端遮罩覆盖全屏 */
+@media (max-width: 768px) {
+    .floating-gallery-backdrop {
+        left: 0;
+    }
 }
 
 /* Drawer 抽屉容器 */
