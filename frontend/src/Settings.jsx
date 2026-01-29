@@ -14,12 +14,10 @@ function Settings({ token, config, onConfigChange }) {
         site_title: '',
         site_subtitle: '',
         cache_retention_days: 7,
-        // Concurrency settings
         max_concurrent_image: 5,
         max_concurrent_video: 3,
         max_concurrent_story: 2,
         max_concurrent_per_user: 2,
-        // Video Quality Review
         review_api_url: '',
         review_api_key: '',
         review_model_name: 'gpt-4o',
@@ -29,6 +27,11 @@ function Settings({ token, config, onConfigChange }) {
     const [msg, setMsg] = useState(null)
     const [error, setError] = useState(null)
     const [activeSection, setActiveSection] = useState('all')
+    
+    const [imageModels, setImageModels] = useState([])
+    const [videoModels, setVideoModels] = useState([])
+    const [reviewModels, setReviewModels] = useState([])
+    const [loadingModels, setLoadingModels] = useState({})
 
     useEffect(() => {
         if (config) {
@@ -44,12 +47,10 @@ function Settings({ token, config, onConfigChange }) {
                 site_title: config.site_title || '',
                 site_subtitle: config.site_subtitle || '',
                 cache_retention_days: config.cache_retention_days ?? 7,
-                // Concurrency settings
                 max_concurrent_image: config.max_concurrent_image ?? 5,
                 max_concurrent_video: config.max_concurrent_video ?? 3,
                 max_concurrent_story: config.max_concurrent_story ?? 2,
                 max_concurrent_per_user: config.max_concurrent_per_user ?? 2,
-                // Video Quality Review
                 review_api_url: config.review_api_url || '',
                 review_api_key: config.review_api_key || '',
                 review_model_name: config.review_model_name || 'gpt-4o',
@@ -57,6 +58,50 @@ function Settings({ token, config, onConfigChange }) {
             })
         }
     }, [config])
+
+    const fetchModels = async (apiUrl, apiKey, type) => {
+        if (!apiUrl || !apiKey) {
+            return []
+        }
+        
+        setLoadingModels(prev => ({ ...prev, [type]: true }))
+        
+        try {
+            const res = await fetch('/api/v1/models', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ api_url: apiUrl, api_key: apiKey })
+            })
+            
+            if (res.ok) {
+                const data = await res.json()
+                return data.models || []
+            }
+        } catch (e) {
+            console.error(`Failed to fetch ${type} models:`, e)
+        } finally {
+            setLoadingModels(prev => ({ ...prev, [type]: false }))
+        }
+        return []
+    }
+
+    const refreshImageModels = async () => {
+        const models = await fetchModels(localConfig.api_url, localConfig.api_key, 'image')
+        setImageModels(models)
+    }
+
+    const refreshVideoModels = async () => {
+        const models = await fetchModels(localConfig.video_api_url, localConfig.video_api_key, 'video')
+        setVideoModels(models)
+    }
+
+    const refreshReviewModels = async () => {
+        const models = await fetchModels(localConfig.review_api_url, localConfig.review_api_key, 'review')
+        setReviewModels(models)
+    }
 
     const handleChange = (key, value) => {
         setLocalConfig(prev => ({ ...prev, [key]: value }))
@@ -91,9 +136,46 @@ function Settings({ token, config, onConfigChange }) {
         return activeSection === 'all' || activeSection === sectionId
     }
 
+    const ModelSelect = ({ value, onChange, models, loading, onRefresh, placeholder, disabled }) => (
+        <div className="model-select-wrapper">
+            <div className="model-select-row">
+                {models.length > 0 ? (
+                    <select
+                        value={value}
+                        onChange={(e) => onChange(e.target.value)}
+                        className="field-input field-select"
+                        disabled={disabled}
+                    >
+                        <option value="">-- 选择模型 --</option>
+                        {models.map(m => (
+                            <option key={m} value={m}>{m}</option>
+                        ))}
+                    </select>
+                ) : (
+                    <input
+                        type="text"
+                        value={value}
+                        onChange={(e) => onChange(e.target.value)}
+                        placeholder={placeholder}
+                        className="field-input"
+                        disabled={disabled}
+                    />
+                )}
+                <button
+                    type="button"
+                    className="refresh-models-btn"
+                    onClick={onRefresh}
+                    disabled={loading || disabled}
+                    title="获取模型列表"
+                >
+                    {loading ? '⏳' : '🔄'}
+                </button>
+            </div>
+        </div>
+    )
+
     return (
         <div className="settings-container">
-            {/* 页面标题 */}
             <div className="settings-header">
                 <h1 className="settings-title">
                     <span className="settings-icon">⚙️</span>
@@ -102,7 +184,6 @@ function Settings({ token, config, onConfigChange }) {
                 <p className="settings-subtitle">管理应用程序的核心配置和参数</p>
             </div>
 
-            {/* 快速导航标签 */}
             <div className="settings-tabs">
                 {sections.map(section => (
                     <button
@@ -116,124 +197,119 @@ function Settings({ token, config, onConfigChange }) {
                 ))}
             </div>
 
-            {/* 配置卡片网格 */}
             <div className="settings-grid">
 
-                {/* 批量场景生成配置 */}
                 {shouldShow('image') && (
                     <div className="settings-card">
                         <div className="card-header">
                             <div className="card-icon image-icon">📦</div>
                             <div className="card-title-group">
-                                <h3 className="card-title">批量场景生成</h3>
-                                <p className="card-desc">配置图片生成 API 和模型参数</p>
+                                <h3 className="card-title">图片生成 API</h3>
+                                <p className="card-desc">配置图片生成服务的连接参数</p>
                             </div>
                         </div>
                         <div className="card-content">
-                            <div className="form-row">
-                                <div className="form-field">
-                                    <label className="field-label">API URL</label>
-                                    <input
-                                        type="text"
-                                        value={localConfig.api_url}
-                                        onChange={(e) => handleChange('api_url', e.target.value)}
-                                        placeholder="https://generativelanguage.googleapis.com"
-                                        className="field-input"
-                                    />
-                                </div>
-                                <div className="form-field">
-                                    <label className="field-label">API Key</label>
-                                    <input
-                                        type="password"
-                                        value={localConfig.api_key}
-                                        onChange={(e) => handleChange('api_key', e.target.value)}
-                                        placeholder="Your API Key"
-                                        className="field-input"
-                                    />
-                                </div>
+                            <div className="form-group">
+                                <label className="field-label">API 地址</label>
+                                <input
+                                    type="text"
+                                    value={localConfig.api_url}
+                                    onChange={(e) => handleChange('api_url', e.target.value)}
+                                    placeholder="https://api.example.com/v1"
+                                    className="field-input"
+                                />
                             </div>
-                            <div className="form-row">
-                                <div className="form-field">
+                            <div className="form-group">
+                                <label className="field-label">API 密钥</label>
+                                <input
+                                    type="password"
+                                    value={localConfig.api_key}
+                                    onChange={(e) => handleChange('api_key', e.target.value)}
+                                    placeholder="sk-..."
+                                    className="field-input"
+                                />
+                            </div>
+                            <div className="form-row-2">
+                                <div className="form-group">
                                     <label className="field-label">生成模型</label>
-                                    <input
-                                        type="text"
+                                    <ModelSelect
                                         value={localConfig.model_name}
-                                        onChange={(e) => handleChange('model_name', e.target.value)}
-                                        placeholder="gemini-3-pro-image-preview"
-                                        className="field-input"
+                                        onChange={(v) => handleChange('model_name', v)}
+                                        models={imageModels}
+                                        loading={loadingModels.image}
+                                        onRefresh={refreshImageModels}
+                                        placeholder="gemini-imagen"
                                     />
                                 </div>
-                                <div className="form-field">
-                                    <label className="field-label">分析模型 (Step 1)</label>
-                                    <input
-                                        type="text"
+                                <div className="form-group">
+                                    <label className="field-label">分析模型</label>
+                                    <ModelSelect
                                         value={localConfig.analysis_model_name}
-                                        onChange={(e) => handleChange('analysis_model_name', e.target.value)}
-                                        placeholder="gemini-3-pro-preview"
-                                        className="field-input"
+                                        onChange={(v) => handleChange('analysis_model_name', v)}
+                                        models={imageModels}
+                                        loading={loadingModels.image}
+                                        onRefresh={refreshImageModels}
+                                        placeholder="gemini-2.0-flash"
                                     />
-                                    <span className="field-hint">用于分析产品和参考图片</span>
+                                    <span className="field-hint">用于分析产品图片</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* 视频生成配置 */}
                 {shouldShow('video') && (
                     <div className="settings-card">
                         <div className="card-header">
                             <div className="card-icon video-icon">🎬</div>
                             <div className="card-title-group">
-                                <h3 className="card-title">视频生成</h3>
+                                <h3 className="card-title">视频生成 API</h3>
                                 <p className="card-desc">配置视频生成服务的连接参数</p>
                             </div>
                         </div>
                         <div className="card-content">
-                            <div className="form-row three-col">
-                                <div className="form-field">
-                                    <label className="field-label">API URL</label>
-                                    <input
-                                        type="text"
-                                        value={localConfig.video_api_url}
-                                        onChange={(e) => handleChange('video_api_url', e.target.value)}
-                                        placeholder="Video Generation API URL"
-                                        className="field-input"
-                                    />
-                                </div>
-                                <div className="form-field">
-                                    <label className="field-label">API Key</label>
-                                    <input
-                                        type="password"
-                                        value={localConfig.video_api_key}
-                                        onChange={(e) => handleChange('video_api_key', e.target.value)}
-                                        placeholder="Video Generation API Key"
-                                        className="field-input"
-                                    />
-                                </div>
-                                <div className="form-field">
-                                    <label className="field-label">模型名称</label>
-                                    <input
-                                        type="text"
-                                        value={localConfig.video_model_name}
-                                        onChange={(e) => handleChange('video_model_name', e.target.value)}
-                                        placeholder="sora2-portrait-10s"
-                                        className="field-input"
-                                    />
-                                </div>
+                            <div className="form-group">
+                                <label className="field-label">API 地址</label>
+                                <input
+                                    type="text"
+                                    value={localConfig.video_api_url}
+                                    onChange={(e) => handleChange('video_api_url', e.target.value)}
+                                    placeholder="https://api.example.com/v1"
+                                    className="field-input"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="field-label">API 密钥</label>
+                                <input
+                                    type="password"
+                                    value={localConfig.video_api_key}
+                                    onChange={(e) => handleChange('video_api_key', e.target.value)}
+                                    placeholder="sk-..."
+                                    className="field-input"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="field-label">视频模型</label>
+                                <ModelSelect
+                                    value={localConfig.video_model_name}
+                                    onChange={(v) => handleChange('video_model_name', v)}
+                                    models={videoModels}
+                                    loading={loadingModels.video}
+                                    onRefresh={refreshVideoModels}
+                                    placeholder="veo-2.0"
+                                />
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* 视频质量审查配置 */}
                 {shouldShow('review') && (
                     <div className="settings-card">
                         <div className="card-header">
                             <div className="card-icon review-icon">🔍</div>
                             <div className="card-title-group">
                                 <h3 className="card-title">视频质量审查</h3>
-                                <p className="card-desc">AI 自动评估视频内容质量</p>
+                                <p className="card-desc">AI 自动评估视频质量</p>
                             </div>
                             <label className="toggle-switch">
                                 <input
@@ -242,113 +318,107 @@ function Settings({ token, config, onConfigChange }) {
                                     onChange={(e) => handleChange('review_enabled', e.target.checked)}
                                 />
                                 <span className="toggle-slider"></span>
-                                <span className="toggle-label">{localConfig.review_enabled ? '已启用' : '已禁用'}</span>
                             </label>
                         </div>
                         <div className="card-content">
-                            <div className="form-row three-col">
-                                <div className="form-field">
-                                    <label className="field-label">审查 API URL</label>
-                                    <input
-                                        type="text"
-                                        value={localConfig.review_api_url}
-                                        onChange={(e) => handleChange('review_api_url', e.target.value)}
-                                        placeholder="https://api.openai.com/v1"
-                                        className="field-input"
-                                        disabled={!localConfig.review_enabled}
-                                    />
-                                    <span className="field-hint">OAI 兼容接口</span>
-                                </div>
-                                <div className="form-field">
-                                    <label className="field-label">审查 API Key</label>
-                                    <input
-                                        type="password"
-                                        value={localConfig.review_api_key}
-                                        onChange={(e) => handleChange('review_api_key', e.target.value)}
-                                        placeholder="Your Review API Key"
-                                        className="field-input"
-                                        disabled={!localConfig.review_enabled}
-                                    />
-                                </div>
-                                <div className="form-field">
-                                    <label className="field-label">审查模型</label>
-                                    <input
-                                        type="text"
-                                        value={localConfig.review_model_name}
-                                        onChange={(e) => handleChange('review_model_name', e.target.value)}
-                                        placeholder="gpt-4o"
-                                        className="field-input"
-                                        disabled={!localConfig.review_enabled}
-                                    />
-                                    <span className="field-hint">支持图片输入的模型</span>
-                                </div>
+                            <div className="form-group">
+                                <label className="field-label">审查 API 地址</label>
+                                <input
+                                    type="text"
+                                    value={localConfig.review_api_url}
+                                    onChange={(e) => handleChange('review_api_url', e.target.value)}
+                                    placeholder="https://api.openai.com/v1"
+                                    className="field-input"
+                                    disabled={!localConfig.review_enabled}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="field-label">审查 API 密钥</label>
+                                <input
+                                    type="password"
+                                    value={localConfig.review_api_key}
+                                    onChange={(e) => handleChange('review_api_key', e.target.value)}
+                                    placeholder="sk-..."
+                                    className="field-input"
+                                    disabled={!localConfig.review_enabled}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="field-label">审查模型</label>
+                                <ModelSelect
+                                    value={localConfig.review_model_name}
+                                    onChange={(v) => handleChange('review_model_name', v)}
+                                    models={reviewModels}
+                                    loading={loadingModels.review}
+                                    onRefresh={refreshReviewModels}
+                                    placeholder="gpt-4o"
+                                    disabled={!localConfig.review_enabled}
+                                />
+                                <span className="field-hint">需支持图片输入</span>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* 系统配置 */}
                 {shouldShow('system') && (
                     <div className="settings-card">
                         <div className="card-header">
                             <div className="card-icon system-icon">🖥️</div>
                             <div className="card-title-group">
-                                <h3 className="card-title">系统配置</h3>
-                                <p className="card-desc">网站基础信息和缓存设置</p>
+                                <h3 className="card-title">网站配置</h3>
+                                <p className="card-desc">基础信息和缓存设置</p>
                             </div>
                         </div>
                         <div className="card-content">
-                            <div className="form-row">
-                                <div className="form-field">
+                            <div className="form-row-2">
+                                <div className="form-group">
                                     <label className="field-label">网站标题</label>
                                     <input
                                         type="text"
                                         value={localConfig.site_title || ''}
                                         onChange={(e) => handleChange('site_title', e.target.value)}
-                                        placeholder="Banana Product"
+                                        placeholder="ABP Studio"
                                         className="field-input"
                                     />
                                 </div>
-                                <div className="form-field">
+                                <div className="form-group">
                                     <label className="field-label">网站副标题</label>
                                     <input
                                         type="text"
                                         value={localConfig.site_subtitle || ''}
                                         onChange={(e) => handleChange('site_subtitle', e.target.value)}
-                                        placeholder="AI Product Design Studio"
+                                        placeholder="AI Product Studio"
                                         className="field-input"
                                     />
                                 </div>
                             </div>
-                            <div className="form-row">
-                                <div className="form-field">
+                            <div className="form-row-2">
+                                <div className="form-group">
                                     <label className="field-label">应用地址</label>
                                     <input
                                         type="text"
                                         value={localConfig.app_url}
                                         onChange={(e) => handleChange('app_url', e.target.value)}
-                                        placeholder="http://localhost:33012"
+                                        placeholder="https://your-domain.com"
                                         className="field-input"
                                     />
                                 </div>
-                                <div className="form-field">
-                                    <label className="field-label">📁 缓存保留 (天)</label>
+                                <div className="form-group">
+                                    <label className="field-label">缓存保留天数</label>
                                     <input
                                         type="number"
                                         min="0"
                                         value={localConfig.cache_retention_days}
                                         onChange={(e) => handleChange('cache_retention_days', parseInt(e.target.value) || 0)}
-                                        placeholder="0 = 永久保留"
                                         className="field-input"
                                     />
-                                    <span className="field-hint">设置为 0 表示永久保留</span>
+                                    <span className="field-hint">0 = 永久保留</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* 并行处理配置 */}
                 {shouldShow('performance') && (
                     <div className="settings-card full-width">
                         <div className="card-header">
@@ -359,62 +429,54 @@ function Settings({ token, config, onConfigChange }) {
                             </div>
                         </div>
                         <div className="card-content">
-                            <div className="stats-grid">
-                                <div className="stat-card">
-                                    <div className="stat-icon">🖼️</div>
-                                    <div className="stat-info">
-                                        <span className="stat-label">图片并发</span>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="20"
-                                            value={localConfig.max_concurrent_image}
-                                            onChange={(e) => handleChange('max_concurrent_image', parseInt(e.target.value) || 5)}
-                                            className="stat-input"
-                                        />
-                                    </div>
+                            <div className="performance-grid">
+                                <div className="perf-item">
+                                    <span className="perf-icon">🖼️</span>
+                                    <span className="perf-label">图片并发</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        value={localConfig.max_concurrent_image}
+                                        onChange={(e) => handleChange('max_concurrent_image', parseInt(e.target.value) || 5)}
+                                        className="perf-input"
+                                    />
                                 </div>
-                                <div className="stat-card">
-                                    <div className="stat-icon">🎬</div>
-                                    <div className="stat-info">
-                                        <span className="stat-label">视频并发</span>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="10"
-                                            value={localConfig.max_concurrent_video}
-                                            onChange={(e) => handleChange('max_concurrent_video', parseInt(e.target.value) || 3)}
-                                            className="stat-input"
-                                        />
-                                    </div>
+                                <div className="perf-item">
+                                    <span className="perf-icon">🎬</span>
+                                    <span className="perf-label">视频并发</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={localConfig.max_concurrent_video}
+                                        onChange={(e) => handleChange('max_concurrent_video', parseInt(e.target.value) || 3)}
+                                        className="perf-input"
+                                    />
                                 </div>
-                                <div className="stat-card">
-                                    <div className="stat-icon">📖</div>
-                                    <div className="stat-info">
-                                        <span className="stat-label">Story 并发</span>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="5"
-                                            value={localConfig.max_concurrent_story}
-                                            onChange={(e) => handleChange('max_concurrent_story', parseInt(e.target.value) || 2)}
-                                            className="stat-input"
-                                        />
-                                    </div>
+                                <div className="perf-item">
+                                    <span className="perf-icon">📖</span>
+                                    <span className="perf-label">故事并发</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="5"
+                                        value={localConfig.max_concurrent_story}
+                                        onChange={(e) => handleChange('max_concurrent_story', parseInt(e.target.value) || 2)}
+                                        className="perf-input"
+                                    />
                                 </div>
-                                <div className="stat-card">
-                                    <div className="stat-icon">👤</div>
-                                    <div className="stat-info">
-                                        <span className="stat-label">用户限额</span>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="10"
-                                            value={localConfig.max_concurrent_per_user}
-                                            onChange={(e) => handleChange('max_concurrent_per_user', parseInt(e.target.value) || 2)}
-                                            className="stat-input"
-                                        />
-                                    </div>
+                                <div className="perf-item">
+                                    <span className="perf-icon">👤</span>
+                                    <span className="perf-label">用户限额</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={localConfig.max_concurrent_per_user}
+                                        onChange={(e) => handleChange('max_concurrent_per_user', parseInt(e.target.value) || 2)}
+                                        className="perf-input"
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -422,7 +484,6 @@ function Settings({ token, config, onConfigChange }) {
                 )}
             </div>
 
-            {/* 保存按钮区域 */}
             <div className="settings-footer">
                 <div className="footer-status">
                     {msg && <span className="status-success">✅ {msg}</span>}
@@ -441,7 +502,7 @@ function Settings({ token, config, onConfigChange }) {
                     ) : (
                         <>
                             <span className="save-icon">💾</span>
-                            保存所有配置
+                            保存配置
                         </>
                     )}
                 </button>

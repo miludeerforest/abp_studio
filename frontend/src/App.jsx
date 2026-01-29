@@ -43,7 +43,7 @@ function App() {
   };
 
   // Tabs: 'image', 'video', 'story', 'settings', 'users'
-  const [activeTab, setActiveTab] = useState('batch')
+  const [activeTab, setActiveTab] = useState('simple-batch')
 
   // Floating Gallery state
   const [isGalleryOpen, setIsGalleryOpen] = useState(false)
@@ -227,6 +227,14 @@ function App() {
 
         <div className="sidebar-menu">
           <button
+            className={`sidebar-item ${activeTab === 'simple-batch' ? 'active' : ''}`}
+            onClick={() => setActiveTab('simple-batch')}
+            title="单图批量生成"
+          >
+            <span className="icon">📦</span>
+            {!sidebarCollapsed && <span className="label">单图批量生成</span>}
+          </button>
+          <button
             className={`sidebar-item ${activeTab === 'batch' ? 'active' : ''}`}
             onClick={() => setActiveTab('batch')}
             title="批量场景生成"
@@ -249,14 +257,6 @@ function App() {
           >
             <span className="icon">🎬</span>
             {!sidebarCollapsed && <span className="label">故事模式</span>}
-          </button>
-          <button
-            className={`sidebar-item ${activeTab === 'simple-batch' ? 'active' : ''}`}
-            onClick={() => setActiveTab('simple-batch')}
-            title="单图批量生成"
-          >
-            <span className="icon">📦</span>
-            {!sidebarCollapsed && <span className="label">单图批量生成</span>}
           </button>
 
           <button

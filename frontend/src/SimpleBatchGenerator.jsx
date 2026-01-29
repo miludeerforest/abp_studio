@@ -72,7 +72,7 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
         setLoading(true)
         setError(null)
         setStep('generating')
-        setProgress({ current: 0, total: uploadedImages.length * genCountPerImage, status: '准备中...' })
+        setProgress({ current: 0, total: genCountPerImage, status: '准备中...' })
 
         if (abortControllerRef.current) abortControllerRef.current.abort()
         abortControllerRef.current = new AbortController()
@@ -87,7 +87,7 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
             formData.append('scene_style_prompt', stylePrompt)
             formData.append('gen_count', genCountPerImage)
 
-            setProgress({ current: 0, total: uploadedImages.length * genCountPerImage, status: '正在生成图片...' })
+            setProgress({ current: 0, total: genCountPerImage, status: '正在生成图片...' })
 
             const response = await fetch(`${BACKEND_URL}/api/v1/simple-batch-generate`, {
                 method: 'POST',
@@ -98,11 +98,27 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
 
             if (!response.ok) {
                 const text = await response.text()
+                const isHtml = text.trim().toLowerCase().startsWith('<!doctype') || text.includes('<html')
+                if (isHtml) {
+                    throw new Error('服务器暂时不可用，请稍后重试')
+                }
                 throw new Error(`生成失败: ${text.slice(0, 100)}`)
             }
 
             const data = await response.json()
-            setGeneratedImages(data.results || [])
+            
+            const successResults = (data.results || []).filter(r => !r.error && (r.saved_url || r.image_url || r.image_base64))
+            const errorResults = (data.results || []).filter(r => r.error)
+            
+            if (successResults.length === 0 && errorResults.length > 0) {
+                const firstError = errorResults[0].error
+                const friendlyError = firstError.includes('<!doctype') || firstError.includes('<html') 
+                    ? '服务器暂时不可用，请稍后重试'
+                    : firstError
+                throw new Error(friendlyError)
+            }
+            
+            setGeneratedImages(successResults)
             setStep('results')
         } catch (err) {
             if (err.name === 'AbortError') {
@@ -191,18 +207,11 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
         setError(null)
     }
 
-    const groupedResults = generatedImages.reduce((acc, img, idx) => {
-        const productIndex = img.product_index ?? 0
-        if (!acc[productIndex]) acc[productIndex] = []
-        acc[productIndex].push({ ...img, globalIndex: idx })
-        return acc
-    }, {})
-
     return (
         <div className="simple-batch-generator">
             <div className="page-header">
                 <h2>📦 单图批量生成</h2>
-                <p>上传1-4张产品图，使用统一描述批量生成场景图，然后选择性生成视频</p>
+                <p>上传1张产品图，AI生成多张不同场景的效果图</p>
             </div>
 
             {error && (
@@ -214,21 +223,20 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
 
             {step === 'upload' && (
                 <div className="upload-section">
-                    <div className="section-title">📸 上传产品图 (1-4张)</div>
-                    <div className="upload-grid">
-                        {[0, 1, 2, 3].map(index => (
-                            <div key={index} className="upload-slot">
-                                {uploadedImages[index] ? (
-                                    <div className="image-preview">
-                                        <img src={URL.createObjectURL(uploadedImages[index])} alt={`产品${index + 1}`} />
-                                        <button className="remove-btn" onClick={() => removeImage(index)}>✕</button>
-                                    </div>
-                                ) : (
-                                    <label className="upload-zone">
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => handleImageUpload(e, uploadedImages.length)}
+                    <div className="section-title">📸 上传产品图</div>
+                    <div className="upload-grid" style={{justifyContent: 'center'}}>
+                        <div className="upload-slot" style={{width: '200px', height: '200px'}}>
+                            {uploadedImages[0] ? (
+                                <div className="image-preview">
+                                    <img src={URL.createObjectURL(uploadedImages[0])} alt="产品图" />
+                                    <button className="remove-btn" onClick={() => removeImage(0)}>✕</button>
+                                </div>
+                            ) : (
+                                <label className="upload-zone">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleImageUpload(e, 0)}
                                             style={{ display: 'none' }}
                                         />
                                         <div className="upload-placeholder">
@@ -238,7 +246,6 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
                                     </label>
                                 )}
                             </div>
-                        ))}
                     </div>
 
                     <div className="section-title">✨ 场景描述</div>
@@ -296,7 +303,7 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
                             </div>
 
                             <div className="config-group">
-                                <label>每图生成数量: {genCountPerImage}</label>
+                                <label>生成数量: {genCountPerImage}</label>
                                 <input
                                     type="range"
                                     min="1"
@@ -324,7 +331,7 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
                             onClick={handleGenerate}
                             disabled={uploadedImages.length === 0 || !prompt.trim() || loading}
                         >
-                            🚀 开始生成 ({uploadedImages.length} 图 × {genCountPerImage} 变体 = {uploadedImages.length * genCountPerImage} 张)
+                            🚀 开始生成 (生成 {genCountPerImage} 张场景图)
                         </button>
                     </div>
                 </div>
@@ -335,7 +342,7 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
                     <div className="loading-spinner"></div>
                     <div className="progress-text">{progress.status}</div>
                     <div className="progress-detail">
-                        正在为 {uploadedImages.length} 张产品图生成 {genCountPerImage} 个变体...
+                        正在生成 {genCountPerImage} 张场景图...
                     </div>
                     <button className="cancel-btn" onClick={() => {
                         if (abortControllerRef.current) abortControllerRef.current.abort()
@@ -356,34 +363,29 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
                         </div>
                     </div>
 
-                    {Object.entries(groupedResults).map(([productIndex, images]) => (
-                        <div key={productIndex} className="product-group">
-                            <div className="group-title">📦 产品 {parseInt(productIndex) + 1} ({images.length} 张变体)</div>
-                            <div className="results-grid">
-                                {images.map(img => (
-                                    <div
-                                        key={img.globalIndex}
-                                        className={`result-card ${selectedForVideo.has(img.globalIndex) ? 'selected' : ''}`}
-                                        onClick={() => toggleImageSelection(img.globalIndex)}
-                                    >
-                                        {img.error ? (
-                                            <div className="error-card">❌ {img.error}</div>
-                                        ) : (
-                                            <>
-                                                <img
-                                                    src={img.saved_url || img.image_url || `data:image/png;base64,${img.image_base64}`}
-                                                    alt={img.angle_name}
-                                                />
-                                                <div className="card-overlay">
-                                                    <span className="check-icon">{selectedForVideo.has(img.globalIndex) ? '✓' : ''}</span>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                ))}
+                    <div className="results-grid">
+                        {generatedImages.map((img, idx) => (
+                            <div
+                                key={idx}
+                                className={`result-card ${selectedForVideo.has(idx) ? 'selected' : ''}`}
+                                onClick={() => toggleImageSelection(idx)}
+                            >
+                                {img.error ? (
+                                    <div className="error-card">❌ {img.error}</div>
+                                ) : (
+                                    <>
+                                        <img
+                                            src={img.saved_url || img.image_url || `data:image/png;base64,${img.image_base64}`}
+                                            alt={`Result ${idx + 1}`}
+                                        />
+                                        <div className="card-overlay">
+                                            <span className="check-icon">{selectedForVideo.has(idx) ? '✓' : ''}</span>
+                                        </div>
+                                    </>
+                                )}
                             </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
 
                     <div className="video-section">
                         <div className="section-title">🎬 视频提示词</div>
