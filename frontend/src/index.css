@@ -211,6 +211,16 @@ body {
   width: 64px;
 }
 
+/* Main Content - PC default (sidebar 260px) */
+.main-content {
+  margin-left: 260px;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-collapsed .main-content {
+  margin-left: 64px;
+}
+
 .sidebar-header {
   padding: 20px 16px;
   display: flex;
@@ -444,8 +454,46 @@ body {
   padding: 16px;
   border-top: 1px solid var(--card-border);
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
-  /* ============================================
+/* Connection Status - Base styles */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.online {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+  animation: pulse-green 2s infinite;
+}
+
+.status-dot.offline {
+  background: #6b7280;
+}
+
+@keyframes pulse-green {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.9);
+  }
+}
+
+/* ============================================
    Light Mode - macOS Big Sur+ Style
    完美复刻 macOS 风格：Vibrant Light 材质、标准控件、经典配色
    ============================================ */
@@ -663,7 +711,6 @@ body {
   [data-theme="light"] * {
     transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
   }
-}
 
 @media (min-width: 1024px) {
   .sidebar-collapsed .sidebar-item {
