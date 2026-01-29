@@ -220,12 +220,11 @@ function App() {
       </button>
 
       {/* Mobile overlay */}
-      {mobileMenuOpen && (
-        <div 
-          className="mobile-overlay"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
+      <div 
+        className={`mobile-overlay ${mobileMenuOpen ? 'visible' : ''}`}
+        onClick={() => setMobileMenuOpen(false)}
+        style={{ display: mobileMenuOpen ? 'block' : 'none' }}
+      />
 
       {/* Sidebar Navigation */}
       <aside className={`sidebar-nav ${mobileMenuOpen ? 'mobile-open' : ''}`}>
