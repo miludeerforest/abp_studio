@@ -48,3 +48,30 @@
     justify-content: center;
     min-height: 65px;
 }
+
+@media (max-width: 768px) {
+    .login-container {
+        padding: 16px;
+    }
+    
+    .login-box {
+        max-width: 100%;
+    }
+    
+    .login-box h2 {
+        font-size: 1.5rem;
+    }
+    
+    .login-box input {
+        font-size: 16px;
+        padding: 14px;
+        min-height: 48px;
+    }
+    
+    .login-box button[type="submit"] {
+        width: 100%;
+        padding: 16px;
+        font-size: 16px;
+        min-height: 48px;
+    }
+}

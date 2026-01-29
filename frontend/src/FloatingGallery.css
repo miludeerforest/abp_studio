@@ -1151,37 +1151,113 @@ html[data-theme="dark"] .fg-lightbox-info {
 }
 
 /* Responsive */
-@media (max-width: 540px) {
+@media (max-width: 768px) {
     .floating-gallery-drawer {
         width: 100vw;
+        border-radius: 0;
     }
-
-    .fg-grid {
-        grid-template-columns: repeat(2, 1fr);
+    
+    .fg-header {
+        padding: 12px 16px;
     }
-
+    
+    .fg-header h3 {
+        font-size: 1.1rem;
+    }
+    
+    .fg-close-btn {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .fg-tabs {
+        padding: 0 12px;
+    }
+    
+    .fg-tab-btn {
+        padding: 10px 16px;
+        font-size: 0.9rem;
+    }
+    
+    .fg-content {
+        padding: 12px;
+    }
+    
     .fg-filters {
-        flex-wrap: wrap;
+        flex-direction: column;
+        gap: 10px;
     }
-
+    
     .fg-select {
-        flex: 1;
-        min-width: 100px;
+        width: 100%;
     }
-
+    
     .fg-filter-group {
-        flex: 1;
-        min-width: 80px;
+        width: 100%;
     }
-
+    
     .fg-search-bar {
-        padding: 0.5rem 0.75rem;
+        padding: 10px 12px;
+        font-size: 0.9rem;
     }
-
+    
+    .fg-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .fg-item {
+        border-radius: 10px;
+    }
+    
+    .fg-batch-actions {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 12px 16px;
+        background: var(--sidebar-bg);
+        border-top: 1px solid var(--card-border);
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .fg-batch-btn {
+        width: 100%;
+        justify-content: center;
+        padding: 12px;
+    }
+    
+    .fg-pagination {
+        padding-bottom: 100px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .fg-lightbox-content img,
+    .fg-lightbox-content video {
+        max-height: 55vh;
+    }
+    
+    .fg-lightbox-info {
+        max-height: 40vh;
+        border-radius: 16px 16px 0 0;
+    }
+    
     .fg-toast {
         left: 12px;
         right: 12px;
         transform: none;
         bottom: 12px;
+    }
+}
+
+@media (max-width: 540px) {
+    .fg-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fg-select {
+        font-size: 0.85rem;
     }
 }

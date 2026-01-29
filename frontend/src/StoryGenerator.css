@@ -346,3 +346,40 @@
     border-radius: 8px;
     margin-bottom: 1rem;
 }
+
+@media (max-width: 768px) {
+    .story-generator-root {
+        padding: 12px;
+    }
+    
+    .story-generator-root .steps-header {
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .story-generator-root .step-item {
+        font-size: 0.85rem;
+    }
+    
+    .story-generator-root .workspace {
+        flex-direction: column;
+    }
+    
+    .story-generator-root .story-settings-panel,
+    .story-generator-root .story-generator-panel {
+        width: 100%;
+        min-width: auto;
+    }
+    
+    .story-generator-root .shots-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .story-generator-root .btn-group {
+        flex-direction: column;
+    }
+    
+    .story-generator-root .btn-group button {
+        width: 100%;
+    }
+}

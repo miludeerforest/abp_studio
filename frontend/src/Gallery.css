@@ -1121,3 +1121,131 @@ html[data-theme="dark"] .batch-btn {
 .refresh-btn:active {
   transform: scale(0.95);
 }
+
+@media (max-width: 768px) {
+  .gallery-container {
+    padding: 12px;
+    padding-top: 8px;
+  }
+  
+  .gallery-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .gallery-header h2 {
+    font-size: 1.2rem;
+  }
+  
+  .gallery-tabs {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+  
+  .gallery-tab-btn {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    justify-content: center;
+  }
+  
+  .gallery-filters {
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+  
+  .gallery-filter-select {
+    width: 100%;
+    padding: 10px;
+  }
+  
+  .gallery-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .gallery-item {
+    border-radius: 10px;
+  }
+  
+  .gallery-item img,
+  .gallery-item video {
+    border-radius: 8px;
+  }
+  
+  .batch-actions {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px;
+    background: var(--sidebar-bg);
+    border-top: 1px solid var(--card-border);
+    z-index: 100;
+  }
+  
+  .batch-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+    font-size: 0.9rem;
+  }
+  
+  .gallery-pagination {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    padding-bottom: 80px;
+  }
+  
+  .lightbox-overlay {
+    padding: 0;
+  }
+  
+  .lightbox-content {
+    width: 100%;
+    height: auto;
+    max-height: 60vh;
+  }
+  
+  .lightbox-content img,
+  .lightbox-content video {
+    max-height: 60vh;
+    object-fit: contain;
+  }
+  
+  .lightbox-info-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 35vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 16px;
+  }
+  
+  .lightbox-close-btn {
+    top: 8px;
+    right: 8px;
+    width: 36px;
+    height: 36px;
+  }
+  
+  .lightbox-nav-btn {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .prompt-content {
+    font-size: 0.85rem;
+    max-height: 80px;
+    overflow-y: auto;
+  }
+}

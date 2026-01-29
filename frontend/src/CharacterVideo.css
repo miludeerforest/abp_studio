@@ -473,3 +473,33 @@
     color: var(--text-muted);
     margin-top: 8px;
 }
+
+@media (max-width: 768px) {
+    .character-video-container {
+        padding: 12px;
+    }
+    
+    .character-card {
+        padding: 16px;
+    }
+    
+    .character-card h3 {
+        font-size: 1rem;
+    }
+    
+    .character-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .character-item {
+        padding: 12px;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+    }
+    
+    .btn-group button {
+        width: 100%;
+    }
+}

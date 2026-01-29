@@ -660,3 +660,53 @@
     background: #ffffff;
     border-color: #d1d1d6;
 }
+
+@media (max-width: 768px) {
+    .settings-container {
+        padding: 12px;
+    }
+    
+    .settings-card {
+        padding: 16px;
+        margin: 8px 0;
+    }
+    
+    .settings-tabs {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .settings-tab {
+        flex: 1 1 45%;
+        text-align: center;
+        padding: 10px;
+    }
+    
+    .field-group {
+        flex-direction: column;
+    }
+    
+    .field-label {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+    
+    .field-input,
+    .field-select {
+        width: 100%;
+        min-height: 44px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .settings-footer {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .settings-footer button {
+        width: 100%;
+    }
+}

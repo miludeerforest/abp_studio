@@ -529,3 +529,60 @@
 .hover-glow:hover {
   box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
 }
+
+/* ============================================
+   Mobile-Specific Optimizations
+   ============================================ */
+
+@media (max-width: 768px) {
+  .btn-interactive:active,
+  .btn-ripple:active,
+  button:active {
+    transform: scale(0.97);
+    transition: transform 0.1s ease;
+  }
+  
+  .card-hover:active {
+    transform: scale(0.98);
+  }
+  
+  .touch-feedback {
+    -webkit-tap-highlight-color: rgba(99, 102, 241, 0.2);
+  }
+  
+  .mobile-slide-up {
+    animation: mobile-slide-up 0.3s var(--ease-out-expo);
+  }
+  
+  @keyframes mobile-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .mobile-fade-in {
+    animation: mobile-fade-in 0.25s ease-out;
+  }
+  
+  @keyframes mobile-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  .smooth-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  
+  input:focus,
+  textarea:focus,
+  select:focus {
+    transform: none;
+    box-shadow: 0 0 0 2px var(--primary-color);
+  }
+}

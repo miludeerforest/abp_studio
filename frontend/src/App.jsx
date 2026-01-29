@@ -51,6 +51,9 @@ function App() {
   // Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
+  // Mobile menu state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
   // Theme state: 'light' (default) or 'dark'
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('theme') || 'light'
@@ -204,8 +207,28 @@ function App() {
 
   return (
     <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {/* Mobile hamburger button */}
+      <button 
+        className="hamburger-btn"
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        aria-label={mobileMenuOpen ? "关闭菜单" : "打开菜单"}
+        aria-expanded={mobileMenuOpen}
+      >
+        <span className={`hamburger-line ${mobileMenuOpen ? 'open' : ''}`}></span>
+        <span className={`hamburger-line ${mobileMenuOpen ? 'open' : ''}`}></span>
+        <span className={`hamburger-line ${mobileMenuOpen ? 'open' : ''}`}></span>
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="mobile-overlay"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar Navigation */}
-      <aside className="sidebar-nav">
+      <aside className={`sidebar-nav ${mobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
           <div className="nav-brand">
             <div className="brand-icon">🍌</div>
@@ -220,6 +243,8 @@ function App() {
             className="sidebar-toggle"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             title={sidebarCollapsed ? '展开菜单' : '收起菜单'}
+            aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            aria-expanded={!sidebarCollapsed}
           >
             {sidebarCollapsed ? '›' : '‹'}
           </button>
@@ -228,32 +253,40 @@ function App() {
         <div className="sidebar-menu">
           <button
             className={`sidebar-item ${activeTab === 'simple-batch' ? 'active' : ''}`}
-            onClick={() => setActiveTab('simple-batch')}
-            title="单图批量生成"
+            onClick={() => { setActiveTab('simple-batch'); setMobileMenuOpen(false); }}
+            title="单图批量"
+            aria-label="单图批量"
+            aria-current={activeTab === 'simple-batch' ? 'page' : undefined}
           >
             <span className="icon">📦</span>
-            {!sidebarCollapsed && <span className="label">单图批量生成</span>}
+            {!sidebarCollapsed && <span className="label">单图批量</span>}
           </button>
           <button
             className={`sidebar-item ${activeTab === 'batch' ? 'active' : ''}`}
-            onClick={() => setActiveTab('batch')}
-            title="批量场景生成"
+            onClick={() => { setActiveTab('batch'); setMobileMenuOpen(false); }}
+            title="批量场景"
+            aria-label="批量场景"
+            aria-current={activeTab === 'batch' ? 'page' : undefined}
           >
             <span className="icon">🎨</span>
-            {!sidebarCollapsed && <span className="label">批量场景生成</span>}
+            {!sidebarCollapsed && <span className="label">批量场景</span>}
           </button>
           <button
             className={`sidebar-item ${activeTab === 'video' ? 'active' : ''}`}
-            onClick={() => setActiveTab('video')}
+            onClick={() => { setActiveTab('video'); setMobileMenuOpen(false); }}
             title="视频生成"
+            aria-label="视频生成"
+            aria-current={activeTab === 'video' ? 'page' : undefined}
           >
             <span className="icon">📹</span>
             {!sidebarCollapsed && <span className="label">视频生成</span>}
           </button>
           <button
             className={`sidebar-item ${activeTab === 'story' ? 'active' : ''}`}
-            onClick={() => setActiveTab('story')}
+            onClick={() => { setActiveTab('story'); setMobileMenuOpen(false); }}
             title="故事模式"
+            aria-label="故事模式"
+            aria-current={activeTab === 'story' ? 'page' : undefined}
           >
             <span className="icon">🎬</span>
             {!sidebarCollapsed && <span className="label">故事模式</span>}
@@ -263,6 +296,7 @@ function App() {
             className="sidebar-item"
             onClick={() => window.open('https://ai.studio/apps/drive/1yz74ruD7ppy6XwVXm-4NcnU1a09AzATR', '_blank')}
             title="泰语配音"
+            aria-label="泰语配音 - 在新标签页打开"
           >
             <span className="icon">🎙️</span>
             {!sidebarCollapsed && <span className="label">泰语配音</span>}
@@ -271,8 +305,10 @@ function App() {
           {/* Profile - All Users */}
           <button
             className={`sidebar-item ${activeTab === 'profile' ? 'active' : ''}`}
-            onClick={() => setActiveTab('profile')}
+            onClick={() => { setActiveTab('profile'); setMobileMenuOpen(false); }}
             title="个人设置"
+            aria-label="个人设置"
+            aria-current={activeTab === 'profile' ? 'page' : undefined}
           >
             <span className="icon">👤</span>
             {!sidebarCollapsed && <span className="label">个人设置</span>}
@@ -284,24 +320,30 @@ function App() {
               <div className="sidebar-divider"></div>
               <button
                 className={`sidebar-item ${activeTab === 'monitor' ? 'active' : ''}`}
-                onClick={() => setActiveTab('monitor')}
+                onClick={() => { setActiveTab('monitor'); setMobileMenuOpen(false); }}
                 title="实时监控"
+                aria-label="实时监控"
+                aria-current={activeTab === 'monitor' ? 'page' : undefined}
               >
                 <span className="icon">📊</span>
                 {!sidebarCollapsed && <span className="label">实时监控</span>}
               </button>
               <button
                 className={`sidebar-item ${activeTab === 'settings' ? 'active' : ''}`}
-                onClick={() => setActiveTab('settings')}
+                onClick={() => { setActiveTab('settings'); setMobileMenuOpen(false); }}
                 title="系统设置"
+                aria-label="系统设置"
+                aria-current={activeTab === 'settings' ? 'page' : undefined}
               >
                 <span className="icon">⚙️</span>
                 {!sidebarCollapsed && <span className="label">系统设置</span>}
               </button>
               <button
                 className={`sidebar-item ${activeTab === 'users' ? 'active' : ''}`}
-                onClick={() => setActiveTab('users')}
+                onClick={() => { setActiveTab('users'); setMobileMenuOpen(false); }}
                 title="用户管理"
+                aria-label="用户管理"
+                aria-current={activeTab === 'users' ? 'page' : undefined}
               >
                 <span className="icon">👥</span>
                 {!sidebarCollapsed && <span className="label">用户管理</span>}
@@ -336,6 +378,7 @@ function App() {
               className="theme-toggle"
               onClick={toggleTheme}
               title={theme === 'dark' ? '切换到白天模式' : '切换到夜间模式'}
+              aria-label={theme === 'dark' ? '切换到白天模式' : '切换到夜间模式'}
               style={{
                 background: 'rgba(255, 255, 255, 0.15)',
                 border: 'none',
@@ -367,13 +410,14 @@ function App() {
             className="logout-btn"
             onClick={handleLogout}
             title="登出"
+            aria-label="退出登录"
           >
             {sidebarCollapsed ? '🚪' : '登出 🚪'}
           </button>
         </div>
       </aside>
 
-      <main className="main-content">
+      <main className="main-content" id="main-content" tabIndex={-1}>
         <div style={{ display: activeTab === 'batch' ? 'block' : 'none', height: '100%' }}>
           <ImageGenerator
             token={token}

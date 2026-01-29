@@ -431,3 +431,44 @@
 .user-tasks-panel {
     grid-column: 1 / -1;
 }
+
+@media (max-width: 768px) {
+    .admin-dashboard {
+        padding: 12px;
+    }
+    
+    .dashboard-header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+    }
+    
+    .dashboard-grid {
+        gap: 16px;
+    }
+    
+    .panel {
+        padding: 16px;
+    }
+    
+    .panel h3 {
+        font-size: 1rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    
+    .stat-card {
+        padding: 12px;
+    }
+    
+    .stat-card .value {
+        font-size: 1.2rem;
+    }
+    
+    .user-list {
+        max-height: 300px;
+    }
+}

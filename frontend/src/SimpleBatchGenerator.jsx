@@ -210,7 +210,7 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
     return (
         <div className="simple-batch-generator">
             <div className="page-header">
-                <h2>📦 单图批量生成</h2>
+                <h2>📦 单图批量</h2>
                 <p>上传1张产品图，AI生成多张不同场景的效果图</p>
             </div>
 
