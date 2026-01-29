@@ -56,3 +56,4 @@ frontend/yarn-error.log*
 # Agent and Gemini local configs
 .agent/
 .gemini/
+.sisyphus/
