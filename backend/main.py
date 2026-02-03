@@ -7193,17 +7193,17 @@ async def mexico_beauty_sync_feishu(
         raise HTTPException(status_code=400, detail="飞书配置未设置，请在系统设置中配置")
     
     try:
-        token_response = await httpx.AsyncClient().post(
-            "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
-            json={"app_id": feishu_app_id, "app_secret": feishu_app_secret},
-            timeout=10.0
-        )
-        token_data = token_response.json()
-        
-        if token_data.get("code") != 0:
-            raise HTTPException(status_code=500, detail=f"飞书Token获取失败: {token_data.get('msg')}")
-        
-        tenant_token = token_data["tenant_access_token"]
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            token_response = await client.post(
+                "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+                json={"app_id": feishu_app_id, "app_secret": feishu_app_secret}
+            )
+            token_data = token_response.json()
+            
+            if token_data.get("code") != 0:
+                raise HTTPException(status_code=500, detail=f"飞书Token获取失败: {token_data.get('msg')}")
+            
+            tenant_token = token_data["tenant_access_token"]
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="飞书Token请求超时")
     except Exception as e:

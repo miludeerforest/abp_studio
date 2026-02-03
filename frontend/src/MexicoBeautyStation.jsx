@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import './MexicoBeautyStation.css'
 
 const BACKEND_URL = ''
@@ -33,13 +33,13 @@ function MexicoBeautyStation({ token }) {
         itemsRef.current = items
     }, [items])
 
-    const stats = {
+    const stats = useMemo(() => ({
         total: items.length,
         completed: items.filter(t => t.status === STATUS.COMPLETED).length,
         processing: items.filter(t => t.status === STATUS.PROCESSING).length,
         failed: items.filter(t => t.status === STATUS.FAILED).length,
         pending: items.filter(t => t.status === STATUS.PENDING).length
-    }
+    }), [items])
 
     const analyzeItem = async (item, module) => {
         const endpoint = {
@@ -75,22 +75,30 @@ function MexicoBeautyStation({ token }) {
         }
     }
 
-    const handleParse = () => {
+    const parseItems = () => {
         if (activeModule === MODULES.KEYWORD) {
             const lines = inputText.trim().split('\n').filter(l => l.trim())
-            if (lines.length === 0) return
+            if (lines.length === 0) return []
             
-            const newItems = lines.map((line, i) => ({
+            return lines.map((line, i) => ({
                 id: Date.now() + i,
                 input: line.trim(),
                 output: '',
                 status: STATUS.PENDING,
                 error: null
             }))
-            setItems(newItems)
         } else if (activeModule === MODULES.TITLE || activeModule === MODULES.DESCRIPTION) {
             const lines = inputText.trim().split('\n').filter(l => l.trim())
-            if (lines.length === 0 && selectedFiles.length === 0) return
+            if (lines.length === 0 && selectedFiles.length === 0) return []
+            
+            if (lines.length !== selectedFiles.length && lines.length > 0 && selectedFiles.length > 0) {
+                const confirmed = window.confirm(
+                    `标题数量(${lines.length})与图片数量(${selectedFiles.length})不匹配。\n` +
+                    `将自动对齐到最大数量(${Math.max(lines.length, selectedFiles.length)})。\n` +
+                    `缺失的标题将为空，缺失的图片将跳过。\n\n确定继续?`
+                )
+                if (!confirmed) return []
+            }
             
             const count = Math.max(lines.length, selectedFiles.length)
             const newItems = []
@@ -105,11 +113,11 @@ function MexicoBeautyStation({ token }) {
                     error: null
                 })
             }
-            setItems(newItems)
+            return newItems
         } else if (activeModule === MODULES.IMAGE) {
-            if (selectedFiles.length === 0) return
+            if (selectedFiles.length === 0) return []
             
-            const newItems = selectedFiles.map((file, i) => ({
+            return selectedFiles.map((file, i) => ({
                 id: Date.now() + i,
                 input: file.name,
                 image: file,
@@ -117,23 +125,38 @@ function MexicoBeautyStation({ token }) {
                 status: STATUS.PENDING,
                 error: null
             }))
+        }
+        return []
+    }
+
+    const handleParse = () => {
+        const newItems = parseItems()
+        if (newItems.length > 0) {
             setItems(newItems)
         }
     }
 
     const handleStartProcess = async () => {
-        if (items.length === 0) {
-            handleParse()
-            return
+        let itemsToProcess = items
+        
+        if (itemsToProcess.length === 0) {
+            itemsToProcess = parseItems()
+            if (itemsToProcess.length === 0) {
+                alert('没有可处理的数据，请输入标题或上传图片')
+                return
+            }
+            setItems(itemsToProcess)
         }
 
         setIsProcessing(true)
         setIsPaused(false)
         pauseRef.current = false
 
-        const queue = items
+        const queue = itemsToProcess
             .map((t, i) => ({ index: i, data: t }))
             .filter(item => item.data.status === STATUS.PENDING || item.data.status === STATUS.FAILED)
+        
+        itemsRef.current = itemsToProcess
         
         let queueIndex = 0
         let activeCount = 0
