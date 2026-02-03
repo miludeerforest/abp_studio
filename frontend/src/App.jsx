@@ -11,6 +11,7 @@ import AdminDashboard from './AdminDashboard';
 import PublicGallery from './PublicGallery';
 import ProfileSettings from './ProfileSettings';
 import KeywordExtractor from './KeywordExtractor';
+import MexicoBeautyStation from './MexicoBeautyStation';
 import { useWebSocket } from './hooks/useWebSocket';
 import './App.css';
 
@@ -303,6 +304,17 @@ function App() {
           </button>
 
           <button
+            className={`sidebar-item ${activeTab === 'mexico-beauty' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('mexico-beauty'); setMobileMenuOpen(false); }}
+            title="墨西哥美妆站"
+            aria-label="墨西哥美妆站"
+            aria-current={activeTab === 'mexico-beauty' ? 'page' : undefined}
+          >
+            <span className="icon">💄</span>
+            {!sidebarCollapsed && <span className="label">墨西哥美妆</span>}
+          </button>
+
+          <button
             className="sidebar-item"
             onClick={() => window.open('https://ai.studio/apps/drive/1yz74ruD7ppy6XwVXm-4NcnU1a09AzATR', '_blank')}
             title="泰语配音"
@@ -437,6 +449,13 @@ function App() {
 
         <div style={{ display: activeTab === 'keywords' ? 'block' : 'none' }}>
           <KeywordExtractor
+            token={token}
+            config={config}
+          />
+        </div>
+
+        <div style={{ display: activeTab === 'mexico-beauty' ? 'block' : 'none', height: '100%' }}>
+          <MexicoBeautyStation
             token={token}
             config={config}
           />
