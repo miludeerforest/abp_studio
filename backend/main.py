@@ -6952,3 +6952,32 @@ async def sync_keywords_to_feishu(
     except Exception as e:
         logger.error(f"Feishu sync error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Mexico Beauty Station ---
+# Helper function to load Mexico Beauty prompts
+def load_mexico_beauty_prompt(module_name: str) -> str:
+    """Load system prompt for Mexico Beauty module from text file."""
+    import os
+    prompt_file = os.path.join(os.path.dirname(__file__), 'prompts', f'mexico_beauty_{module_name}.txt')
+    try:
+        with open(prompt_file, 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        logger.error(f"Mexico Beauty prompt file not found: {prompt_file}")
+        return ""
+
+# Mexico Beauty request/response models
+class MexicoBeautyKeywordRequest(BaseModel):
+    title: str
+
+class MexicoBeautyTitleRequest(BaseModel):
+    title: str
+    image_base64: Optional[str] = None
+
+class MexicoBeautyImageRequest(BaseModel):
+    image_base64: str
+
+class MexicoBeautyDescriptionRequest(BaseModel):
+    title: str
+    image_base64: str
+
