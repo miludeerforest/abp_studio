@@ -7163,3 +7163,140 @@ async def mexico_description_single(
     except Exception as e:
         logger.error(f"Mexico description generation failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Mexico Beauty Feishu Sync Models
+class MexicoBeautyFeishuSyncRequest(BaseModel):
+    module: str
+    results: List[dict]
+
+class MexicoBeautyFeishuSyncResponse(BaseModel):
+    success: bool
+    synced_count: int
+    failed_count: int = 0
+    message: str
+
+@app.post("/api/v1/mexico-beauty/sync-feishu", response_model=MexicoBeautyFeishuSyncResponse)
+async def mexico_beauty_sync_feishu(
+    request: MexicoBeautyFeishuSyncRequest,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    """Sync Mexico Beauty results to Feishu spreadsheet with chunking."""
+    config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
+    
+    feishu_app_id = config_dict.get("feishu_app_id")
+    feishu_app_secret = config_dict.get("feishu_app_secret")
+    feishu_app_token = config_dict.get("feishu_app_token")
+    
+    if not all([feishu_app_id, feishu_app_secret, feishu_app_token]):
+        raise HTTPException(status_code=400, detail="飞书配置未设置，请在系统设置中配置")
+    
+    try:
+        token_response = await httpx.AsyncClient().post(
+            "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+            json={"app_id": feishu_app_id, "app_secret": feishu_app_secret},
+            timeout=10.0
+        )
+        token_data = token_response.json()
+        
+        if token_data.get("code") != 0:
+            raise HTTPException(status_code=500, detail=f"飞书Token获取失败: {token_data.get('msg')}")
+        
+        tenant_token = token_data["tenant_access_token"]
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="飞书Token请求超时")
+    except Exception as e:
+        logger.error(f"Feishu token error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    module_headers = {
+        "keyword": ["标题", "核心大词", "关键属性", "搜索组合", "时间"],
+        "title": ["原标题", "优化标题1", "优化标题2", "优化标题3", "时间"],
+        "image": ["图片名称", "Visual Prompt", "Marketing Copy", "时间"],
+        "description": ["标题", "产品描述", "使用说明", "时间"]
+    }
+    
+    headers = module_headers.get(request.module, ["输入", "输出", "时间"])
+    
+    records = []
+    for item in request.results:
+        timestamp = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+        
+        if request.module == "keyword":
+            records.append([
+                item.get("input", ""),
+                item.get("output", "")[:500],
+                "",
+                "",
+                timestamp
+            ])
+        elif request.module == "title":
+            output_lines = item.get("output", "").split("\n")
+            titles = [line for line in output_lines if line.strip()][:3]
+            records.append([
+                item.get("input", ""),
+                titles[0] if len(titles) > 0 else "",
+                titles[1] if len(titles) > 1 else "",
+                titles[2] if len(titles) > 2 else "",
+                timestamp
+            ])
+        else:
+            records.append([
+                item.get("input", ""),
+                item.get("output", "")[:1000],
+                "",
+                timestamp
+            ])
+    
+    CHUNK_SIZE = 300
+    synced_count = 0
+    failed_count = 0
+    
+    for i in range(0, len(records), CHUNK_SIZE):
+        chunk = records[i:i + CHUNK_SIZE]
+        
+        url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{feishu_app_token}/tables/tblEnwRv7jWy5ivB/records/batch_create"
+        headers_req = {"Authorization": f"Bearer {tenant_token}"}
+        
+        feishu_records = []
+        for record in chunk:
+            fields = {}
+            for idx, value in enumerate(record):
+                if idx < len(headers):
+                    fields[headers[idx]] = value
+            feishu_records.append({"fields": fields})
+        
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    url,
+                    headers=headers_req,
+                    json={"records": feishu_records}
+                )
+                data = response.json()
+                
+                if data.get("code") == 0:
+                    synced_count += len(chunk)
+                else:
+                    failed_count += len(chunk)
+                    logger.error(f"Feishu sync chunk failed: {data}")
+                
+                await asyncio.sleep(0.5)
+        except Exception as e:
+            failed_count += len(chunk)
+            logger.error(f"Feishu sync chunk error: {str(e)}")
+    
+    if failed_count > 0:
+        return MexicoBeautyFeishuSyncResponse(
+            success=False,
+            synced_count=synced_count,
+            failed_count=failed_count,
+            message=f"部分同步失败：成功 {synced_count} 条，失败 {failed_count} 条"
+        )
+    else:
+        return MexicoBeautyFeishuSyncResponse(
+            success=True,
+            synced_count=synced_count,
+            failed_count=0,
+            message=f"成功同步 {synced_count} 条记录到飞书多维表格"
+        )
