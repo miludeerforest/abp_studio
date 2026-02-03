@@ -15,7 +15,8 @@ const MODULES = {
     KEYWORD: 'keyword',
     TITLE: 'title',
     IMAGE: 'image',
-    DESCRIPTION: 'description'
+    DESCRIPTION: 'description',
+    CORE_KEYWORD: 'core_keyword'
 }
 
 function MexicoBeautyStation({ token }) {
@@ -46,10 +47,11 @@ function MexicoBeautyStation({ token }) {
             [MODULES.KEYWORD]: '/api/v1/mexico-beauty/keyword-analysis-single',
             [MODULES.TITLE]: '/api/v1/mexico-beauty/title-optimization-single',
             [MODULES.IMAGE]: '/api/v1/mexico-beauty/image-prompt-single',
-            [MODULES.DESCRIPTION]: '/api/v1/mexico-beauty/description-single'
+            [MODULES.DESCRIPTION]: '/api/v1/mexico-beauty/description-single',
+            [MODULES.CORE_KEYWORD]: '/api/v1/keywords/analyze-single'
         }[module]
 
-        if (module === MODULES.KEYWORD) {
+        if (module === MODULES.KEYWORD || module === MODULES.CORE_KEYWORD) {
             const response = await fetch(`${BACKEND_URL}${endpoint}`, {
                 method: 'POST',
                 headers: {
@@ -76,7 +78,7 @@ function MexicoBeautyStation({ token }) {
     }
 
     const parseItems = () => {
-        if (activeModule === MODULES.KEYWORD) {
+        if (activeModule === MODULES.KEYWORD || activeModule === MODULES.CORE_KEYWORD) {
             const lines = inputText.trim().split('\n').filter(l => l.trim())
             if (lines.length === 0) return []
             
@@ -176,10 +178,16 @@ function MexicoBeautyStation({ token }) {
 
                 analyzeItem(itemData, activeModule)
                     .then(result => {
+                        let outputText
+                        if (activeModule === MODULES.CORE_KEYWORD && result.translation && result.keywords) {
+                            outputText = `翻译: ${result.translation}\n核心词: ${result.keywords}`
+                        } else {
+                            outputText = result.result || JSON.stringify(result)
+                        }
                         setItems(prev => prev.map((t, idx) => 
                             idx === index ? {
                                 ...t,
-                                output: result.result || JSON.stringify(result),
+                                output: outputText,
                                 status: STATUS.COMPLETED,
                                 error: null
                             } : t
@@ -283,7 +291,7 @@ function MexicoBeautyStation({ token }) {
         <div className="mexico-beauty-container">
             <div className="mb-header">
                 <h2>🎯 营销助手</h2>
-                <p className="mb-subtitle">AI-Powered Marketing Tools - 4个智能工具模块</p>
+                <p className="mb-subtitle">AI-Powered Marketing Tools - 5个智能工具模块</p>
             </div>
 
             {!activeModule && (
@@ -351,6 +359,22 @@ function MexicoBeautyStation({ token }) {
                             </div>
                         </div>
                     </div>
+
+                    <div 
+                        className="mb-card" 
+                        onClick={() => setActiveModule(MODULES.CORE_KEYWORD)}
+                    >
+                        <div className="mb-card-header">
+                            <span className="mb-card-icon">🎯</span>
+                            <h3>核心词提取</h3>
+                        </div>
+                        <div className="mb-card-body">
+                            <p className="mb-card-desc">标题 → 中文翻译 + 4个核心关键词</p>
+                            <div className="mb-card-example">
+                                <small>快速提取产品核心卖点词</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -368,6 +392,7 @@ function MexicoBeautyStation({ token }) {
                             {activeModule === MODULES.TITLE && '✍️ 标题优化'}
                             {activeModule === MODULES.IMAGE && '🎨 图片提示词生成'}
                             {activeModule === MODULES.DESCRIPTION && '📝 产品描述生成'}
+                            {activeModule === MODULES.CORE_KEYWORD && '🎯 核心词提取'}
                         </h3>
                     </div>
 
@@ -377,11 +402,13 @@ function MexicoBeautyStation({ token }) {
                                 <label>输入数据</label>
                             </div>
                             
-                            {activeModule === MODULES.KEYWORD && (
+                            {(activeModule === MODULES.KEYWORD || activeModule === MODULES.CORE_KEYWORD) && (
                                 <div>
                                     <textarea
                                         className="mb-textarea"
-                                        placeholder="粘贴竞品标题，每行一个..."
+                                        placeholder={activeModule === MODULES.CORE_KEYWORD 
+                                            ? "粘贴产品标题，每行一个..." 
+                                            : "粘贴竞品标题，每行一个..."}
                                         rows={8}
                                         value={inputText}
                                         onChange={(e) => setInputText(e.target.value)}
@@ -391,7 +418,7 @@ function MexicoBeautyStation({ token }) {
                                         onClick={handleParse}
                                         disabled={!inputText.trim()}
                                     >
-                                        开始分析
+                                        {activeModule === MODULES.CORE_KEYWORD ? '开始提取' : '开始分析'}
                                     </button>
                                 </div>
                             )}
