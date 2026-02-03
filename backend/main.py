@@ -6981,3 +6981,185 @@ class MexicoBeautyDescriptionRequest(BaseModel):
     title: str
     image_base64: str
 
+
+# Mexico Beauty API Endpoints
+@app.post("/api/v1/mexico-beauty/keyword-analysis-single")
+async def mexico_keyword_analysis_single(
+    request: MexicoBeautyKeywordRequest,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    """Analyze competitor title to extract root keywords and attributes."""
+    await throttle_request()
+    
+    config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
+    api_url = config_dict.get("api_url")
+    api_key = config_dict.get("api_key")
+    model_name = config_dict.get("analysis_model_name", "gemini-3-pro-preview")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=400, detail="API configuration not set")
+    
+    system_prompt = load_mexico_beauty_prompt("keyword")
+    if not system_prompt:
+        raise HTTPException(status_code=500, detail="System prompt not loaded")
+    
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": request.title}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 2048
+    }
+    
+    try:
+        result_text = await call_openai_compatible_api(api_url, api_key, payload)
+        return {"result": result_text}
+    except Exception as e:
+        logger.error(f"Mexico keyword analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/mexico-beauty/title-optimization-single")
+async def mexico_title_optimization_single(
+    title: str = Form(...),
+    image: UploadFile = File(None),
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    """Optimize product title for TikTok Shop Mexico SEO."""
+    await throttle_request()
+    
+    config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
+    api_url = config_dict.get("api_url")
+    api_key = config_dict.get("api_key")
+    model_name = config_dict.get("analysis_model_name", "gemini-3-pro-preview")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=400, detail="API configuration not set")
+    
+    system_prompt = load_mexico_beauty_prompt("title")
+    if not system_prompt:
+        raise HTTPException(status_code=500, detail="System prompt not loaded")
+    
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    if image:
+        image_b64 = await file_to_base64_compressed(image, max_size=800, quality=75)
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": f"Competitor Title: {title}"},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+            ]
+        })
+    else:
+        messages.append({"role": "user", "content": f"Competitor Title: {title}"})
+    
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 1024
+    }
+    
+    try:
+        result_text = await call_openai_compatible_api(api_url, api_key, payload)
+        return {"result": result_text}
+    except Exception as e:
+        logger.error(f"Mexico title optimization failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/mexico-beauty/image-prompt-single")
+async def mexico_image_prompt_single(
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    """Generate image prompts and marketing copy from reference image."""
+    await throttle_request()
+    
+    config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
+    api_url = config_dict.get("api_url")
+    api_key = config_dict.get("api_key")
+    model_name = config_dict.get("analysis_model_name", "gemini-3-pro-preview")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=400, detail="API configuration not set")
+    
+    system_prompt = load_mexico_beauty_prompt("image")
+    if not system_prompt:
+        raise HTTPException(status_code=500, detail="System prompt not loaded")
+    
+    image_b64 = await file_to_base64_compressed(image, max_size=800, quality=75)
+    
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Please analyze this product image and generate visual prompts and marketing copy."},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+                ]
+            }
+        ],
+        "temperature": 0.8,
+        "max_tokens": 2048
+    }
+    
+    try:
+        result_text = await call_openai_compatible_api(api_url, api_key, payload)
+        return {"result": result_text}
+    except Exception as e:
+        logger.error(f"Mexico image prompt generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/mexico-beauty/description-single")
+async def mexico_description_single(
+    title: str = Form(...),
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    """Generate product description (Modo de Uso) for TikTok Shop."""
+    await throttle_request()
+    
+    config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
+    api_url = config_dict.get("api_url")
+    api_key = config_dict.get("api_key")
+    model_name = config_dict.get("analysis_model_name", "gemini-3-pro-preview")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=400, detail="API configuration not set")
+    
+    system_prompt = load_mexico_beauty_prompt("description")
+    if not system_prompt:
+        raise HTTPException(status_code=500, detail="System prompt not loaded")
+    
+    image_b64 = await file_to_base64_compressed(image, max_size=800, quality=75)
+    
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": f"Product Title: {title}\n\nGenerate usage instructions (Modo de Uso)."},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+                ]
+            }
+        ],
+        "temperature": 0.6,
+        "max_tokens": 2048
+    }
+    
+    try:
+        result_text = await call_openai_compatible_api(api_url, api_key, payload)
+        return {"result": result_text}
+    except Exception as e:
+        logger.error(f"Mexico description generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
