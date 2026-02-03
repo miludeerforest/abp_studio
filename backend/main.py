@@ -7187,8 +7187,9 @@ async def mexico_beauty_sync_feishu(
     feishu_app_id = config_dict.get("feishu_app_id")
     feishu_app_secret = config_dict.get("feishu_app_secret")
     feishu_app_token = config_dict.get("feishu_app_token")
+    feishu_table_id = config_dict.get("feishu_table_id")
     
-    if not all([feishu_app_id, feishu_app_secret, feishu_app_token]):
+    if not all([feishu_app_id, feishu_app_secret, feishu_app_token, feishu_table_id]):
         raise HTTPException(status_code=400, detail="飞书配置未设置，请在系统设置中配置")
     
     try:
@@ -7255,7 +7256,7 @@ async def mexico_beauty_sync_feishu(
     for i in range(0, len(records), CHUNK_SIZE):
         chunk = records[i:i + CHUNK_SIZE]
         
-        url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{feishu_app_token}/tables/tblEnwRv7jWy5ivB/records/batch_create"
+        url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{feishu_app_token}/tables/{feishu_table_id}/records/batch_create"
         headers_req = {"Authorization": f"Bearer {tenant_token}"}
         
         feishu_records = []
