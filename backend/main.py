@@ -6966,6 +6966,29 @@ def load_mexico_beauty_prompt(module_name: str) -> str:
         logger.error(f"Mexico Beauty prompt file not found: {prompt_file}")
         return ""
 
+async def call_chat_completion_api(api_url: str, api_key: str, payload: dict) -> str:
+    """Generic chat completion API call for Mexico Beauty endpoints."""
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    
+    target_url = api_url
+    if not target_url.endswith("/chat/completions"):
+        target_url = f"{target_url.rstrip('/')}/chat/completions"
+    
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        response = await client.post(target_url, json=payload, headers=headers)
+        
+        if response.status_code != 200:
+            error_text = response.text
+            logger.error(f"Chat completion API error: {response.status_code} - {error_text[:200]}")
+            raise HTTPException(status_code=500, detail=f"API error: {response.status_code}")
+        
+        data = response.json()
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        return content
+
 # Mexico Beauty request/response models
 class MexicoBeautyKeywordRequest(BaseModel):
     title: str
@@ -7015,7 +7038,7 @@ async def mexico_keyword_analysis_single(
     }
     
     try:
-        result_text = await call_openai_compatible_api(api_url, api_key, payload)
+        result_text = await call_chat_completion_api(api_url, api_key, payload)
         return {"result": result_text}
     except Exception as e:
         logger.error(f"Mexico keyword analysis failed: {str(e)}")
@@ -7065,7 +7088,7 @@ async def mexico_title_optimization_single(
     }
     
     try:
-        result_text = await call_openai_compatible_api(api_url, api_key, payload)
+        result_text = await call_chat_completion_api(api_url, api_key, payload)
         return {"result": result_text}
     except Exception as e:
         logger.error(f"Mexico title optimization failed: {str(e)}")
@@ -7111,7 +7134,7 @@ async def mexico_image_prompt_single(
     }
     
     try:
-        result_text = await call_openai_compatible_api(api_url, api_key, payload)
+        result_text = await call_chat_completion_api(api_url, api_key, payload)
         return {"result": result_text}
     except Exception as e:
         logger.error(f"Mexico image prompt generation failed: {str(e)}")
@@ -7158,7 +7181,7 @@ async def mexico_description_single(
     }
     
     try:
-        result_text = await call_openai_compatible_api(api_url, api_key, payload)
+        result_text = await call_chat_completion_api(api_url, api_key, payload)
         return {"result": result_text}
     except Exception as e:
         logger.error(f"Mexico description generation failed: {str(e)}")
