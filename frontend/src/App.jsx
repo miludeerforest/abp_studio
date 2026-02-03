@@ -306,12 +306,12 @@ function App() {
           <button
             className={`sidebar-item ${activeTab === 'mexico-beauty' ? 'active' : ''}`}
             onClick={() => { setActiveTab('mexico-beauty'); setMobileMenuOpen(false); }}
-            title="墨西哥美妆站"
-            aria-label="墨西哥美妆站"
+            title="营销助手"
+            aria-label="营销助手"
             aria-current={activeTab === 'mexico-beauty' ? 'page' : undefined}
           >
-            <span className="icon">💄</span>
-            {!sidebarCollapsed && <span className="label">墨西哥美妆</span>}
+            <span className="icon">🎯</span>
+            {!sidebarCollapsed && <span className="label">营销助手</span>}
           </button>
 
           <button

@@ -259,8 +259,8 @@ function MexicoBeautyStation({ token }) {
     return (
         <div className="mexico-beauty-container">
             <div className="mb-header">
-                <h2>💄 墨西哥美妆工作台</h2>
-                <p className="mb-subtitle">TikTok Mexico E-commerce AI Tools - 4个AI工具模块</p>
+                <h2>🎯 营销助手</h2>
+                <p className="mb-subtitle">AI-Powered Marketing Tools - 4个智能工具模块</p>
             </div>
 
             {!activeModule && (
