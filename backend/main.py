@@ -276,6 +276,11 @@ class ConfigItem(BaseModel):
     review_api_key: Optional[str] = None           # API 密钥
     review_model_name: Optional[str] = "gpt-4o"    # 模型名称
     review_enabled: Optional[bool] = False         # 是否启用自动审查
+    # Feishu/Lark Bitable Integration
+    feishu_app_id: Optional[str] = None            # 飞书应用 App ID
+    feishu_app_secret: Optional[str] = None        # 飞书应用 App Secret
+    feishu_app_token: Optional[str] = None         # 多维表格 App Token (从URL获取)
+    feishu_table_id: Optional[str] = None          # 数据表 Table ID
 
 
 
@@ -6585,3 +6590,365 @@ async def generate_character_video(
             "X-Accel-Buffering": "no"
         }
     )
+
+
+# ============================================
+# Keyword Extraction API Endpoints
+# ============================================
+
+class KeywordAnalyzeRequest(BaseModel):
+    title: str
+    prompt: Optional[str] = None
+
+class KeywordAnalyzeResponse(BaseModel):
+    translation: str
+    keywords: str
+
+class KeywordHistorySaveRequest(BaseModel):
+    titles: List[dict]
+
+class KeywordBatchRequest(BaseModel):
+    titles: List[str]
+    batch_size: int = 5  # Process in batches to avoid token limits
+
+# In-memory storage for keyword history (could be moved to database)
+KEYWORD_HISTORY = []
+
+@app.post("/api/v1/keywords/analyze-single", response_model=KeywordAnalyzeResponse)
+async def analyze_single_keyword(
+    request: KeywordAnalyzeRequest,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    """Analyze a single title: translate to Chinese and extract root keywords."""
+    
+    # Get config from database
+    db_config_list = db.query(SystemConfig).all()
+    config_dict = {item.key: item.value for item in db_config_list}
+    
+    api_url = config_dict.get("api_url")
+    api_key = config_dict.get("api_key")
+    model_name = config_dict.get("analysis_model_name", "gemini-3-pro-preview")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=400, detail="API configuration not set. Please configure in Settings.")
+    
+    # Build prompt
+    system_prompt = """You are a professional e-commerce title analyst. Analyze the given product title and return a JSON response.
+
+RULES:
+1. Translate the title to fluent Chinese
+2. Extract 4 root keywords in the ORIGINAL language of the title (not Chinese)
+3. Keywords should be the most important product descriptors
+4. Separate keywords with commas
+
+Return ONLY valid JSON, no additional text:
+{"translation": "中文翻译", "keywords": "Keyword1, Keyword2, Keyword3, Keyword4"}"""
+
+    user_prompt = f"Analyze this product title:\n\n{request.title}"
+    
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.3,
+        "max_tokens": 1024
+    }
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    
+    target_url = api_url
+    if not target_url.endswith("/chat/completions"):
+        target_url = f"{target_url.rstrip('/')}/chat/completions"
+    
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(target_url, json=payload, headers=headers)
+            
+            if response.status_code != 200:
+                error_text = response.text
+                logger.error(f"Keyword analysis API error: {response.status_code} - {error_text[:200]}")
+                raise HTTPException(status_code=500, detail=f"API error: {response.status_code}")
+            
+            data = response.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            # Parse JSON response
+            try:
+                # Clean potential markdown code blocks
+                content = content.strip()
+                if content.startswith("```json"):
+                    content = content[7:]
+                if content.startswith("```"):
+                    content = content[3:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                content = content.strip()
+                
+                result = json.loads(content)
+                translation = result.get("translation", "")
+                keywords = result.get("keywords", "")
+                
+                await auto_sync_to_feishu(db, request.title, translation, keywords)
+                
+                return KeywordAnalyzeResponse(
+                    translation=translation,
+                    keywords=keywords
+                )
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse keyword response: {content[:200]}")
+                # Try to extract manually
+                return KeywordAnalyzeResponse(
+                    translation=content[:200] if content else "解析失败",
+                    keywords=""
+                )
+                
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="API request timeout")
+    except Exception as e:
+        logger.error(f"Keyword analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/keywords/history")
+async def save_keyword_history(
+    request: KeywordHistorySaveRequest,
+    token: str = Depends(verify_token)
+):
+    """Save keyword extraction history."""
+    record = {
+        "created_at": datetime.now().isoformat(),
+        "count": len(request.titles),
+        "titles": request.titles
+    }
+    KEYWORD_HISTORY.insert(0, record)
+    # Keep only last 50 records
+    if len(KEYWORD_HISTORY) > 50:
+        KEYWORD_HISTORY.pop()
+    return {"success": True}
+
+
+@app.get("/api/v1/keywords/history")
+async def get_keyword_history(token: str = Depends(verify_token)):
+    return {"records": KEYWORD_HISTORY}
+
+
+@app.delete("/api/v1/keywords/history/{index}")
+async def delete_keyword_history(index: int, token: str = Depends(verify_token)):
+    if 0 <= index < len(KEYWORD_HISTORY):
+        KEYWORD_HISTORY.pop(index)
+        return {"success": True}
+    raise HTTPException(status_code=404, detail="History record not found")
+
+
+@app.delete("/api/v1/keywords/history")
+async def clear_keyword_history(token: str = Depends(verify_token)):
+    KEYWORD_HISTORY.clear()
+    return {"success": True}
+
+
+@app.post("/api/v1/keywords/export-excel")
+async def export_keywords_excel(
+    request: KeywordHistorySaveRequest,
+    token: str = Depends(verify_token)
+):
+    """Export keyword results to Excel format."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "核心大词分析"
+        
+        # Header style
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="667EEA", end_color="764BA2", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Headers
+        headers = ["标题", "标题_中文翻译", "标题_核心大词(Root Keywords)", "处理状态"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        
+        # Data rows
+        for row_idx, title_data in enumerate(request.titles, 2):
+            ws.cell(row=row_idx, column=1, value=title_data.get("original", ""))
+            ws.cell(row=row_idx, column=2, value=title_data.get("translation", ""))
+            ws.cell(row=row_idx, column=3, value=title_data.get("keywords", ""))
+            
+            status = title_data.get("status", "pending")
+            status_text = "已完成" if status == "completed" else "失败" if status == "failed" else "未处理"
+            ws.cell(row=row_idx, column=4, value=status_text)
+            
+            # Apply borders
+            for col in range(1, 5):
+                ws.cell(row=row_idx, column=col).border = thin_border
+        
+        # Column widths
+        ws.column_dimensions['A'].width = 50
+        ws.column_dimensions['B'].width = 40
+        ws.column_dimensions['C'].width = 50
+        ws.column_dimensions['D'].width = 12
+        
+        # Save to bytes
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        filename = f"keywords_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename_cn = f"核心词提取_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        
+        from urllib.parse import quote
+        encoded_filename = quote(filename_cn)
+        
+        return Response(
+            content=output.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{encoded_filename}"
+            }
+        )
+        
+    except ImportError:
+        raise HTTPException(status_code=500, detail="openpyxl not installed. Please install: pip install openpyxl")
+    except Exception as e:
+        logger.error(f"Excel export error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class FeishuSyncRequest(BaseModel):
+    titles: List[dict]
+
+class FeishuSyncResponse(BaseModel):
+    success: bool
+    synced_count: int
+    message: str
+
+async def get_feishu_tenant_token(app_id: str, app_secret: str) -> str:
+    url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, json={"app_id": app_id, "app_secret": app_secret})
+        data = response.json()
+        if data.get("code") == 0:
+            return data["tenant_access_token"]
+        raise Exception(f"Feishu auth failed: {data.get('msg', 'Unknown error')}")
+
+async def auto_sync_to_feishu(db: Session, original: str, translation: str, keywords: str):
+    import time
+    try:
+        db_config_list = db.query(SystemConfig).all()
+        config_dict = {item.key: item.value for item in db_config_list}
+        
+        app_id = config_dict.get("feishu_app_id")
+        app_secret = config_dict.get("feishu_app_secret")
+        app_token = config_dict.get("feishu_app_token")
+        table_id = config_dict.get("feishu_table_id")
+        
+        if not all([app_id, app_secret, app_token, table_id]):
+            return
+        
+        feishu_token = await get_feishu_tenant_token(app_id, app_secret)
+        beijing_timestamp = int(time.time() * 1000)
+        
+        record = {
+            "fields": {
+                "标题": original,
+                "中文翻译": translation,
+                "核心大词": keywords,
+                "同步时间": beijing_timestamp
+            }
+        }
+        
+        url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_create"
+        headers = {
+            "Authorization": f"Bearer {feishu_token}",
+            "Content-Type": "application/json"
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await client.post(url, headers=headers, json={"records": [record]})
+    except Exception as e:
+        logger.warning(f"Auto sync to Feishu failed: {str(e)}")
+
+@app.post("/api/v1/keywords/sync-feishu", response_model=FeishuSyncResponse)
+async def sync_keywords_to_feishu(
+    request: FeishuSyncRequest,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    db_config_list = db.query(SystemConfig).all()
+    config_dict = {item.key: item.value for item in db_config_list}
+    
+    app_id = config_dict.get("feishu_app_id")
+    app_secret = config_dict.get("feishu_app_secret")
+    app_token = config_dict.get("feishu_app_token")
+    table_id = config_dict.get("feishu_table_id")
+    
+    if not all([app_id, app_secret, app_token, table_id]):
+        raise HTTPException(status_code=400, detail="飞书配置不完整，请在系统设置中配置飞书 App ID、App Secret、App Token 和 Table ID")
+    
+    try:
+        feishu_token = await get_feishu_tenant_token(app_id, app_secret)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"飞书认证失败: {str(e)}")
+    
+    completed_titles = [t for t in request.titles if t.get("status") == "completed"]
+    if not completed_titles:
+        raise HTTPException(status_code=400, detail="没有已完成的记录可以同步")
+    
+    import time
+    beijing_timestamp = int(time.time() * 1000)
+    
+    records = []
+    for title in completed_titles:
+        records.append({
+            "fields": {
+                "标题": title.get("original", ""),
+                "中文翻译": title.get("translation", ""),
+                "核心大词": title.get("keywords", ""),
+                "同步时间": beijing_timestamp
+            }
+        })
+    
+    url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_create"
+    headers = {
+        "Authorization": f"Bearer {feishu_token}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(url, headers=headers, json={"records": records})
+            data = response.json()
+            
+            if data.get("code") == 0:
+                return FeishuSyncResponse(
+                    success=True,
+                    synced_count=len(completed_titles),
+                    message=f"成功同步 {len(completed_titles)} 条记录到飞书多维表格"
+                )
+            else:
+                error_msg = data.get("msg", "Unknown error")
+                logger.error(f"Feishu sync failed: {data}")
+                raise HTTPException(status_code=500, detail=f"飞书同步失败: {error_msg}")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="飞书 API 请求超时")
+    except Exception as e:
+        logger.error(f"Feishu sync error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

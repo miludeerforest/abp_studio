@@ -233,10 +233,26 @@ async def review_video(
                 result["error"] = f"API 请求失败: {response.status_code} - {response.text}"
                 return result
             
-            api_result = response.json()
+            response_text_raw = response.text
             
-        # 4. 解析结果
-        response_text = api_result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if response_text_raw.startswith("data:"):
+                full_content = ""
+                for line in response_text_raw.split("\n"):
+                    line = line.strip()
+                    if line.startswith("data:") and line != "data: [DONE]":
+                        try:
+                            chunk_data = json.loads(line[5:].strip())
+                            choices = chunk_data.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                if "content" in delta:
+                                    full_content += delta["content"]
+                        except json.JSONDecodeError:
+                            continue
+                response_text = full_content
+            else:
+                api_result = response.json()
+                response_text = api_result.get("choices", [{}])[0].get("message", {}).get("content", "")
         
         # 记录原始响应便于调试（截取前500字符）
         logger.debug(f"Raw API response (first 500 chars): {response_text[:500]}")

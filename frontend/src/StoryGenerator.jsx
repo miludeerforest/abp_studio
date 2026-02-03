@@ -453,19 +453,19 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                 <div style={{
                     background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(251, 191, 36, 0.15) 100%)',
                     border: '1px solid rgba(251, 146, 60, 0.4)',
-                    borderRadius: '8px',
-                    padding: '12px 16px',
-                    margin: '0 24px 16px 24px',
+                    borderRadius: '6px',
+                    padding: '10px 14px',
+                    margin: '0 16px 12px 16px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px'
+                    gap: '10px'
                 }}>
-                    <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                    <span style={{ fontSize: '1.1rem' }}>⚠️</span>
                     <div style={{ flex: 1 }}>
-                        <div style={{ color: '#fb923c', fontWeight: '600', marginBottom: '4px' }}>
+                        <div style={{ color: '#fb923c', fontWeight: '600', marginBottom: '2px', fontSize: '0.9rem' }}>
                             网络连接不稳定
                         </div>
-                        <div style={{ color: '#fbbf24', fontSize: '0.9rem' }}>
+                        <div style={{ color: '#fbbf24', fontSize: '0.8rem' }}>
                             无法获取最新状态，但您的任务仍在后台执行中，请稍候刷新页面查看结果
                         </div>
                     </div>
@@ -476,8 +476,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                             border: 'none',
                             color: '#fb923c',
                             cursor: 'pointer',
-                            fontSize: '1.2rem',
-                            padding: '4px'
+                            fontSize: '1.1rem',
+                            padding: '2px'
                         }}
                     >
                         ✕
@@ -512,65 +512,65 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                             <h3>故事设定</h3>
 
                             {/* Generation Mode Toggle */}
-                            <div className="form-group" style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>生成模式</label>
-                                <div style={{ display: 'flex', gap: '8px' }}>
+                            <div className="form-group" style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>生成模式</label>
+                                <div style={{ display: 'flex', gap: '6px' }}>
                                     <button
                                         onClick={() => setGenerationMode('fission')}
                                         style={{
                                             flex: 1,
-                                            padding: '10px 16px',
+                                            padding: '8px 12px',
                                             borderRadius: '6px',
                                             border: generationMode === 'fission' ? '2px solid #10b981' : '1px solid #444',
                                             background: generationMode === 'fission' ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
                                             color: generationMode === 'fission' ? '#34d399' : 'var(--text-muted)',
                                             cursor: 'pointer',
-                                            fontSize: '0.9rem',
+                                            fontSize: '0.85rem',
                                             fontWeight: generationMode === 'fission' ? '600' : '400'
                                         }}
                                     >
-                                        🚀 裂变模式（并发加速）
+                                        🚀 裂变模式
                                     </button>
                                     <button
                                         onClick={() => setGenerationMode('linear')}
                                         style={{
                                             flex: 1,
-                                            padding: '10px 16px',
+                                            padding: '8px 12px',
                                             borderRadius: '6px',
                                             border: generationMode === 'linear' ? '2px solid #6d28d9' : '1px solid #444',
                                             background: generationMode === 'linear' ? 'rgba(109, 40, 217, 0.2)' : 'transparent',
                                             color: generationMode === 'linear' ? '#a78bfa' : 'var(--text-muted)',
                                             cursor: 'pointer',
-                                            fontSize: '0.9rem',
+                                            fontSize: '0.85rem',
                                             fontWeight: generationMode === 'linear' ? '600' : '400'
                                         }}
                                     >
-                                        🔗 线性模式（一镜到底）
+                                        🔗 一镜到底
                                     </button>
                                 </div>
-                                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '6px' }}>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>
                                     {generationMode === 'fission'
-                                        ? '从产品图片裂变出多个独立场景，3个一组并发生成后合并'
+                                        ? '从产品图片裂变出多个独立场景，并发生成后合并'
                                         : '分镜脚本串行生成，保持画面连贯性'}
                                 </p>
                             </div>
 
                             {/* Product Category */}
-                            <div className="form-group" style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>产品类别</label>
-                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <div className="form-group" style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>产品类别</label>
+                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                     {CATEGORIES.map(cat => (
                                         <button
                                             key={cat.id}
                                             onClick={() => setCategory(cat.id)}
                                             style={{
-                                                padding: '8px 12px',
-                                                borderRadius: '6px',
+                                                padding: '6px 10px',
+                                                borderRadius: '5px',
                                                 border: category === cat.id ? '2px solid #6d28d9' : '1px solid #444',
                                                 background: category === cat.id ? 'rgba(109, 40, 217, 0.2)' : 'transparent',
                                                 color: category === cat.id ? '#a78bfa' : 'var(--text-muted)',
                                                 cursor: 'pointer',
-                                                fontSize: '0.9rem'
+                                                fontSize: '0.85rem'
                                             }}
                                         >
                                             {cat.icon} {cat.label}
@@ -580,8 +580,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                             </div>
 
                             {/* Visual Style */}
-                            <div className="form-group" style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>视觉风格</label>
+                            <div className="form-group" style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>视觉风格</label>
                                 <select
                                     value={visualStyle}
                                     onChange={(e) => setVisualStyle(e.target.value)}
@@ -594,8 +594,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                             </div>
 
                             {/* Camera Movement */}
-                            <div className="form-group" style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-main)', fontWeight: '600' }}>运镜风格</label>
+                            <div className="form-group" style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>运镜风格</label>
                                 <select
                                     value={cameraMovement}
                                     onChange={(e) => setCameraMovement(e.target.value)}
@@ -607,8 +607,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                 </select>
                             </div>
 
-                            <div className="form-group" style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-main)', fontWeight: '600' }}>
+                            <div className="form-group" style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', marginBottom: '4px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>
                                     镜头数量: {shotCount}
                                 </label>
                                 <input
@@ -625,7 +625,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                 value={topic}
                                 onChange={(e) => setTopic(e.target.value)}
                                 placeholder="输入故事主题..."
-                                rows={4}
+                                rows={3}
                                 className="script-input"
                             />
                             <button
@@ -636,7 +636,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                 {loading ? '正在分析...' : '生成分镜脚本'}
                             </button>
                             {loading && (
-                                <button className="secondary-btn" onClick={stopAnalysis} style={{ marginTop: '10px', width: '100%', borderColor: 'var(--error-color)', color: 'var(--error-color)' }}>
+                                <button className="secondary-btn" onClick={stopAnalysis} style={{ marginTop: '8px', width: '100%', borderColor: 'var(--error-color)', color: 'var(--error-color)', fontSize: '0.9rem' }}>
                                     ⏹ 停止分析
                                 </button>
                             )}

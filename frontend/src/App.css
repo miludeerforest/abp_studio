@@ -205,6 +205,9 @@
   .sidebar-menu {
     padding: 16px;
     gap: 8px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
   }
   
   .sidebar-item {
@@ -242,9 +245,10 @@
   }
   
   .sidebar-footer {
-    padding: 20px;
+    padding: 16px;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    margin-top: auto;
+    flex-shrink: 0;
+    background: var(--sidebar-bg);
   }
   
   [data-theme="light"] .sidebar-footer {

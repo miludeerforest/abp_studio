@@ -10,6 +10,7 @@ import FloatingGallery from './FloatingGallery';
 import AdminDashboard from './AdminDashboard';
 import PublicGallery from './PublicGallery';
 import ProfileSettings from './ProfileSettings';
+import KeywordExtractor from './KeywordExtractor';
 import { useWebSocket } from './hooks/useWebSocket';
 import './App.css';
 
@@ -290,6 +291,16 @@ function App() {
             <span className="icon">🎬</span>
             {!sidebarCollapsed && <span className="label">故事模式</span>}
           </button>
+          <button
+            className={`sidebar-item ${activeTab === 'keywords' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('keywords'); setMobileMenuOpen(false); }}
+            title="核心词提取"
+            aria-label="核心词提取"
+            aria-current={activeTab === 'keywords' ? 'page' : undefined}
+          >
+            <span className="icon">📊</span>
+            {!sidebarCollapsed && <span className="label">核心词提取</span>}
+          </button>
 
           <button
             className="sidebar-item"
@@ -350,26 +361,6 @@ function App() {
             </>
           )}
         </div>
-
-        {/* User Profile in Sidebar */}
-        {!sidebarCollapsed && userProfile && (
-          <div className="sidebar-user-profile">
-            <div className="sidebar-avatar">
-              <img src={userProfile.avatar || '/default-avatar.jpg'} alt="Avatar" />
-            </div>
-            <div className="sidebar-user-info">
-              <span className="sidebar-user-name">{userProfile.nickname || userProfile.username}</span>
-              <span className="sidebar-user-level">Lv.{userProfile.level || 1} {userProfile.level_name || '凡人'}</span>
-            </div>
-            <div className="sidebar-exp-bar">
-              <div
-                className="sidebar-exp-fill"
-                style={{ width: `${userProfile.level_progress || 0}%` }}
-              />
-            </div>
-            <span className="sidebar-exp-text">{userProfile.experience || 0} EXP</span>
-          </div>
-        )}
 
         <div className="sidebar-footer">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -441,6 +432,13 @@ function App() {
             token={token}
             config={config}
             onTabChange={setActiveTab}
+          />
+        </div>
+
+        <div style={{ display: activeTab === 'keywords' ? 'block' : 'none' }}>
+          <KeywordExtractor
+            token={token}
+            config={config}
           />
         </div>
 

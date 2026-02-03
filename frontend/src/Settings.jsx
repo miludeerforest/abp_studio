@@ -21,7 +21,11 @@ function Settings({ token, config, onConfigChange }) {
         review_api_url: '',
         review_api_key: '',
         review_model_name: 'gpt-4o',
-        review_enabled: false
+        review_enabled: false,
+        feishu_app_id: '',
+        feishu_app_secret: '',
+        feishu_app_token: '',
+        feishu_table_id: ''
     })
     const [saving, setSaving] = useState(false)
     const [msg, setMsg] = useState(null)
@@ -54,7 +58,11 @@ function Settings({ token, config, onConfigChange }) {
                 review_api_url: config.review_api_url || '',
                 review_api_key: config.review_api_key || '',
                 review_model_name: config.review_model_name || 'gpt-4o',
-                review_enabled: config.review_enabled === true || config.review_enabled === 'true'
+                review_enabled: config.review_enabled === true || config.review_enabled === 'true',
+                feishu_app_id: config.feishu_app_id || '',
+                feishu_app_secret: config.feishu_app_secret || '',
+                feishu_app_token: config.feishu_app_token || '',
+                feishu_table_id: config.feishu_table_id || ''
             })
         }
     }, [config])
@@ -128,6 +136,7 @@ function Settings({ token, config, onConfigChange }) {
         { id: 'image', label: '图片生成', icon: '📦' },
         { id: 'video', label: '视频生成', icon: '🎬' },
         { id: 'review', label: '质量审查', icon: '🔍' },
+        { id: 'feishu', label: '飞书集成', icon: '📋' },
         { id: 'system', label: '系统配置', icon: '🖥️' },
         { id: 'performance', label: '性能调优', icon: '⚡' }
     ]
@@ -355,6 +364,75 @@ function Settings({ token, config, onConfigChange }) {
                                     disabled={!localConfig.review_enabled}
                                 />
                                 <span className="field-hint">需支持图片输入</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {shouldShow('feishu') && (
+                    <div className="settings-card">
+                        <div className="card-header">
+                            <div className="card-icon feishu-icon">📋</div>
+                            <div className="card-title-group">
+                                <h3 className="card-title">飞书多维表格</h3>
+                                <p className="card-desc">同步核心词提取结果到飞书</p>
+                            </div>
+                        </div>
+                        <div className="card-content">
+                            <div className="form-row-2">
+                                <div className="form-group">
+                                    <label className="field-label">App ID</label>
+                                    <input
+                                        type="text"
+                                        value={localConfig.feishu_app_id}
+                                        onChange={(e) => handleChange('feishu_app_id', e.target.value)}
+                                        placeholder="cli_xxxxxx"
+                                        className="field-input"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label className="field-label">App Secret</label>
+                                    <input
+                                        type="password"
+                                        value={localConfig.feishu_app_secret}
+                                        onChange={(e) => handleChange('feishu_app_secret', e.target.value)}
+                                        placeholder="xxxxxx"
+                                        className="field-input"
+                                    />
+                                </div>
+                            </div>
+                            <div className="form-row-2">
+                                <div className="form-group">
+                                    <label className="field-label">App Token</label>
+                                    <input
+                                        type="text"
+                                        value={localConfig.feishu_app_token}
+                                        onChange={(e) => handleChange('feishu_app_token', e.target.value)}
+                                        placeholder="appbcbWCzen6D8dezhoCH2RpMAh"
+                                        className="field-input"
+                                    />
+                                    <span className="field-hint">从多维表格 URL 获取</span>
+                                </div>
+                                <div className="form-group">
+                                    <label className="field-label">Table ID</label>
+                                    <input
+                                        type="text"
+                                        value={localConfig.feishu_table_id}
+                                        onChange={(e) => handleChange('feishu_table_id', e.target.value)}
+                                        placeholder="tblsRc9GRRXKqhvW"
+                                        className="field-input"
+                                    />
+                                    <span className="field-hint">数据表 ID</span>
+                                </div>
+                            </div>
+                            <div className="form-hint-box">
+                                <p><strong>配置说明：</strong></p>
+                                <ol>
+                                    <li>在 <a href="https://open.feishu.cn/app" target="_blank" rel="noopener noreferrer">飞书开放平台</a> 创建应用获取 App ID 和 App Secret</li>
+                                    <li>在多维表格 URL 中获取 App Token (如: feishu.cn/base/<strong>appXXX</strong>)</li>
+                                    <li>在数据表 URL 中获取 Table ID (如: ?table=<strong>tblXXX</strong>)</li>
+                                    <li>确保表格有 "标题"、"中文翻译"、"核心大词" 三列</li>
+                                </ol>
                             </div>
                         </div>
                     </div>

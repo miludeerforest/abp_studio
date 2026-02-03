@@ -121,25 +121,32 @@ function ProfileSettings({ token, onProfileUpdate }) {
                 <p className="profile-subtitle">管理您的账户信息和偏好设置</p>
             </div>
 
-            {/* Avatar Upload Card */}
-            <div className="profile-card">
-                <h3>头像</h3>
-                <div className="avatar-section">
-                    <div className="avatar-preview">
+            {/* User Level Card */}
+            <div className="profile-card level-card">
+                <div className="level-display">
+                    <label className="level-avatar-clickable">
                         <img src={profile.avatar || '/default-avatar.jpg'} alt="Avatar" />
-                    </div>
-                    <div className="avatar-upload">
-                        <label className="upload-btn">
-                            {avatarUploading ? '上传中...' : '更换头像'}
-                            <input
-                                type="file"
-                                accept="image/jpeg,image/png,image/gif,image/webp"
-                                onChange={handleAvatarUpload}
-                                disabled={avatarUploading}
-                                hidden
-                            />
-                        </label>
-                        <p className="upload-hint">支持 JPG、PNG、GIF、WebP 格式，最大 2MB</p>
+                        <div className="avatar-overlay">
+                            {avatarUploading ? '⏳' : '📷'}
+                        </div>
+                        <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            onChange={handleAvatarUpload}
+                            disabled={avatarUploading}
+                            hidden
+                        />
+                    </label>
+                    <div className="level-info">
+                        <div className="level-name">{profile.nickname || profile.username}</div>
+                        <div className="level-badge">
+                            <span className="level-number">Lv.{profile.level || 1}</span>
+                            <span className="level-title">{profile.level_name || '凡人'}</span>
+                        </div>
+                        <div className="level-exp-bar">
+                            <div className="level-exp-fill" style={{ width: `${profile.level_progress || 0}%` }} />
+                        </div>
+                        <div className="level-exp-text">{profile.experience || 0} / {profile.next_level_exp || 100} EXP</div>
                     </div>
                 </div>
             </div>

@@ -476,19 +476,19 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                 background: 'var(--card-bg)',
                 backdropFilter: 'blur(20px)',
                 border: '1px solid var(--card-border)',
-                borderRadius: 'var(--radius-lg)',
-                padding: '24px',
-                marginBottom: '24px',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--card-padding)',
+                marginBottom: 'var(--section-gap)',
                 display: 'grid',
-                gridTemplateColumns: '1fr 300px',
-                gap: '24px'
+                gridTemplateColumns: '1fr 280px',
+                gap: 'var(--card-gap)'
             }}>
 
                 {/* Left: Upload Area */}
                 <div
                     className="upload-zone"
                     style={{
-                        minHeight: '200px',
+                        minHeight: '160px',
                         borderStyle: 'dashed',
                         borderWidth: '2px',
                         borderColor: isDragging ? 'var(--primary-color)' : 'var(--card-border)',
@@ -501,7 +501,7 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                     onDrop={handleDrop}
                 >
                     <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '10px' }}>☁️</div>
+                        <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>☁️</div>
                         <p>点击或拖拽上传图片/文本</p>
                         <small>支持 JPG, PNG, TXT (同名自动匹配)</small>
                     </div>
@@ -509,21 +509,22 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                 </div>
 
                 {/* Right: Controls */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--card-gap)' }}>
                     {/* Category Selector */}
                     <div>
-                        <span className="section-title" style={{ marginBottom: '8px', display: 'block' }}>产品类目</span>
+                        <span className="section-title" style={{ marginBottom: '6px', display: 'block', fontSize: '0.85rem' }}>产品类目</span>
                         <select
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
                             style={{
                                 width: '100%',
-                                padding: '10px',
-                                borderRadius: '8px',
+                                padding: '8px 10px',
+                                borderRadius: '6px',
                                 background: 'var(--card-bg)',
                                 backdropFilter: 'blur(20px)',
                                 border: '1px solid var(--card-border)',
-                                color: 'var(--text-main)'
+                                color: 'var(--text-main)',
+                                fontSize: '0.9rem'
                             }}
                         >
                             {CATEGORIES.map(cat => (
@@ -540,66 +541,66 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                 onChange={(e) => setCustomProductName(e.target.value)}
                                 style={{
                                     width: '100%',
-                                    padding: '10px',
-                                    marginTop: '8px',
-                                    borderRadius: '8px',
+                                    padding: '8px 10px',
+                                    marginTop: '6px',
+                                    borderRadius: '6px',
                                     background: 'var(--input-bg, transparent)',
                                     border: '1px solid var(--primary-color)',
                                     color: 'var(--text-main)',
-                                    outline: 'none'
+                                    outline: 'none',
+                                    fontSize: '0.9rem'
                                 }}
                             />
                         )}
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="section-title" style={{ marginBottom: 0 }}>默认提示词</span>
+                        <span className="section-title" style={{ marginBottom: 0, fontSize: '0.85rem' }}>默认提示词</span>
                     </div>
 
-                    <div>
+<div>
                         <textarea
                             value={globalPrompt}
                             onChange={(e) => setGlobalPrompt(e.target.value)}
-                            rows="3"
-                            style={{ resize: 'none' }}
+                            rows="2"
+                            style={{ resize: 'none', fontSize: '0.9rem', padding: '8px 10px' }}
                             placeholder="当未匹配到同名txt文件时使用此提示词"
                         />
                     </div>
 
-                    <div style={{ marginTop: 'auto', display: 'flex', gap: '10px', alignItems: 'center', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary-color)' }}></span>
+                    <div style={{ marginTop: 'auto', display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary-color)' }}></span>
                             进行中: {processingNow}/{CONCURRENT_LIMIT}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#666' }}></span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#666' }}></span>
                             等待中: {pendingCount}
                         </div>
-                        <div style={{ marginLeft: 'auto', fontSize: '0.8rem', color: '#666' }}>
+                        <div style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#666' }}>
                             ⚙️ 更多配置请前往系统设置
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* \u7f51\u7edc\u8fde\u63a5\u8b66\u544a\u6a2a\u5e45 */}
             {connectionWarning && (
                 <div style={{
                     background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(251, 191, 36, 0.15) 100%)',
                     border: '1px solid rgba(251, 146, 60, 0.4)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '16px 20px',
-                    margin: '0 0 24px 0',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 16px',
+                    marginBottom: 'var(--section-gap)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px'
+                    gap: '10px'
                 }}>
-                    <span style={{ fontSize: '1.3rem' }}>⚠️</span>
+                    <span style={{ fontSize: '1.2rem' }}>⚠️</span>
                     <div style={{ flex: 1 }}>
-                        <div style={{ color: '#fb923c', fontWeight: '600', marginBottom: '4px', fontSize: '0.95rem' }}>
+                        <div style={{ color: '#fb923c', fontWeight: '600', marginBottom: '2px', fontSize: '0.9rem' }}>
                             网络连接不稳定
                         </div>
-                        <div style={{ color: '#fbbf24', fontSize: '0.85rem', lineHeight: '1.4' }}>
+                        <div style={{ color: '#fbbf24', fontSize: '0.8rem', lineHeight: '1.4' }}>
                             无法获取最新队列状态，但视频生成任务仍在后台执行。<br />
                             请稍候刷新页面或等待连接恢复后查看结果。
                         </div>
@@ -629,13 +630,13 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                 background: 'var(--card-bg)',
                 backdropFilter: 'blur(20px)',
                 border: '1px solid var(--card-border)',
-                borderRadius: 'var(--radius-lg)',
-                padding: '24px',
-                minHeight: '300px'
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--card-padding)',
+                minHeight: '250px'
             }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div className="section-title" style={{ marginBottom: 0 }}>任务队列 ({queue.length})</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--card-gap)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--card-gap)' }}>
+                        <div className="section-title" style={{ marginBottom: 0, fontSize: '0.95rem' }}>任务队列 ({queue.length})</div>
                         {/* Merge Button */}
                         {selectedVideoIds.size > 0 && (
                             <button
@@ -643,21 +644,21 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                 onClick={handleMergeVideos}
                                 disabled={isMerging}
                                 style={{
-                                    padding: '6px 16px',
-                                    fontSize: '0.9rem',
+                                    padding: '5px 12px',
+                                    fontSize: '0.8rem',
                                     background: 'var(--primary-color)',
                                     opacity: isMerging ? 0.7 : 1
                                 }}
                             >
-                                {isMerging ? '🔄 合成中...' : `🔗 合成选中的视频 (${selectedVideoIds.size})`}
+                                {isMerging ? '🔄 合成中...' : `🔗 合成选中 (${selectedVideoIds.size})`}
                             </button>
                         )}
                     </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <button className="btn-secondary" onClick={clearDone} style={{ fontSize: '0.8rem' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="btn-secondary" onClick={clearDone} style={{ fontSize: '0.75rem', padding: '5px 10px' }}>
                             {userRole === 'admin' ? '清除已完成' : '清除我的已完成'}
                         </button>
-                        <button className="btn-secondary" onClick={clearAll} style={{ fontSize: '0.8rem', color: 'var(--error-color)' }}>
+                        <button className="btn-secondary" onClick={clearAll} style={{ fontSize: '0.75rem', padding: '5px 10px', color: 'var(--error-color)' }}>
                             {userRole === 'admin' ? '清除全部' : '清除我的任务'}
                         </button>
                     </div>
@@ -666,7 +667,7 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                 {/* Queue List Item Update: Add Checkbox */}
                 {queue.length === 0 ? (
                     <div style={{
-                        height: '200px',
+                        height: '180px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -675,22 +676,22 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                         borderRadius: 'var(--radius-md)'
                     }}>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '2rem', marginBottom: '10px' }}>📹</div>
-                            <p>暂无任务，请上传图片开始生成</p>
+                            <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>📹</div>
+                            <p style={{ fontSize: '0.9rem' }}>暂无任务，请上传图片开始生成</p>
                         </div>
                     </div>
                 ) : (
-                    <div className="queue-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div className="queue-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {queue.map(item => (
                             <div key={item.id} className="queue-item" style={{
                                 display: 'grid',
-                                gridTemplateColumns: '40px 80px 1fr 120px 100px', // Adjusted grid
-                                gap: '16px',
+                                gridTemplateColumns: '32px 64px 1fr 100px 90px',
+                                gap: '10px',
                                 background: selectedVideoIds.has(item.id) ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-secondary, rgba(255,255,255,0.03))',
                                 backdropFilter: 'blur(10px)',
                                 border: selectedVideoIds.has(item.id) ? '1px solid var(--primary-color)' : '1px solid var(--card-border)',
-                                borderRadius: '8px',
-                                padding: '12px',
+                                borderRadius: '6px',
+                                padding: '10px',
                                 alignItems: 'center',
                                 transition: 'all 0.2s'
                             }}>
@@ -701,7 +702,7 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                             type="checkbox"
                                             checked={selectedVideoIds.has(item.id)}
                                             onChange={() => toggleSelection(item.id)}
-                                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                                         />
                                     )}
                                 </div>
@@ -709,8 +710,8 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                 {/* Thumbnail */}
                                 <div
                                     style={{
-                                        width: '80px',
-                                        height: '80px',
+                                        width: '64px',
+                                        height: '64px',
                                         borderRadius: '4px',
                                         overflow: 'hidden',
                                         background: '#000',

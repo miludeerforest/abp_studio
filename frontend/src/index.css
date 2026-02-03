@@ -13,6 +13,20 @@
   --success-color: #10b981;
   --error-color: #ef4444;
 
+  /* Spacing System - 8px Grid */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+
+  /* Component Spacing */
+  --card-padding: 16px;
+  --card-gap: 12px;
+  --section-gap: 16px;
+  --grid-gap: 16px;
+
   /* Spacing */
   --radius-lg: 16px;
   --radius-md: 12px;
@@ -47,9 +61,8 @@
     gap: 24px;
   }
   
-  .image-workspace {
-    grid-template-columns: 360px 1fr;
-    gap: 32px;
+  .video-generator {
+    max-width: 1400px;
   }
   
   .sidebar {
@@ -74,9 +87,8 @@
     gap: 28px;
   }
   
-  .image-workspace {
-    grid-template-columns: 400px 1fr;
-    gap: 40px;
+  .video-generator {
+    max-width: 1600px;
   }
   
   .main-content {
@@ -105,9 +117,8 @@
     gap: 32px;
   }
   
-  .image-workspace {
-    grid-template-columns: 440px 1fr;
-    gap: 48px;
+  .video-generator {
+    max-width: 1800px;
   }
   
   body {
@@ -147,6 +158,37 @@
   max-width: var(--content-max-width);
   margin: 0 auto;
   padding: 0 var(--content-padding);
+  width: 100%;
+}
+
+/* 通用页面布局基础样式 */
+.image-workspace {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: calc(100vh - 48px);
+  gap: 20px;
+  box-sizing: border-box;
+}
+
+.video-generator {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  width: 100%;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
   width: 100%;
 }
 
@@ -214,11 +256,17 @@ body {
 /* Main Content - PC default (sidebar 260px) */
 .main-content {
   margin-left: 260px;
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 100vh;
+  padding: 24px 32px;
+  width: calc(100% - 260px);
+  max-width: 100%;
+  box-sizing: border-box;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-collapsed .main-content {
   margin-left: 64px;
+  width: calc(100% - 64px);
 }
 
 .sidebar-header {

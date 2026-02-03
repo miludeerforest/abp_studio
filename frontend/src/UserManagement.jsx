@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 
-// 用户管理界面专用样式
 const styles = {
     container: {
-        padding: '32px',
-        maxWidth: '1600px',
+        padding: '20px',
+        maxWidth: '1400px',
         margin: '0 auto',
         width: '100%'
     },
@@ -12,60 +11,58 @@ const styles = {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '28px',
+        marginBottom: '16px',
         flexWrap: 'wrap',
-        gap: '16px'
+        gap: '12px'
     },
     title: {
-        fontSize: '1.8rem',
+        fontSize: '1.4rem',
         fontWeight: '700',
         background: 'linear-gradient(135deg, #6366f1, #a855f7)',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
         backgroundClip: 'text'
     },
-    // 统计卡片网格
     statsGrid: {
         display: 'grid',
         gridTemplateColumns: 'repeat(5, 1fr)',
-        gap: '16px',
-        marginBottom: '32px'
+        gap: '12px',
+        marginBottom: '20px'
     },
     statCard: {
-        padding: '20px',
+        padding: '14px',
         textAlign: 'center',
-        borderRadius: '16px',
+        borderRadius: '10px',
         transition: 'transform 0.2s ease, box-shadow 0.2s ease'
     },
     statLabel: {
         margin: 0,
-        fontSize: '0.85rem',
+        fontSize: '0.75rem',
         color: '#9ca3af',
-        marginBottom: '8px',
+        marginBottom: '4px',
         fontWeight: '500'
     },
     statValue: {
-        fontSize: '2rem',
+        fontSize: '1.5rem',
         fontWeight: 'bold',
         lineHeight: 1.2
     },
-    // 表格样式
     tableContainer: {
         overflowX: 'auto',
-        borderRadius: '16px'
+        borderRadius: '10px'
     },
     table: {
         width: '100%',
         borderCollapse: 'separate',
         borderSpacing: 0,
-        minWidth: '900px'
+        minWidth: '800px'
     },
     tableHead: {
         background: 'rgba(99, 102, 241, 0.1)'
     },
     th: {
-        padding: '16px 12px',
-        fontSize: '0.85rem',
+        padding: '10px 8px',
+        fontSize: '0.75rem',
         fontWeight: '600',
         color: '#a5b4fc',
         textTransform: 'uppercase',
@@ -73,61 +70,58 @@ const styles = {
         whiteSpace: 'nowrap'
     },
     td: {
-        padding: '16px 12px',
+        padding: '10px 8px',
         borderBottom: '1px solid var(--card-border)',
-        verticalAlign: 'middle'
+        verticalAlign: 'middle',
+        fontSize: '0.85rem'
     },
-    // 操作按钮
     actionButton: {
-        padding: '6px 12px',
-        fontSize: '0.8rem',
-        borderRadius: '6px',
+        padding: '4px 10px',
+        fontSize: '0.75rem',
+        borderRadius: '5px',
         whiteSpace: 'nowrap',
         transition: 'all 0.2s ease'
     },
     deleteButton: {
-        padding: '6px 12px',
-        fontSize: '0.8rem',
-        borderRadius: '6px',
+        padding: '4px 10px',
+        fontSize: '0.75rem',
+        borderRadius: '5px',
         background: 'rgba(239, 68, 68, 0.15)',
         color: '#f87171',
         border: '1px solid rgba(239, 68, 68, 0.3)',
         whiteSpace: 'nowrap',
         transition: 'all 0.2s ease'
     },
-    // 角色标签
     roleBadge: (isAdmin) => ({
         background: isAdmin ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'rgba(156, 163, 175, 0.2)',
         color: '#fff',
-        padding: '4px 12px',
-        borderRadius: '20px',
-        fontSize: '0.75rem',
+        padding: '3px 10px',
+        borderRadius: '12px',
+        fontSize: '0.7rem',
         fontWeight: '600',
         textTransform: 'uppercase',
         letterSpacing: '0.05em',
         display: 'inline-block'
     }),
-    // 等级标签
     levelBadge: (exp) => ({
         background: exp < 0
             ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1))'
             : 'linear-gradient(135deg, rgba(255, 165, 0, 0.2), rgba(255, 215, 0, 0.15))',
         color: exp < 0 ? '#f87171' : '#fbbf24',
-        padding: '4px 12px',
-        borderRadius: '20px',
-        fontSize: '0.8rem',
+        padding: '3px 10px',
+        borderRadius: '12px',
+        fontSize: '0.7rem',
         fontWeight: '600',
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '4px',
+        gap: '3px',
         border: exp < 0 ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255, 165, 0, 0.3)'
     }),
     expText: (exp) => ({
         color: exp < 0 ? '#f87171' : '#9ca3af',
         fontWeight: exp < 0 ? '600' : '500',
-        fontSize: '0.9rem'
+        fontSize: '0.8rem'
     }),
-    // 模态框
     modalOverlay: {
         position: 'fixed',
         top: 0, left: 0, right: 0, bottom: 0,
@@ -139,23 +133,23 @@ const styles = {
         zIndex: 1000
     },
     modalContent: {
-        padding: '32px',
-        width: '420px',
+        padding: '24px',
+        width: '380px',
         maxWidth: '90vw',
-        borderRadius: '20px'
+        borderRadius: '14px'
     },
     modalTitle: {
-        marginBottom: '24px',
-        fontSize: '1.4rem',
+        marginBottom: '18px',
+        fontSize: '1.2rem',
         fontWeight: '600'
     },
     formGroup: {
-        marginBottom: '20px'
+        marginBottom: '14px'
     },
     formLabel: {
         display: 'block',
-        marginBottom: '8px',
-        fontSize: '0.9rem',
+        marginBottom: '6px',
+        fontSize: '0.85rem',
         fontWeight: '500',
         color: '#9ca3af'
     },

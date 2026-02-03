@@ -11,3 +11,4 @@ bcrypt==3.2.2
 python-jose[cryptography]
 redis>=5.0.0
 websockets
+openpyxl
