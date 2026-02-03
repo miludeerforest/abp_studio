@@ -21,6 +21,8 @@ const MODULES = {
 function MexicoBeautyStation({ token }) {
     const [activeModule, setActiveModule] = useState(null)
     const [items, setItems] = useState([])
+    const [inputText, setInputText] = useState('')
+    const [selectedFiles, setSelectedFiles] = useState([])
     const [isProcessing, setIsProcessing] = useState(false)
     const [isPaused, setIsPaused] = useState(false)
     const pauseRef = useRef(false)
@@ -39,6 +41,208 @@ function MexicoBeautyStation({ token }) {
         pending: items.filter(t => t.status === STATUS.PENDING).length
     }
 
+    const analyzeItem = async (item, module) => {
+        const endpoint = {
+            [MODULES.KEYWORD]: '/api/v1/mexico-beauty/keyword-analysis-single',
+            [MODULES.TITLE]: '/api/v1/mexico-beauty/title-optimization-single',
+            [MODULES.IMAGE]: '/api/v1/mexico-beauty/image-prompt-single',
+            [MODULES.DESCRIPTION]: '/api/v1/mexico-beauty/description-single'
+        }[module]
+
+        if (module === MODULES.KEYWORD) {
+            const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ title: item.input })
+            })
+            if (!response.ok) throw new Error(await response.text())
+            return await response.json()
+        } else {
+            const formData = new FormData()
+            if (item.title) formData.append('title', item.title)
+            if (item.image) formData.append('image', item.image)
+            
+            const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            })
+            if (!response.ok) throw new Error(await response.text())
+            return await response.json()
+        }
+    }
+
+    const handleParse = () => {
+        if (activeModule === MODULES.KEYWORD) {
+            const lines = inputText.trim().split('\n').filter(l => l.trim())
+            if (lines.length === 0) return
+            
+            const newItems = lines.map((line, i) => ({
+                id: Date.now() + i,
+                input: line.trim(),
+                output: '',
+                status: STATUS.PENDING,
+                error: null
+            }))
+            setItems(newItems)
+        } else if (activeModule === MODULES.TITLE || activeModule === MODULES.DESCRIPTION) {
+            const lines = inputText.trim().split('\n').filter(l => l.trim())
+            if (lines.length === 0 && selectedFiles.length === 0) return
+            
+            const count = Math.max(lines.length, selectedFiles.length)
+            const newItems = []
+            for (let i = 0; i < count; i++) {
+                newItems.push({
+                    id: Date.now() + i,
+                    input: lines[i] || '',
+                    title: lines[i] || '',
+                    image: selectedFiles[i] || null,
+                    output: '',
+                    status: STATUS.PENDING,
+                    error: null
+                })
+            }
+            setItems(newItems)
+        } else if (activeModule === MODULES.IMAGE) {
+            if (selectedFiles.length === 0) return
+            
+            const newItems = selectedFiles.map((file, i) => ({
+                id: Date.now() + i,
+                input: file.name,
+                image: file,
+                output: '',
+                status: STATUS.PENDING,
+                error: null
+            }))
+            setItems(newItems)
+        }
+    }
+
+    const handleStartProcess = async () => {
+        if (items.length === 0) {
+            handleParse()
+            return
+        }
+
+        setIsProcessing(true)
+        setIsPaused(false)
+        pauseRef.current = false
+
+        const queue = items
+            .map((t, i) => ({ index: i, data: t }))
+            .filter(item => item.data.status === STATUS.PENDING || item.data.status === STATUS.FAILED)
+        
+        let queueIndex = 0
+        let activeCount = 0
+        
+        const processNext = () => {
+            while (queueIndex < queue.length && activeCount < CONCURRENCY && !pauseRef.current) {
+                const current = queue[queueIndex]
+                queueIndex++
+                activeCount++
+                
+                const index = current.index
+                const itemData = itemsRef.current[index]
+                
+                setItems(prev => prev.map((t, idx) => 
+                    idx === index ? { ...t, status: STATUS.PROCESSING } : t
+                ))
+
+                analyzeItem(itemData, activeModule)
+                    .then(result => {
+                        setItems(prev => prev.map((t, idx) => 
+                            idx === index ? {
+                                ...t,
+                                output: result.result || JSON.stringify(result),
+                                status: STATUS.COMPLETED,
+                                error: null
+                            } : t
+                        ))
+                    })
+                    .catch(error => {
+                        setItems(prev => prev.map((t, idx) => 
+                            idx === index ? {
+                                ...t,
+                                status: STATUS.FAILED,
+                                error: error.message
+                            } : t
+                        ))
+                    })
+                    .finally(() => {
+                        activeCount--
+                        if (!pauseRef.current) {
+                            processNext()
+                        }
+                        if (activeCount === 0 && (queueIndex >= queue.length || pauseRef.current)) {
+                            setIsProcessing(false)
+                        }
+                    })
+            }
+            
+            if (queueIndex >= queue.length && activeCount === 0) {
+                setIsProcessing(false)
+            }
+        }
+
+        processNext()
+    }
+
+    const handlePause = () => {
+        pauseRef.current = true
+        setIsPaused(true)
+    }
+
+    const handleSyncFeishu = async () => {
+        const completedItems = items.filter(t => t.status === STATUS.COMPLETED)
+        if (completedItems.length === 0) {
+            alert('没有已完成的记录可以同步')
+            return
+        }
+
+        setSyncingFeishu(true)
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/v1/mexico-beauty/sync-feishu`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ 
+                    module: activeModule,
+                    results: completedItems 
+                })
+            })
+
+            const data = await response.json()
+            
+            if (!response.ok) {
+                throw new Error(data.detail || '同步失败')
+            }
+
+            alert(data.message || `成功同步 ${completedItems.length} 条记录`)
+        } catch (error) {
+            console.error('Feishu sync failed:', error)
+            alert('同步到飞书失败: ' + error.message)
+        } finally {
+            setSyncingFeishu(false)
+        }
+    }
+
+    const handleClear = () => {
+        setItems([])
+        setInputText('')
+        setSelectedFiles([])
+        setActiveModule(null)
+    }
+
+    const handleFileSelect = (e) => {
+        const files = Array.from(e.target.files)
+        setSelectedFiles(files)
+    }
+
     const getStatusIndicator = (status) => {
         switch (status) {
             case STATUS.COMPLETED:
@@ -50,21 +254,6 @@ function MexicoBeautyStation({ token }) {
             default:
                 return <span className="status-dot status-pending" title="待处理">⚪</span>
         }
-    }
-
-    const handleStartProcess = () => {
-        // TODO: Implement batch processing logic (Task 5)
-        alert('批量处理功能将在 Task 5 实现')
-    }
-
-    const handleSyncFeishu = () => {
-        // TODO: Implement Feishu sync (Task 6)
-        alert('飞书同步功能将在 Task 6 实现')
-    }
-
-    const handleClear = () => {
-        setItems([])
-        setActiveModule(null)
     }
 
     return (
@@ -147,7 +336,7 @@ function MexicoBeautyStation({ token }) {
                     <div className="mb-module-header">
                         <button 
                             className="mb-back-btn" 
-                            onClick={() => { setActiveModule(null); setItems([]); }}
+                            onClick={handleClear}
                         >
                             ← 返回模块选择
                         </button>
@@ -171,29 +360,67 @@ function MexicoBeautyStation({ token }) {
                                         className="mb-textarea"
                                         placeholder="粘贴竞品标题，每行一个..."
                                         rows={8}
+                                        value={inputText}
+                                        onChange={(e) => setInputText(e.target.value)}
                                     />
-                                    <button className="mb-btn mb-btn-primary">
+                                    <button 
+                                        className="mb-btn mb-btn-primary"
+                                        onClick={handleParse}
+                                        disabled={!inputText.trim()}
+                                    >
                                         开始分析
                                     </button>
                                 </div>
                             )}
 
-                            {(activeModule === MODULES.TITLE || 
-                              activeModule === MODULES.IMAGE || 
-                              activeModule === MODULES.DESCRIPTION) && (
+                            {(activeModule === MODULES.TITLE || activeModule === MODULES.DESCRIPTION) && (
                                 <div>
                                     <textarea
                                         className="mb-textarea"
                                         placeholder="粘贴标题，每行一个..."
                                         rows={5}
+                                        value={inputText}
+                                        onChange={(e) => setInputText(e.target.value)}
                                     />
                                     <div className="mb-file-upload">
                                         <label className="mb-upload-label">
-                                            <input type="file" multiple accept="image/*" />
-                                            <span>📁 上传图片（可多选）</span>
+                                            <input 
+                                                type="file" 
+                                                multiple 
+                                                accept="image/*"
+                                                onChange={handleFileSelect}
+                                            />
+                                            <span>📁 上传图片（可多选）- {selectedFiles.length}个已选</span>
                                         </label>
                                     </div>
-                                    <button className="mb-btn mb-btn-primary">
+                                    <button 
+                                        className="mb-btn mb-btn-primary"
+                                        onClick={handleParse}
+                                        disabled={!inputText.trim() && selectedFiles.length === 0}
+                                    >
+                                        开始分析
+                                    </button>
+                                </div>
+                            )}
+
+                            {activeModule === MODULES.IMAGE && (
+                                <div>
+                                    <div className="mb-file-upload">
+                                        <label className="mb-upload-label">
+                                            <input 
+                                                type="file" 
+                                                multiple 
+                                                accept="image/*"
+                                                onChange={handleFileSelect}
+                                            />
+                                            <span>📁 上传参考图片（可多选）- {selectedFiles.length}个已选</span>
+                                        </label>
+                                    </div>
+                                    <button 
+                                        className="mb-btn mb-btn-primary"
+                                        onClick={handleParse}
+                                        disabled={selectedFiles.length === 0}
+                                    >
                                         开始分析
                                     </button>
                                 </div>
@@ -233,7 +460,7 @@ function MexicoBeautyStation({ token }) {
                                     </button>
                                 )}
                                 {isProcessing && (
-                                    <button className="mb-btn mb-btn-warning" onClick={() => { setIsPaused(true); pauseRef.current = true; }}>
+                                    <button className="mb-btn mb-btn-warning" onClick={handlePause}>
                                         ⏸️ 暂停
                                     </button>
                                 )}
@@ -255,8 +482,8 @@ function MexicoBeautyStation({ token }) {
                                         <tr>
                                             <th style={{ width: '40px' }}>#</th>
                                             <th style={{ width: '50px' }}>状态</th>
-                                            <th>输入</th>
-                                            <th>输出</th>
+                                            <th style={{ width: '30%' }}>输入</th>
+                                            <th style={{ width: '60%' }}>输出</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -268,7 +495,9 @@ function MexicoBeautyStation({ token }) {
                                                     {item.input || '-'}
                                                 </td>
                                                 <td className="mb-cell-output">
-                                                    {item.output || (item.status === STATUS.PROCESSING ? '分析中...' : '-')}
+                                                    {item.status === STATUS.PROCESSING ? '分析中...' : 
+                                                     item.status === STATUS.FAILED ? `❌ ${item.error}` :
+                                                     item.output || '-'}
                                                 </td>
                                             </tr>
                                         ))}
