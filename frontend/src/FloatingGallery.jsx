@@ -62,6 +62,7 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
     // Lightbox
     const [selectedImage, setSelectedImage] = useState(null);
     const [selectedVideo, setSelectedVideo] = useState(null);
+    const [videoError, setVideoError] = useState(false);
     const [reviewDetails, setReviewDetails] = useState(null);
     const [loadingReview, setLoadingReview] = useState(false);
 
@@ -122,6 +123,7 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
     useEffect(() => {
         if (selectedVideo && selectedVideo.review_status === 'done') {
             setLoadingReview(true);
+            setVideoError(false);
             const token = localStorage.getItem('token');
             fetch(`/api/v1/gallery/videos/${selectedVideo.id}/review`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -134,6 +136,7 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                 .catch(() => setLoadingReview(false));
         } else {
             setReviewDetails(null);
+            setVideoError(false);
         }
     }, [selectedVideo]);
 
@@ -998,7 +1001,23 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
             {selectedVideo && (
                 <div className="fg-lightbox" onClick={() => setSelectedVideo(null)}>
                     <div className="fg-lightbox-content video" onClick={e => e.stopPropagation()}>
-                        <video src={selectedVideo.result_url} controls autoPlay className="fg-lightbox-video" />
+                        {videoError ? (
+                            <div className="fg-video-expired">
+                                <div className="fg-expired-icon">⏰</div>
+                                <div className="fg-expired-title">视频链接已过期</div>
+                                <div className="fg-expired-desc">
+                                    外部视频资源已失效，请重新生成视频
+                                </div>
+                            </div>
+                        ) : (
+                            <video 
+                                src={selectedVideo.result_url} 
+                                controls 
+                                autoPlay 
+                                className="fg-lightbox-video"
+                                onError={() => setVideoError(true)}
+                            />
+                        )}
                         <div className="fg-lightbox-info">
                             <p className="fg-lightbox-prompt">{selectedVideo.prompt || '无提示词'}</p>
                             <div className="fg-lightbox-meta">

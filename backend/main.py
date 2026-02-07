@@ -279,8 +279,20 @@ class ConfigItem(BaseModel):
     # Feishu/Lark Bitable Integration
     feishu_app_id: Optional[str] = None            # 飞书应用 App ID
     feishu_app_secret: Optional[str] = None        # 飞书应用 App Secret
-    feishu_app_token: Optional[str] = None         # 多维表格 App Token (从URL获取)
-    feishu_table_id: Optional[str] = None          # 数据表 Table ID
+    feishu_app_token: Optional[str] = None         # 核心词提取 - 多维表格 App Token
+    feishu_table_id: Optional[str] = None          # 核心词提取 - 数据表 Table ID
+    feishu_description_app_token: Optional[str] = None  # 产品描述 - 多维表格 App Token
+    feishu_description_table_id: Optional[str] = None   # 产品描述 - 数据表 Table ID
+    # Content Review (内容审核)
+    content_review_enabled: Optional[bool] = False           # 是否启用内容审核
+    content_review_api_url: Optional[str] = None
+    content_review_api_key: Optional[str] = None
+    content_review_model: Optional[str] = None
+    thai_dubbing_url: Optional[str] = None
+    voice_clone_api_url: Optional[str] = None
+    voice_clone_api_key: Optional[str] = None
+    voice_clone_analysis_model: Optional[str] = None
+    voice_clone_tts_model: Optional[str] = None
 
 
 
@@ -974,6 +986,20 @@ def get_config(db: Session = Depends(get_db), token: str = Depends(verify_token)
         "review_api_key": os.getenv("REVIEW_API_KEY", ""),
         "review_model_name": os.getenv("REVIEW_MODEL_NAME", "gpt-4o"),
         "review_enabled": os.getenv("REVIEW_ENABLED", "false").lower() == "true",
+        "feishu_app_id": os.getenv("FEISHU_APP_ID", ""),
+        "feishu_app_secret": os.getenv("FEISHU_APP_SECRET", ""),
+        "feishu_app_token": os.getenv("FEISHU_APP_TOKEN", ""),
+        "feishu_table_id": os.getenv("FEISHU_TABLE_ID", ""),
+        "feishu_description_app_token": os.getenv("FEISHU_DESCRIPTION_APP_TOKEN", ""),
+        "feishu_description_table_id": os.getenv("FEISHU_DESCRIPTION_TABLE_ID", ""),
+        "content_review_enabled": os.getenv("CONTENT_REVIEW_ENABLED", "false").lower() == "true",
+        "content_review_api_url": os.getenv("CONTENT_REVIEW_API_URL", ""),
+        "content_review_api_key": os.getenv("CONTENT_REVIEW_API_KEY", ""),
+        "content_review_model": os.getenv("CONTENT_REVIEW_MODEL", ""),
+        "voice_clone_api_url": os.getenv("VOICE_CLONE_API_URL", ""),
+        "voice_clone_api_key": os.getenv("VOICE_CLONE_API_KEY", ""),
+        "voice_clone_analysis_model": os.getenv("VOICE_CLONE_ANALYSIS_MODEL", ""),
+        "voice_clone_tts_model": os.getenv("VOICE_CLONE_TTS_MODEL", ""),
     }
     
     # Check if DB is empty for these keys, if so, seed them
@@ -992,14 +1018,14 @@ def get_config(db: Session = Depends(get_db), token: str = Depends(verify_token)
 
 @app.post("/api/v1/config", response_model=ConfigItem)
 def update_config(config: ConfigItem, db: Session = Depends(get_db), token: str = Depends(verify_token)):
-    # Update DB
     for key, val in config.dict().items():
         if val is not None:
+            str_val = str(val).lower() if isinstance(val, bool) else str(val)
             item = db.query(SystemConfig).filter(SystemConfig.key == key).first()
             if item:
-                item.value = val
+                item.value = str_val
             else:
-                item = SystemConfig(key=key, value=val)
+                item = SystemConfig(key=key, value=str_val)
                 db.add(item)
     
     db.commit()
@@ -1817,11 +1843,87 @@ async def call_multi_image_gen(
     image_b64_list: List[str],
     scene_prompt: str,
     variation_index: int,
-    model: str = "gemini-3-pro-image-preview"
+    model: str = "gemini-3-pro-image-preview",
+    aspect_ratio: str = "1:1"
 ) -> ImageResult:
     """Generate image using multiple input images as reference + text prompt"""
     angle_name = f"Result_{variation_index + 1}"
-    logger.info(f"Multi-Image Gen for {angle_name} with {len(image_b64_list)} input images")
+    logger.info(f"Multi-Image Gen for {angle_name} with {len(image_b64_list)} input images, model: {model}")
+    
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    timeout = httpx.Timeout(connect=15.0, read=300.0, write=30.0, pool=30.0)
+    
+    if "imagen" in model.lower():
+        logger.info(f"Using /images/generations endpoint for imagen model: {model}")
+        target_url = api_url.rstrip("/")
+        if target_url.endswith("/v1"):
+            target_url = f"{target_url}/images/generations"
+        elif not target_url.endswith("/images/generations"):
+            target_url = f"{target_url}/images/generations"
+        
+        size_map = {
+            "1:1": "1024x1024",
+            "9:16": "768x1344",
+            "16:9": "1344x768",
+            "4:5": "896x1120",
+            "3:4": "896x1152"
+        }
+        image_size = size_map.get(aspect_ratio, "1024x1024")
+        
+        payload = {
+            "model": model,
+            "prompt": scene_prompt,
+            "n": 1,
+            "size": image_size
+        }
+        
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            try:
+                await throttle_request()
+                logger.info(f"Imagen request for {angle_name} (Attempt {attempt+1}/{max_retries+1}) to {target_url}")
+                response = await client.post(target_url, json=payload, headers=headers, timeout=timeout)
+                
+                if response.status_code == 429:
+                    if attempt < max_retries:
+                        wait_time = 2.0 * (2 ** attempt)
+                        logger.warning(f"Rate limited (429). Retrying in {wait_time:.1f}s...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    return ImageResult(angle_name=angle_name, error="Rate Limit Exceeded (429)")
+                
+                if response.status_code != 200:
+                    error_msg = response.text[:300]
+                    logger.error(f"Imagen API error: {response.status_code} - {error_msg}")
+                    if attempt < max_retries:
+                        await asyncio.sleep(2)
+                        continue
+                    return ImageResult(angle_name=angle_name, error=f"API Error {response.status_code}")
+                
+                data = response.json()
+                if data.get("data") and len(data["data"]) > 0:
+                    item = data["data"][0]
+                    if "b64_json" in item:
+                        logger.info(f"Got base64 image for {angle_name}, length: {len(item['b64_json'])}")
+                        return ImageResult(angle_name=angle_name, image_base64=item["b64_json"], video_prompt=scene_prompt)
+                    elif "url" in item:
+                        logger.info(f"Got image URL for {angle_name}: {item['url'][:80]}...")
+                        return ImageResult(angle_name=angle_name, image_url=item["url"], video_prompt=scene_prompt)
+                
+                logger.warning(f"Empty data array from imagen API for {angle_name}")
+                if attempt < max_retries:
+                    await asyncio.sleep(2)
+                    continue
+                return ImageResult(angle_name=angle_name, error="No image data returned from API")
+                
+            except Exception as e:
+                logger.error(f"Exception in Imagen Gen for {angle_name}: {type(e).__name__}: {e}")
+                if attempt < max_retries:
+                    await asyncio.sleep(2)
+                    continue
+                return ImageResult(angle_name=angle_name, error=str(e))
+        
+        return ImageResult(angle_name=angle_name, error="Max retries exceeded")
     
     system_instruction = (
         "You are a professional product photographer and image compositing expert. "
@@ -1907,16 +2009,36 @@ async def call_multi_image_gen(
                             chunk = json.loads(data_str)
                             chunk_count += 1
                             if chunk_count <= 3:
-                                logger.info(f"Chunk {chunk_count} for {angle_name}: {json.dumps(chunk)}")
+                                logger.info(f"Chunk {chunk_count} for {angle_name}: {json.dumps(chunk)[:500]}")
                             
                             choices = chunk.get("choices", [])
                             if choices:
                                 choice = choices[0]
                                 delta = choice.get("delta", {})
+                                
+                                # Check for images array (gemini-3-pro-image-preview format)
+                                images = delta.get("images", [])
+                                if images:
+                                    for img in images:
+                                        if img.get("type") == "image_url":
+                                            img_url = img.get("image_url", {}).get("url", "")
+                                            if img_url:
+                                                full_content += img_url
+                                
                                 delta_content = delta.get("content", "")
                                 if delta_content:
                                     full_content += delta_content
                                 message = choice.get("message", {})
+                                
+                                # Also check message.images
+                                msg_images = message.get("images", [])
+                                if msg_images:
+                                    for img in msg_images:
+                                        if img.get("type") == "image_url":
+                                            img_url = img.get("image_url", {}).get("url", "")
+                                            if img_url:
+                                                full_content += img_url
+                                
                                 msg_content = message.get("content", "")
                                 if msg_content:
                                     full_content += msg_content
@@ -2028,7 +2150,7 @@ async def simple_batch_generate(
             async with httpx.AsyncClient() as client:
                 result = await call_multi_image_gen(
                     client, api_url, api_key, image_b64_list,
-                    final_prompt, var_index, model_name
+                    final_prompt, var_index, model_name, aspect_ratio
                 )
                 result.angle_name = f"Result_{var_index + 1}"
                 return result
@@ -3724,56 +3846,81 @@ async def process_video_background(item_id: str, video_api_url: str, video_api_k
                             preview_url = None
                             
                             if found_url.startswith("http"):
-                                try:
-                                    local_filename = f"video_{item_id}.mp4"
-                                    local_path = f"/app/uploads/queue/{local_filename}"
-                                    
-                                    # Prepare headers - Grok videos may need Referer to bypass 403
-                                    download_headers = {}
-                                    if "grok.codeedu.de" in found_url or "codeedu.de" in found_url:
-                                        download_headers["Referer"] = "https://grok.codeedu.de/"
-                                        logger.info(f"Detected Grok cached URL, adding Referer header")
-                                    
-                                    logger.info(f"Downloading video from {found_url[:100]}...")
-                                    async with httpx.AsyncClient() as download_client:
-                                        video_resp = await download_client.get(
-                                            found_url, 
-                                            timeout=300.0,
-                                            headers=download_headers,
-                                            follow_redirects=True
-                                        )
-                                        if video_resp.status_code == 200:
-                                            with open(local_path, "wb") as f:
-                                                f.write(video_resp.content)
-                                            final_url = f"/uploads/queue/{local_filename}"
-                                            logger.info(f"Video downloaded to local: {final_url}")
-                                            
-                                            # Generate thumbnail from first frame
-                                            thumb_filename = f"video_{item_id}_thumb.jpg"
-                                            thumb_path = f"/app/uploads/queue/{thumb_filename}"
-                                            try:
-                                                thumb_cmd = [
-                                                    "ffmpeg", "-y",
-                                                    "-i", local_path,
-                                                    "-ss", "00:00:00.500",
-                                                    "-vframes", "1",
-                                                    "-q:v", "2",
-                                                    thumb_path
-                                                ]
-                                                subprocess.run(thumb_cmd, check=True, capture_output=True)
-                                                preview_url = f"/uploads/queue/{thumb_filename}"
-                                            except Exception as thumb_err:
-                                                logger.warning(f"Failed to generate thumbnail: {thumb_err}")
-                                        elif video_resp.status_code == 403:
-                                            # 403 Forbidden - Grok direct links are restricted
-                                            # Keep the cached URL (grok.codeedu.de) as it should work via browser
-                                            logger.warning(f"Video download 403 Forbidden - keeping remote URL for browser playback: {found_url[:80]}...")
-                                            # For Grok cached URLs, they should still work in browser
-                                            final_url = found_url
-                                        else:
-                                            logger.warning(f"Failed to download video: HTTP {video_resp.status_code}")
-                                except Exception as dl_err:
-                                    logger.warning(f"Video download failed, keeping remote URL: {dl_err}")
+                                local_filename = f"video_{item_id}.mp4"
+                                local_path = f"/app/uploads/queue/{local_filename}"
+                                download_success = False
+                                
+                                # Prepare headers - Grok/xAI videos need specific headers
+                                download_headers = {
+                                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                                    "Accept": "video/mp4,video/*,*/*",
+                                    "Accept-Language": "en-US,en;q=0.9",
+                                }
+                                
+                                # Add specific headers for Grok domains
+                                if "grok.com" in found_url or "assets.grok.com" in found_url:
+                                    download_headers["Referer"] = "https://grok.com/"
+                                    download_headers["Origin"] = "https://grok.com"
+                                    logger.info(f"Detected Grok assets URL, adding browser-like headers")
+                                elif "grok.codeedu.de" in found_url or "codeedu.de" in found_url:
+                                    download_headers["Referer"] = "https://grok.codeedu.de/"
+                                    logger.info(f"Detected Grok cached URL, adding Referer header")
+                                
+                                # Try downloading with retries
+                                max_download_retries = 3
+                                for dl_attempt in range(max_download_retries):
+                                    try:
+                                        logger.info(f"Downloading video (attempt {dl_attempt + 1}/{max_download_retries}) from {found_url[:100]}...")
+                                        async with httpx.AsyncClient() as download_client:
+                                            video_resp = await download_client.get(
+                                                found_url, 
+                                                timeout=300.0,
+                                                headers=download_headers,
+                                                follow_redirects=True
+                                            )
+                                            if video_resp.status_code == 200:
+                                                content_type = video_resp.headers.get("content-type", "")
+                                                if "video" in content_type or len(video_resp.content) > 100000:
+                                                    with open(local_path, "wb") as f:
+                                                        f.write(video_resp.content)
+                                                    final_url = f"/uploads/queue/{local_filename}"
+                                                    download_success = True
+                                                    logger.info(f"Video downloaded to local: {final_url} ({len(video_resp.content)} bytes)")
+                                                    
+                                                    # Generate thumbnail from first frame
+                                                    thumb_filename = f"video_{item_id}_thumb.jpg"
+                                                    thumb_path = f"/app/uploads/queue/{thumb_filename}"
+                                                    try:
+                                                        thumb_cmd = [
+                                                            "ffmpeg", "-y",
+                                                            "-i", local_path,
+                                                            "-ss", "00:00:00.500",
+                                                            "-vframes", "1",
+                                                            "-q:v", "2",
+                                                            thumb_path
+                                                        ]
+                                                        subprocess.run(thumb_cmd, check=True, capture_output=True)
+                                                        preview_url = f"/uploads/queue/{thumb_filename}"
+                                                    except Exception as thumb_err:
+                                                        logger.warning(f"Failed to generate thumbnail: {thumb_err}")
+                                                    break
+                                                else:
+                                                    logger.warning(f"Response doesn't look like video (content-type: {content_type}, size: {len(video_resp.content)})")
+                                            elif video_resp.status_code == 403:
+                                                logger.warning(f"Video download 403 Forbidden (attempt {dl_attempt + 1})")
+                                                if dl_attempt < max_download_retries - 1:
+                                                    await asyncio.sleep(2 * (dl_attempt + 1))
+                                            else:
+                                                logger.warning(f"Failed to download video: HTTP {video_resp.status_code}")
+                                                break
+                                    except Exception as dl_err:
+                                        logger.warning(f"Video download attempt {dl_attempt + 1} failed: {dl_err}")
+                                        if dl_attempt < max_download_retries - 1:
+                                            await asyncio.sleep(2)
+                                
+                                if not download_success:
+                                    # Keep remote URL as fallback, but log warning
+                                    logger.warning(f"All download attempts failed, keeping remote URL (may expire): {found_url[:80]}...")
                             
                             item.result_url = final_url
                             if preview_url:
@@ -6966,7 +7113,7 @@ def load_mexico_beauty_prompt(module_name: str) -> str:
         logger.error(f"Mexico Beauty prompt file not found: {prompt_file}")
         return ""
 
-async def call_chat_completion_api(api_url: str, api_key: str, payload: dict) -> str:
+async def call_chat_completion_api(api_url: str, api_key: str, payload: dict, max_retries: int = 3) -> str:
     """Generic chat completion API call for Mexico Beauty endpoints."""
     headers = {
         "Content-Type": "application/json",
@@ -6977,17 +7124,157 @@ async def call_chat_completion_api(api_url: str, api_key: str, payload: dict) ->
     if not target_url.endswith("/chat/completions"):
         target_url = f"{target_url.rstrip('/')}/chat/completions"
     
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(target_url, json=payload, headers=headers)
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(target_url, json=payload, headers=headers)
+                
+                if response.status_code == 503 or response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        wait_time = 2 * (attempt + 1)
+                        logger.warning(f"API returned {response.status_code}, retrying in {wait_time}s... (attempt {attempt+1}/{max_retries})")
+                        await asyncio.sleep(wait_time)
+                        continue
+                
+                if response.status_code != 200:
+                    error_text = response.text
+                    logger.error(f"Chat completion API error: {response.status_code} - {error_text[:200]}")
+                    raise HTTPException(status_code=500, detail=f"API error: {response.status_code}")
+                
+                data = response.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                return content
+        except HTTPException:
+            raise
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                logger.warning(f"API call failed: {e}, retrying... (attempt {attempt+1}/{max_retries})")
+                await asyncio.sleep(2)
+                continue
+            raise HTTPException(status_code=500, detail=f"API call failed after {max_retries} attempts: {str(e)}")
+
+async def call_content_review_api(prompt_text: str, db: Session) -> dict:
+    """
+    调用内容审核 API 检查图片生成提示词是否包含违规内容。
+    
+    Args:
+        prompt_text: 待审核的提示词文本
+        db: 数据库会话
         
-        if response.status_code != 200:
-            error_text = response.text
-            logger.error(f"Chat completion API error: {response.status_code} - {error_text[:200]}")
-            raise HTTPException(status_code=500, detail=f"API error: {response.status_code}")
-        
-        data = response.json()
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        return content
+    Returns:
+        dict: {"passed": bool, "reviewed_prompt": str, "reason": str, "is_modified": bool}
+    """
+    # 默认返回结果（通过，无修改）
+    default_result = {
+        "passed": True,
+        "reviewed_prompt": prompt_text,
+        "reason": "审核未启用",
+        "is_modified": False
+    }
+    
+    # 读取审核配置
+    config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
+    
+    # 检查是否启用审核
+    review_enabled = config_dict.get("content_review_enabled", "false")
+    if review_enabled.lower() != "true":
+        logger.debug("Content review is disabled, skipping review")
+        return default_result
+    
+    # 获取 API 配置
+    api_url = config_dict.get("content_review_api_url", "")
+    api_key = config_dict.get("content_review_api_key", "")
+    model_name = config_dict.get("content_review_model", "content-review")
+    
+    if not api_key:
+        logger.warning("Content review API key not configured, skipping review")
+        default_result["reason"] = "审核 API 密钥未配置"
+        return default_result
+    
+    # 构建请求
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    
+    target_url = api_url
+    if not target_url.endswith("/chat/completions"):
+        target_url = f"{target_url.rstrip('/')}/chat/completions"
+    
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": "你是一个内容审核助手。检查以下图片生成提示词是否包含违规内容（色情、暴力、政治敏感等）。如果安全，返回JSON: {\"passed\": true, \"reason\": \"内容安全\"}。如果不安全，返回JSON: {\"passed\": false, \"reason\": \"违规原因\", \"safe_version\": \"修改后的安全版本\"}"},
+            {"role": "user", "content": f"请审核以下提示词:\n\n{prompt_text}"}
+        ],
+        "temperature": 0.3,
+        "max_tokens": 1024
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(target_url, json=payload, headers=headers)
+            
+            if response.status_code != 200:
+                error_text = response.text
+                logger.warning(f"Content review API error: {response.status_code} - {error_text[:200]}, allowing content by default")
+                default_result["reason"] = "审核 API 调用失败，默认通过"
+                return default_result
+            
+            data = response.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            # 尝试解析 JSON 响应
+            try:
+                clean_content = content.strip()
+                if clean_content.startswith("```"):
+                    lines = clean_content.split("\n")
+                    clean_content = "\n".join(lines[1:-1]) if len(lines) > 2 else clean_content
+                if clean_content.endswith("```"):
+                    clean_content = clean_content[:-3].strip()
+                
+                review_result = json.loads(clean_content)
+                
+                passed = review_result.get("passed", review_result.get("pass", True))
+                reason = review_result.get("reason", "未知原因")
+                safe_version = review_result.get("safe_version", "")
+                
+                if passed:
+                    return {
+                        "passed": True,
+                        "reviewed_prompt": prompt_text,
+                        "reason": reason,
+                        "is_modified": False
+                    }
+                else:
+                    if safe_version:
+                        logger.info(f"Content review modified prompt: {reason}")
+                        return {
+                            "passed": True,
+                            "reviewed_prompt": safe_version,
+                            "reason": f"原内容违规({reason})，已自动修改",
+                            "is_modified": True
+                        }
+                    else:
+                        logger.warning(f"Content review rejected: {reason}")
+                        return {
+                            "passed": False,
+                            "reviewed_prompt": prompt_text,
+                            "reason": reason,
+                            "is_modified": False
+                        }
+                        
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse content review response: {e}, content: {content[:200]}")
+                default_result["reason"] = "审核响应解析失败，默认通过"
+                return default_result
+                
+    except Exception as e:
+        logger.warning(f"Content review API call failed: {e}, allowing content by default")
+        default_result["reason"] = f"审核 API 调用异常: {str(e)}"
+        return default_result
 
 # Mexico Beauty request/response models
 class MexicoBeautyKeywordRequest(BaseModel):
@@ -7187,6 +7474,436 @@ async def mexico_description_single(
         logger.error(f"Mexico description generation failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- Mexico Beauty: Image Prompts Generation (10 prompts) ---
+class ImagePromptItem(BaseModel):
+    id: int
+    type: str  # "Main Image" or "Detail/Scenario"
+    title: str
+    promptText: str
+    rationale: str
+    review_status: Optional[str] = None  # "passed", "modified", "failed", or None
+
+class ImagePromptsRequest(BaseModel):
+    title: Optional[str] = None
+    keywords: Optional[str] = None
+    description: Optional[str] = None
+
+class ImagePromptsResponse(BaseModel):
+    prompts: List[ImagePromptItem]
+
+@app.post("/api/v1/mexico-beauty/image-prompts-batch", response_model=ImagePromptsResponse)
+async def mexico_image_prompts_batch(
+    title: str = Form(None),
+    keywords: str = Form(None),
+    description: str = Form(None),
+    aspect_ratio: str = Form("1:1"),
+    target_language: str = Form("es-MX"),
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    """Generate 10 image prompts (2 Main + 8 Detail) based on product info."""
+    await throttle_request()
+    
+    config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
+    api_url = config_dict.get("api_url")
+    api_key = config_dict.get("api_key")
+    model_name = config_dict.get("analysis_model_name", "gemini-3-pro-preview")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=400, detail="API configuration not set")
+    
+    # Language/Region configuration mapping
+    LANGUAGE_CONFIG = {
+        "es-MX": {"region": "Mexico", "language": "Mexican Spanish", "locale_examples": '"Súper práctico," "No gasta luz," "Material resistente"'},
+        "th-TH": {"region": "Thailand", "language": "Thai", "locale_examples": '"สะดวกสุดๆ," "ประหยัดไฟ," "วัสดุทนทาน"'},
+        "zh-CN": {"region": "China", "language": "Simplified Chinese", "locale_examples": '"超级实用," "省电," "材质耐用"'},
+        "en-US": {"region": "United States", "language": "American English", "locale_examples": '"Super practical," "Energy-saving," "Durable material"'},
+        "id-ID": {"region": "Indonesia", "language": "Indonesian", "locale_examples": '"Sangat praktis," "Hemat listrik," "Bahan tahan lama"'},
+        "vi-VN": {"region": "Vietnam", "language": "Vietnamese", "locale_examples": '"Siêu tiện lợi," "Tiết kiệm điện," "Chất liệu bền"'},
+        "ms-MY": {"region": "Malaysia", "language": "Malay", "locale_examples": '"Sangat praktikal," "Jimat elektrik," "Bahan tahan lasak"'},
+        "tl-PH": {"region": "Philippines", "language": "Filipino/Tagalog", "locale_examples": '"Sobrang praktiko," "Tipid sa kuryente," "Matibay na materyales"'},
+    }
+    
+    lang_config = LANGUAGE_CONFIG.get(target_language, LANGUAGE_CONFIG["es-MX"])
+    
+    system_prompt = load_mexico_beauty_prompt("image_prompts")
+    if not system_prompt:
+        raise HTTPException(status_code=500, detail="System prompt not loaded")
+    
+    # Dynamic replacement of region/language in the prompt
+    system_prompt = system_prompt.replace("Mexico", lang_config["region"])
+    system_prompt = system_prompt.replace("Mexican Spanish", lang_config["language"])
+    system_prompt = system_prompt.replace("TikTok Mexico", f"TikTok {lang_config['region']}")
+    system_prompt = system_prompt.replace(
+        '"Súper práctico," "No gasta luz," "Material resistente"',
+        lang_config["locale_examples"]
+    )
+    
+    image_b64 = await file_to_base64_compressed(image, max_size=800, quality=75)
+    
+    user_message = f"""
+Product Title: {title or "Not provided"}
+Keywords: {keywords or "Not provided"}
+Context/Description: {description or "Not provided"}
+
+*** CRITICAL REQUIREMENT - TARGET LANGUAGE/REGION: {lang_config["language"]} ({lang_config["region"]}) ***
+All text overlays, headlines, feature points, and CTAs MUST be written in {lang_config["language"]}.
+Use localized e-commerce copy appropriate for {lang_config["region"]} market.
+
+*** CRITICAL REQUIREMENT - ASPECT RATIO: {aspect_ratio} ***
+You MUST use "{aspect_ratio}" as the aspect ratio in EVERY prompt's [LAYOUT & COMPOSITION] section.
+- If aspect ratio is "1:1": Use "Square 1:1 format" in all prompts
+- If aspect ratio is "9:16": Use "Vertical 9:16 portrait" in all prompts  
+- If aspect ratio is "16:9": Use "Horizontal 16:9 landscape" in all prompts
+DO NOT use any other aspect ratio. This is mandatory.
+
+The user has provided an image of the product. Analyze the image to understand the product's features.
+
+Generate 10 prompts in JSON format following the strict structure defined above.
+"""
+    
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_message},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+                ]
+            }
+        ],
+        "temperature": 0.8,
+        "max_tokens": 8192
+    }
+    
+    try:
+        result_text = await call_chat_completion_api(api_url, api_key, payload)
+        
+        json_match = re.search(r'\[[\s\S]*\]', result_text)
+        if json_match:
+            prompts_data = json.loads(json_match.group())
+        else:
+            prompts_data = json.loads(result_text)
+        
+        prompts = []
+        for i, p in enumerate(prompts_data[:10]):
+            original_prompt_text = p.get("promptText", "")
+            
+            prompts.append(ImagePromptItem(
+                id=p.get("id", i + 1),
+                type=p.get("type", "Main Image" if i < 2 else "Detail/Scenario"),
+                title=p.get("title", f"Prompt {i + 1}"),
+                promptText=original_prompt_text,
+                rationale=p.get("rationale", ""),
+                review_status=None
+            ))
+        
+        return ImagePromptsResponse(prompts=prompts)
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON from AI response: {str(e)}")
+        logger.error(f"Raw response: {result_text[:500]}")
+        raise HTTPException(status_code=500, detail="Failed to parse AI response as JSON")
+    except Exception as e:
+        logger.error(f"Mexico image prompts generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Mexico Beauty: Refine Prompt ---
+class RefinePromptRequest(BaseModel):
+    original_prompt: ImagePromptItem
+    feedback: str
+    product_title: Optional[str] = None
+    product_description: Optional[str] = None
+
+@app.post("/api/v1/mexico-beauty/refine-prompt", response_model=ImagePromptItem)
+async def mexico_refine_prompt(
+    request: RefinePromptRequest,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    """Refine a specific prompt based on user feedback."""
+    await throttle_request()
+    
+    config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
+    api_url = config_dict.get("api_url")
+    api_key = config_dict.get("api_key")
+    model_name = config_dict.get("analysis_model_name", "gemini-3-pro-preview")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=400, detail="API configuration not set")
+    
+    system_prompt = load_mexico_beauty_prompt("refine_prompt")
+    if not system_prompt:
+        raise HTTPException(status_code=500, detail="System prompt not loaded")
+    
+    user_message = f"""
+PRODUCT INFO:
+Title: {request.product_title or "Not provided"}
+Context: {request.product_description or "Not provided"}
+
+ORIGINAL PROMPT DATA:
+ID: {request.original_prompt.id}
+Type: {request.original_prompt.type}
+Current Title: {request.original_prompt.title}
+Current Prompt Text: {request.original_prompt.promptText}
+
+USER FEEDBACK (PROBLEM TO FIX):
+"{request.feedback}"
+
+INSTRUCTION:
+Rewrite the 'promptText', 'title', and 'rationale' to strictly address the User Feedback.
+- If they complain about text, fix the [TEXT OVERLAYS].
+- If they complain about background, fix the [VISUAL CORE].
+- Ensure NO MINORS are mentioned.
+- Keep the output strict JSON.
+"""
+    
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 2048
+    }
+    
+    try:
+        result_text = await call_chat_completion_api(api_url, api_key, payload)
+        
+        json_match = re.search(r'\{[\s\S]*\}', result_text)
+        if json_match:
+            refined_data = json.loads(json_match.group())
+        else:
+            refined_data = json.loads(result_text)
+        
+        return ImagePromptItem(
+            id=refined_data.get("id", request.original_prompt.id),
+            type=refined_data.get("type", request.original_prompt.type),
+            title=refined_data.get("title", request.original_prompt.title),
+            promptText=refined_data.get("promptText", request.original_prompt.promptText),
+            rationale=refined_data.get("rationale", "Refined based on user feedback")
+        )
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON from AI response: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to parse AI response as JSON")
+    except Exception as e:
+        logger.error(f"Mexico refine prompt failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Mexico Beauty: Generate Image from Prompt ---
+class MexicoGenerateImageRequest(BaseModel):
+    prompt_text: str
+    aspect_ratio: str = "1:1"
+
+@app.post("/api/v1/mexico-beauty/generate-image")
+async def mexico_generate_image(
+    prompt_text: str = Form(...),
+    aspect_ratio: str = Form("1:1"),
+    reference_image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    await throttle_request()
+    
+    config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
+    api_url = config_dict.get("api_url")
+    api_key = config_dict.get("api_key")
+    model_name = config_dict.get("model_name", "gemini-3-pro-image-preview")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=400, detail="API configuration not set")
+    
+    # 调用内容审核（生图前二次审核）
+    review_result = await call_content_review_api(prompt_text, db)
+    if not review_result["passed"] and not review_result["is_modified"]:
+        raise HTTPException(status_code=400, detail=f"内容审核未通过: {review_result['reason']}")
+    if review_result["is_modified"]:
+        prompt_text = review_result["reviewed_prompt"]
+        logger.info(f"Mexico generate-image: Prompt modified by content review")
+    
+    image_b64 = await file_to_base64_compressed(reference_image, max_size=800, quality=75)
+    
+    final_prompt = f"{prompt_text}\n\nFINAL RENDER INSTRUCTIONS:\n1. Ensure the reference product is the star.\n2. STRICTLY follow the text rendering instructions for Spanish overlays.\n3. Use {aspect_ratio} aspect ratio.\n4. DO NOT include realistic people/faces to ensure safety compliance."
+    
+    # Map aspect ratio to size
+    size_map = {
+        "1:1": "1024x1024",
+        "9:16": "768x1344",
+        "16:9": "1344x768",
+        "4:5": "896x1120",
+        "3:4": "896x1152"
+    }
+    image_size = size_map.get(aspect_ratio, "1024x1024")
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            result = None
+            
+            # Check if model is imagen-type (use /images/generations endpoint)
+            if "imagen" in model_name.lower():
+                logger.info(f"Using /images/generations endpoint for model: {model_name}")
+                target_url = api_url.rstrip("/")
+                if target_url.endswith("/v1"):
+                    target_url = f"{target_url}/images/generations"
+                elif not target_url.endswith("/images/generations"):
+                    target_url = f"{target_url}/images/generations"
+                
+                headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+                timeout = httpx.Timeout(connect=15.0, read=300.0, write=30.0, pool=30.0)
+                
+                payload = {
+                    "model": model_name,
+                    "prompt": final_prompt,
+                    "n": 1,
+                    "size": image_size
+                }
+                
+                response = await client.post(target_url, json=payload, headers=headers, timeout=timeout)
+                
+                if response.status_code != 200:
+                    error_msg = response.text[:500]
+                    logger.error(f"Imagen API error: {response.status_code} - {error_msg}")
+                    raise HTTPException(status_code=500, detail=f"Image generation failed: {error_msg}")
+                
+                data = response.json()
+                if data.get("data") and len(data["data"]) > 0:
+                    item = data["data"][0]
+                    if "b64_json" in item:
+                        result = ImageResult(angle_name="Generated", image_base64=item["b64_json"])
+                    elif "url" in item:
+                        result = ImageResult(angle_name="Generated", image_url=item["url"])
+                    else:
+                        raise HTTPException(status_code=500, detail="Unknown image format in response")
+                else:
+                    raise HTTPException(status_code=500, detail="No image data returned from API")
+            else:
+                result = await call_multi_image_gen(
+                    client, api_url, api_key,
+                    [image_b64],
+                    final_prompt,
+                    0,
+                    model_name,
+                    aspect_ratio
+                )
+            
+            if result is None:
+                raise HTTPException(status_code=500, detail="No result from image generation")
+            
+            if result.error:
+                raise HTTPException(status_code=500, detail=result.error)
+            
+            image_url = None
+            saved_url = None
+            
+            if result.image_base64:
+                image_url = f"data:image/png;base64,{result.image_base64}"
+                
+                try:
+                    gallery_dir = "/app/uploads/gallery"
+                    os.makedirs(gallery_dir, exist_ok=True)
+                    
+                    b64 = result.image_base64
+                    if b64.startswith("data:"):
+                        b64 = b64.split(",", 1)[1]
+                    img_data = base64.b64decode(b64)
+                    
+                    timestamp = int(time.time() * 1000)
+                    filename = f"mexico_product_{user.id}_{timestamp}.png"
+                    file_path = os.path.join(gallery_dir, filename)
+                    
+                    with open(file_path, "wb") as f:
+                        f.write(img_data)
+                    
+                    img_width, img_height = 1024, 1024
+                    try:
+                        from PIL import Image
+                        with Image.open(file_path) as img:
+                            img_width, img_height = img.size
+                    except:
+                        pass
+                    
+                    new_image = SavedImage(
+                        user_id=user.id,
+                        filename=filename,
+                        file_path=file_path,
+                        url=f"/uploads/gallery/{filename}",
+                        prompt=prompt_text[:500],
+                        width=img_width,
+                        height=img_height,
+                        category="mexico_product",
+                        is_shared=user.default_share if user.default_share is not None else True
+                    )
+                    db.add(new_image)
+                    db.commit()
+                    saved_url = f"/uploads/gallery/{filename}"
+                    logger.info(f"Mexico product image saved to gallery: {filename}")
+                except Exception as save_err:
+                    logger.error(f"Failed to save mexico product image to gallery: {save_err}")
+                
+            elif result.image_url:
+                image_url = result.image_url
+                
+                try:
+                    gallery_dir = "/app/uploads/gallery"
+                    os.makedirs(gallery_dir, exist_ok=True)
+                    
+                    async with httpx.AsyncClient(timeout=60) as dl_client:
+                        img_response = await dl_client.get(result.image_url)
+                        if img_response.status_code == 200:
+                            img_data = img_response.content
+                            
+                            timestamp = int(time.time() * 1000)
+                            filename = f"mexico_product_{user.id}_{timestamp}.png"
+                            file_path = os.path.join(gallery_dir, filename)
+                            
+                            with open(file_path, "wb") as f:
+                                f.write(img_data)
+                            
+                            img_width, img_height = 1024, 1024
+                            try:
+                                from PIL import Image
+                                with Image.open(file_path) as img:
+                                    img_width, img_height = img.size
+                            except:
+                                pass
+                            
+                            new_image = SavedImage(
+                                user_id=user.id,
+                                filename=filename,
+                                file_path=file_path,
+                                url=f"/uploads/gallery/{filename}",
+                                prompt=prompt_text[:500],
+                                width=img_width,
+                                height=img_height,
+                                category="mexico_product",
+                                is_shared=user.default_share if user.default_share is not None else True
+                            )
+                            db.add(new_image)
+                            db.commit()
+                            saved_url = f"/uploads/gallery/{filename}"
+                            image_url = f"data:image/png;base64,{base64.b64encode(img_data).decode()}"
+                            logger.info(f"Mexico product image downloaded and saved: {filename}")
+                except Exception as dl_err:
+                    logger.error(f"Failed to download and save mexico product image: {dl_err}")
+            else:
+                raise HTTPException(status_code=500, detail="No image generated")
+            
+            return {
+                "image_url": image_url,
+                "saved_url": saved_url
+            }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Mexico generate image failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Mexico Beauty Feishu Sync Models
 class MexicoBeautyFeishuSyncRequest(BaseModel):
     module: str
@@ -7234,24 +7951,24 @@ async def mexico_beauty_sync_feishu(
         raise HTTPException(status_code=500, detail=str(e))
     
     module_headers = {
-        "keyword": ["标题", "核心大词", "关键属性", "搜索组合", "时间"],
-        "title": ["原标题", "优化标题1", "优化标题2", "优化标题3", "时间"],
-        "image": ["图片名称", "Visual Prompt", "Marketing Copy", "时间"],
-        "description": ["标题", "产品描述", "使用说明", "时间"]
+        "keyword": ["标题", "中文翻译", "核心词", "同步时间"],
+        "core_keyword": ["标题", "中文翻译", "核心词", "同步时间"],
+        "title": ["原标题", "优化标题1", "优化标题2", "优化标题3", "同步时间"],
+        "image": ["图片名称", "Visual Prompt", "Marketing Copy", "同步时间"],
+        "description": ["标题", "产品描述", "使用说明", "同步时间"]
     }
     
-    headers = module_headers.get(request.module, ["输入", "输出", "时间"])
+    headers = module_headers.get(request.module, ["输入", "输出", "同步时间"])
     
     records = []
     for item in request.results:
-        timestamp = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
         
-        if request.module == "keyword":
+        if request.module == "keyword" or request.module == "core_keyword":
             records.append([
                 item.get("input", ""),
-                item.get("output", "")[:500],
-                "",
-                "",
+                item.get("translation", ""),
+                item.get("keywords", ""),
                 timestamp
             ])
         elif request.module == "title":
@@ -7290,8 +8007,9 @@ async def mexico_beauty_sync_feishu(
                     fields[headers[idx]] = value
             feishu_records.append({"fields": fields})
         
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for chunk in chunks:
                 response = await client.post(
                     url,
                     headers=headers_req,
@@ -7306,9 +8024,9 @@ async def mexico_beauty_sync_feishu(
                     logger.error(f"Feishu sync chunk failed: {data}")
                 
                 await asyncio.sleep(0.5)
-        except Exception as e:
-            failed_count += len(chunk)
-            logger.error(f"Feishu sync chunk error: {str(e)}")
+    except Exception as e:
+        failed_count += len(chunk)
+        logger.error(f"Feishu sync chunk error: {str(e)}")
     
     if failed_count > 0:
         return MexicoBeautyFeishuSyncResponse(
@@ -7324,3 +8042,421 @@ async def mexico_beauty_sync_feishu(
             failed_count=0,
             message=f"成功同步 {synced_count} 条记录到飞书多维表格"
         )
+
+class ProductDescriptionFeishuSyncRequest(BaseModel):
+    product_title: str
+    prompts: List[dict]
+
+@app.post("/api/v1/mexico-beauty/sync-description-feishu", response_model=MexicoBeautyFeishuSyncResponse)
+async def sync_description_to_feishu(
+    request: ProductDescriptionFeishuSyncRequest,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token)
+):
+    config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
+    
+    feishu_app_id = config_dict.get("feishu_app_id")
+    feishu_app_secret = config_dict.get("feishu_app_secret")
+    desc_app_token = config_dict.get("feishu_description_app_token")
+    desc_table_id = config_dict.get("feishu_description_table_id")
+    
+    if not all([feishu_app_id, feishu_app_secret, desc_app_token, desc_table_id]):
+        raise HTTPException(status_code=400, detail="产品描述飞书配置未设置，请在系统设置中配置")
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            token_response = await client.post(
+                "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+                json={"app_id": feishu_app_id, "app_secret": feishu_app_secret}
+            )
+            token_data = token_response.json()
+            
+            if token_data.get("code") != 0:
+                raise HTTPException(status_code=500, detail=f"飞书Token获取失败: {token_data.get('msg')}")
+            
+            tenant_token = token_data["tenant_access_token"]
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="飞书Token请求超时")
+    except Exception as e:
+        logger.error(f"Feishu token error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    timestamp = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+    
+    feishu_records = []
+    for prompt in request.prompts:
+        feishu_records.append({
+            "fields": {
+                "产品标题": request.product_title or "未命名",
+                "序号": prompt.get("id", 0),
+                "类型": prompt.get("type", ""),
+                "策略标题": prompt.get("title", ""),
+                "策略思路": prompt.get("rationale", ""),
+                "提示词": prompt.get("promptText", "")[:2000],
+                "时间": timestamp
+            }
+        })
+    
+    url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{desc_app_token}/tables/{desc_table_id}/records/batch_create"
+    
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                url,
+                headers={"Authorization": f"Bearer {tenant_token}"},
+                json={"records": feishu_records}
+            )
+            data = response.json()
+            
+            if data.get("code") == 0:
+                return MexicoBeautyFeishuSyncResponse(
+                    success=True,
+                    synced_count=len(feishu_records),
+                    message=f"成功同步 {len(feishu_records)} 条记录"
+                )
+            else:
+                logger.error(f"Feishu sync failed: {data}")
+                raise HTTPException(status_code=500, detail=f"飞书同步失败: {data.get('msg', 'Unknown error')}")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="飞书同步请求超时")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Feishu sync error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========== Voice Clone (音色模仿) API ==========
+
+class VoiceCloneAnalyzeRequest(BaseModel):
+    target_lang: str = "th-TH"  # th-TH, es-ES, en-US, ja-JP, ko-KR
+    video_duration: float = 0
+
+class VoiceCloneScriptSegment(BaseModel):
+    id: int
+    timeRange: str
+    targetContent: str
+    chinese: str
+
+class VoiceCloneAnalyzeResponse(BaseModel):
+    segments: List[VoiceCloneScriptSegment]
+    flaggedWords: List[dict]
+    detectedSourceLanguage: Optional[str] = None
+
+class VoiceCloneSynthesizeRequest(BaseModel):
+    segments: List[VoiceCloneScriptSegment]
+    voice_name: str = "Kore"
+    target_lang: str = "th-TH"
+
+class VoiceCloneSynthesizeResponse(BaseModel):
+    audio_base64: str
+    segment_durations: List[float]
+
+# Supported languages for Voice Clone
+VOICE_CLONE_LANGUAGES = {
+    "th-TH": {"name": "泰语", "flag": "🇹🇭"},
+    "es-ES": {"name": "西班牙语", "flag": "🇪🇸"},
+    "en-US": {"name": "英语", "flag": "🇺🇸"},
+    "ja-JP": {"name": "日语", "flag": "🇯🇵"},
+    "ko-KR": {"name": "韩语", "flag": "🇰🇷"},
+}
+
+@app.post("/api/v1/voice-clone/analyze-video", response_model=VoiceCloneAnalyzeResponse)
+async def voice_clone_analyze_video(
+    video: UploadFile = File(...),
+    target_lang: str = Form("th-TH"),
+    video_duration: float = Form(0),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """
+    分析视频并生成多语种脱敏脚本。
+    使用 Gemini Flash 模型分析视频内容，生成目标语言的配音脚本。
+    """
+    logger.info(f"Voice Clone: Analyzing video for user {user.username}, target_lang={target_lang}")
+    
+    # 获取配置
+    config_dict = {}
+    for item in db.query(SystemConfig).all():
+        config_dict[item.key] = item.value
+    
+    api_url = config_dict.get("voice_clone_api_url") or config_dict.get("api_url") or os.getenv("DEFAULT_API_URL", "")
+    api_key = config_dict.get("voice_clone_api_key") or config_dict.get("api_key") or os.getenv("DEFAULT_API_KEY", "")
+    model_name = config_dict.get("voice_clone_analysis_model") or config_dict.get("analysis_model_name") or os.getenv("DEFAULT_ANALYSIS_MODEL_NAME", "")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=500, detail="API配置缺失，请在系统设置中配置API密钥")
+    
+    # 读取视频文件
+    video_content = await video.read()
+    video_b64 = base64.b64encode(video_content).decode("utf-8")
+    video_mime = video.content_type or "video/mp4"
+    
+    lang_info = VOICE_CLONE_LANGUAGES.get(target_lang, {"name": "泰语"})
+    lang_name = lang_info["name"]
+    
+    # 构建分析提示词
+    prompt = f"""
+You are a high-level Compliance AI for a global e-commerce platform.
+Analyze this video ({video_duration:.1f}s) and generate a voiceover script in {lang_name} ({target_lang}) with Chinese translation.
+
+### MANDATORY COMPLIANCE RULES:
+
+1. **ABSOLUTE BRAND MASKING**:
+   - NEVER include specific brand names (e.g., "SUCHCUTE", "TikTok", "Apple", "Lazada") in the script.
+   - Replace brands with generic terms like "this brand", "this product", or "the platform" in the target language.
+   - For Chinese translation, use "某品牌", "这款产品", "该平台".
+
+2. **LANGUAGE PURITY**:
+   - The 'targetContent' field MUST ONLY contain characters of the target language ({lang_name}). 
+   - If Target is Thai, NO English letters. If Target is Spanish, use Spanish conventions.
+   - Ensure the tone is natural for social media marketing in that locale.
+
+3. **OUTPUT JSON**:
+   - 'segments': Array of script blocks (~10s each).
+   - 'flaggedWords': List original brand/risk terms found for user review.
+   - 'detectedSourceLanguage': What language is being spoken in the video?
+
+### CATEGORIES:
+- **brand**: Shop/Platform/Product names.
+- **price**: Monetary values.
+- **risk**: Extreme claims (e.g., "Best", "Guaranteed").
+
+Return valid JSON only with the following structure:
+{{
+  "segments": [
+    {{"id": 1, "timeRange": "0:00-0:10", "targetContent": "...", "chinese": "..."}}
+  ],
+  "flaggedWords": [
+    {{"word": "...", "category": "brand", "reason": "..."}}
+  ],
+  "detectedSourceLanguage": "..."
+}}
+"""
+    
+    # 调用 Gemini API
+    api_endpoint = api_url.rstrip("/")
+    if not api_endpoint.endswith("/chat/completions"):
+        api_endpoint = api_endpoint + "/chat/completions"
+    
+    try:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            response = await client.post(
+                api_endpoint,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": model_name,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "video_url",
+                                    "video_url": {
+                                        "url": f"data:{video_mime};base64,{video_b64}"
+                                    }
+                                },
+                                {
+                                    "type": "text",
+                                    "text": prompt
+                                }
+                            ]
+                        }
+                    ],
+                    "max_tokens": 4096,
+                    "response_format": {"type": "json_object"}
+                }
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Voice Clone API error: {response.status_code} - {response.text}")
+                raise HTTPException(status_code=response.status_code, detail=f"视频分析失败: {response.text[:200]}")
+            
+            result = response.json()
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            
+            # 解析JSON响应
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError:
+                json_match = re.search(r'\{[\s\S]*\}', content)
+                if json_match:
+                    parsed = json.loads(json_match.group())
+                else:
+                    raise HTTPException(status_code=500, detail="无法解析AI响应")
+            
+            segments = parsed.get("segments", [])
+            flagged_words = parsed.get("flaggedWords", [])
+            detected_lang = parsed.get("detectedSourceLanguage", None)
+            
+            # 品牌词脱敏过滤
+            for seg in segments:
+                content_text = seg.get("targetContent", "")
+                chinese_text = seg.get("chinese", "")
+                for fw in flagged_words:
+                    if fw.get("category") == "brand":
+                        word = fw.get("word", "")
+                        if word:
+                            content_text = re.sub(re.escape(word), "---", content_text, flags=re.IGNORECASE)
+                            chinese_text = re.sub(re.escape(word), "某品牌", chinese_text, flags=re.IGNORECASE)
+                seg["targetContent"] = content_text
+                seg["chinese"] = chinese_text
+            
+            logger.info(f"Voice Clone: Analysis complete, {len(segments)} segments generated")
+            
+            return VoiceCloneAnalyzeResponse(
+                segments=[VoiceCloneScriptSegment(**seg) for seg in segments],
+                flaggedWords=flagged_words,
+                detectedSourceLanguage=detected_lang
+            )
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="视频分析请求超时，请尝试较短的视频")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Voice Clone analyze error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"视频分析失败: {str(e)}")
+
+
+@app.post("/api/v1/voice-clone/synthesize-speech", response_model=VoiceCloneSynthesizeResponse)
+async def voice_clone_synthesize_speech(
+    request: VoiceCloneSynthesizeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """
+    使用 Gemini TTS 模型合成语音。
+    将脚本段落转换为音频数据。
+    """
+    logger.info(f"Voice Clone: Synthesizing speech for user {user.username}, voice={request.voice_name}")
+    
+    # 获取配置
+    config_dict = {}
+    for item in db.query(SystemConfig).all():
+        config_dict[item.key] = item.value
+    
+    api_url = config_dict.get("voice_clone_api_url") or config_dict.get("api_url") or os.getenv("DEFAULT_API_URL", "")
+    api_key = config_dict.get("voice_clone_api_key") or config_dict.get("api_key") or os.getenv("DEFAULT_API_KEY", "")
+    tts_model = config_dict.get("voice_clone_tts_model") or os.getenv("VOICE_CLONE_TTS_MODEL", "")
+    
+    if not api_url or not api_key:
+        raise HTTPException(status_code=500, detail="API配置缺失，请在系统设置中配置API密钥")
+    
+    api_endpoint = api_url.rstrip("/")
+    if not api_endpoint.endswith("/chat/completions"):
+        api_endpoint = api_endpoint + "/chat/completions"
+    
+    all_audio_chunks = []
+    segment_durations = []
+    
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            for segment in request.segments:
+                text = segment.targetContent.strip()
+                if not text:
+                    all_audio_chunks.append(b"")
+                    segment_durations.append(0.0)
+                    continue
+                
+                # 调用 TTS API
+                tts_response = await client.post(
+                    api_endpoint,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": tts_model,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": text
+                            }
+                        ],
+                        "modalities": ["audio"],
+                        "audio": {
+                            "voice": request.voice_name.lower(),
+                            "format": "pcm16"
+                        }
+                    }
+                )
+                
+                if tts_response.status_code != 200:
+                    logger.error(f"TTS API error: {tts_response.status_code} - {tts_response.text[:200]}")
+                    all_audio_chunks.append(b"")
+                    segment_durations.append(0.0)
+                    continue
+                
+                tts_result = tts_response.json()
+                logger.info(f"TTS API response keys: {tts_result.keys()}")
+                
+                audio_data = None
+                choices = tts_result.get("choices", [])
+                if choices:
+                    message = choices[0].get("message", {})
+                    logger.info(f"TTS message keys: {message.keys()}")
+                    
+                    audio_info = message.get("audio", {})
+                    if audio_info and audio_info.get("data"):
+                        audio_data = audio_info.get("data")
+                        logger.info(f"Found audio in message.audio.data, length: {len(audio_data)}")
+                    
+                    if not audio_data:
+                        content = message.get("content", [])
+                        if isinstance(content, list):
+                            for part in content:
+                                if isinstance(part, dict):
+                                    if part.get("inlineData", {}).get("data"):
+                                        audio_data = part["inlineData"]["data"]
+                                        logger.info(f"Found audio in content.inlineData.data")
+                                        break
+                                    if part.get("audio", {}).get("data"):
+                                        audio_data = part["audio"]["data"]
+                                        logger.info(f"Found audio in content.audio.data")
+                                        break
+                        elif isinstance(content, str) and len(content) > 100:
+                            try:
+                                import base64 as b64_test
+                                b64_test.b64decode(content[:100])
+                                audio_data = content
+                                logger.info(f"Found audio as raw base64 string in content")
+                            except:
+                                pass
+                    
+                    if not audio_data and message.get("audio_content"):
+                        audio_data = message.get("audio_content")
+                        logger.info(f"Found audio in message.audio_content")
+                
+                if audio_data:
+                    audio_bytes = base64.b64decode(audio_data)
+                    all_audio_chunks.append(audio_bytes)
+                    # 计算时长: PCM 16-bit, 24000 Hz, mono
+                    duration = len(audio_bytes) / (24000 * 2)  # 2 bytes per sample
+                    segment_durations.append(duration)
+                else:
+                    logger.warning(f"No audio data in TTS response for segment {segment.id}")
+                    all_audio_chunks.append(b"")
+                    segment_durations.append(0.0)
+        
+        # 合并所有音频块
+        combined_audio = b"".join(all_audio_chunks)
+        audio_base64 = base64.b64encode(combined_audio).decode("utf-8")
+        
+        logger.info(f"Voice Clone: Speech synthesis complete, total duration: {sum(segment_durations):.1f}s")
+        
+        return VoiceCloneSynthesizeResponse(
+            audio_base64=audio_base64,
+            segment_durations=segment_durations
+        )
+        
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="语音合成请求超时")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Voice Clone synthesize error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")

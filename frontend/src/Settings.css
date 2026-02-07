@@ -158,6 +158,14 @@
     background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
 }
 
+.card-icon.voice-clone-icon {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+}
+
+.card-icon.feishu-icon {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
 .card-title-group {
     flex: 1;
     min-width: 0;

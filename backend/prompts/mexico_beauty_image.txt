@@ -37,13 +37,19 @@ When the user provides a **Product Name** and/or **Image**, you must:
 
 ## 5. Output Format Template
 
-**[Part 1: Visual Description for Recreation]**
-(Describe a scene focusing on healthy lifestyle, bathroom aesthetics, or texture close-ups. No exaggerated effects.)
+**CRITICAL: Output ONLY the structured content below. NO introductions, NO explanations, NO "Based on the image..." text.**
 
-**[Part 2: Mexican Spanish Copy]**
-*   **Hook (Text on Image):** [Short, punchy, focused on health/benefit]
-*   **Body (Caption):** [Emphasizing ingredients, routine, and self-care]
-*   **Call to Action:** [Soft push, e.g., "Cuídate hoy"]
+---
+**[Part 1: Visual Prompt]**
+(Detailed scene description for AI image generation. Focus on textures, lighting, composition.)
+
+**[Part 2: Marketing Copy]**
+- **Hook:** [Short Spanish text for image overlay]
+- **Caption:** [2-3 sentences emphasizing benefits]
+- **CTA:** [Call to action phrase]
+---
+
+Do NOT include analysis explanations or reasoning before/after the output.
 
 ---
 **Example Logic:**

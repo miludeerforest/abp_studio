@@ -941,6 +941,42 @@ html[data-theme="light"] .fg-lightbox-content {
     background: #000;
 }
 
+.fg-video-expired {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    padding: 2rem;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: #e2e8f0;
+    text-align: center;
+}
+
+.fg-expired-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+.fg-expired-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #f59e0b;
+}
+
+.fg-expired-desc {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    max-width: 280px;
+}
+
 .fg-lightbox-info {
     padding: 1rem 1.25rem;
     background: rgba(15, 23, 42, 0.95);

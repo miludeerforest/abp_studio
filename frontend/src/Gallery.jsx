@@ -60,6 +60,7 @@ const Gallery = ({ onSelectForVideo }) => {
     // Detailed items for lightbox
     const [selectedImage, setSelectedImage] = useState(null);
     const [selectedVideo, setSelectedVideo] = useState(null);
+    const [videoError, setVideoError] = useState(false);
 
     // Totals for pagination
     const [totalImages, setTotalImages] = useState(0);
@@ -703,7 +704,7 @@ const Gallery = ({ onSelectForVideo }) => {
                                         <div
                                             key={vid.id}
                                             className={`gallery-card video-card ${portraitVideos.has(vid.id) ? 'portrait' : ''} ${selectMode && selectedIds.has(vid.id) ? 'selected' : ''}`}
-                                            onClick={() => setSelectedVideo(vid)}
+                                            onClick={() => { setVideoError(false); setSelectedVideo(vid); }}
                                         >
                                             {/* Select checkbox - bottom right, only in select mode */}
                                             {selectMode && (
@@ -963,12 +964,21 @@ const Gallery = ({ onSelectForVideo }) => {
                     <div className="lightbox-content lightbox-two-column" onClick={e => e.stopPropagation()}>
                         {/* Left: Video */}
                         <div className="lightbox-media-wrapper video-card">
-                            <video
-                                src={selectedVideo.result_url}
-                                controls
-                                autoPlay
-                                className="lightbox-video"
-                            />
+                            {videoError ? (
+                                <div className="video-expired-placeholder">
+                                    <div className="expired-icon">⏰</div>
+                                    <div className="expired-title">视频链接已过期</div>
+                                    <div className="expired-desc">外部视频资源已失效，请重新生成</div>
+                                </div>
+                            ) : (
+                                <video
+                                    src={selectedVideo.result_url}
+                                    controls
+                                    autoPlay
+                                    className="lightbox-video"
+                                    onError={() => setVideoError(true)}
+                                />
+                            )}
                         </div>
 
                         {/* Right: Info Panel */}

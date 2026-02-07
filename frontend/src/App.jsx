@@ -10,8 +10,8 @@ import FloatingGallery from './FloatingGallery';
 import AdminDashboard from './AdminDashboard';
 import PublicGallery from './PublicGallery';
 import ProfileSettings from './ProfileSettings';
-import KeywordExtractor from './KeywordExtractor';
 import MexicoBeautyStation from './MexicoBeautyStation';
+import VoiceClone from './VoiceClone';
 import { useWebSocket } from './hooks/useWebSocket';
 import './App.css';
 
@@ -293,17 +293,6 @@ function App() {
             {!sidebarCollapsed && <span className="label">故事模式</span>}
           </button>
           <button
-            className={`sidebar-item ${activeTab === 'keywords' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('keywords'); setMobileMenuOpen(false); }}
-            title="核心词提取"
-            aria-label="核心词提取"
-            aria-current={activeTab === 'keywords' ? 'page' : undefined}
-          >
-            <span className="icon">📊</span>
-            {!sidebarCollapsed && <span className="label">核心词提取</span>}
-          </button>
-
-          <button
             className={`sidebar-item ${activeTab === 'mexico-beauty' ? 'active' : ''}`}
             onClick={() => { setActiveTab('mexico-beauty'); setMobileMenuOpen(false); }}
             title="营销助手"
@@ -315,13 +304,14 @@ function App() {
           </button>
 
           <button
-            className="sidebar-item"
-            onClick={() => window.open('https://ai.studio/apps/drive/1yz74ruD7ppy6XwVXm-4NcnU1a09AzATR', '_blank')}
-            title="泰语配音"
-            aria-label="泰语配音 - 在新标签页打开"
+            className={`sidebar-item ${activeTab === 'voice-clone' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('voice-clone'); setMobileMenuOpen(false); }}
+            title="音色模仿"
+            aria-label="音色模仿"
+            aria-current={activeTab === 'voice-clone' ? 'page' : undefined}
           >
             <span className="icon">🎙️</span>
-            {!sidebarCollapsed && <span className="label">泰语配音</span>}
+            {!sidebarCollapsed && <span className="label">音色模仿</span>}
           </button>
 
           {/* Profile - All Users */}
@@ -447,13 +437,6 @@ function App() {
           />
         </div>
 
-        <div style={{ display: activeTab === 'keywords' ? 'block' : 'none' }}>
-          <KeywordExtractor
-            token={token}
-            config={config}
-          />
-        </div>
-
         <div style={{ display: activeTab === 'mexico-beauty' ? 'block' : 'none', height: '100%' }}>
           <MexicoBeautyStation
             token={token}
@@ -461,6 +444,11 @@ function App() {
           />
         </div>
 
+        <div style={{ display: activeTab === 'voice-clone' ? 'block' : 'none', height: '100%' }}>
+          <VoiceClone
+            token={token}
+          />
+        </div>
 
 
         <div style={{ display: activeTab === 'video' ? 'block' : 'none' }}>

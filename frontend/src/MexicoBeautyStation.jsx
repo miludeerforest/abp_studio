@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import './MexicoBeautyStation.css'
+import ProductDescriptionModule from './components/ProductDescriptionModule'
 
 const BACKEND_URL = ''
 const CONCURRENCY = 5
@@ -29,6 +30,13 @@ function MexicoBeautyStation({ token }) {
     const pauseRef = useRef(false)
     const itemsRef = useRef([])
     const [syncingFeishu, setSyncingFeishu] = useState(false)
+
+    // History state (for 核心词提取)
+    const [showHistory, setShowHistory] = useState(false)
+    const [history, setHistory] = useState([])
+    const [loadingHistory, setLoadingHistory] = useState(false)
+    const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(null)
+    const [historySearch, setHistorySearch] = useState('')
 
     useEffect(() => {
         itemsRef.current = items
@@ -178,20 +186,53 @@ function MexicoBeautyStation({ token }) {
 
                 analyzeItem(itemData, activeModule)
                     .then(result => {
-                        let outputText
-                        if (activeModule === MODULES.CORE_KEYWORD && result.translation && result.keywords) {
-                            outputText = `翻译: ${result.translation}\n核心词: ${result.keywords}`
-                        } else {
-                            outputText = result.result || JSON.stringify(result)
-                        }
-                        setItems(prev => prev.map((t, idx) => 
-                            idx === index ? {
-                                ...t,
-                                output: outputText,
-                                status: STATUS.COMPLETED,
-                                error: null
-                            } : t
-                        ))
+                        setItems(prev => prev.map((t, idx) => {
+                            if (idx !== index) return t
+                            
+                            const currentModule = activeModule
+                            
+                            if (currentModule === MODULES.CORE_KEYWORD) {
+                                return {
+                                    ...t,
+                                    translation: result.translation || '',
+                                    keywords: result.keywords || '',
+                                    output: result.result || JSON.stringify(result),
+                                    status: STATUS.COMPLETED,
+                                    error: null
+                                }
+                            } else if (currentModule === MODULES.KEYWORD) {
+                                return {
+                                    ...t,
+                                    analysisReport: result.result || '',
+                                    output: result.result || '',
+                                    status: STATUS.COMPLETED,
+                                    error: null
+                                }
+                            } else if (currentModule === MODULES.TITLE) {
+                                return {
+                                    ...t,
+                                    optimizedTitles: result.result || '',
+                                    output: result.result || '',
+                                    status: STATUS.COMPLETED,
+                                    error: null
+                                }
+                            } else if (currentModule === MODULES.IMAGE) {
+                                return {
+                                    ...t,
+                                    imagePrompt: result.result || '',
+                                    output: result.result || '',
+                                    status: STATUS.COMPLETED,
+                                    error: null
+                                }
+                            } else {
+                                return {
+                                    ...t,
+                                    output: result.result || JSON.stringify(result),
+                                    status: STATUS.COMPLETED,
+                                    error: null
+                                }
+                            }
+                        }))
                     })
                     .catch(error => {
                         setItems(prev => prev.map((t, idx) => 
@@ -209,6 +250,7 @@ function MexicoBeautyStation({ token }) {
                         }
                         if (activeCount === 0 && (queueIndex >= queue.length || pauseRef.current)) {
                             setIsProcessing(false)
+                            setTimeout(() => autoSaveHistory(), 500)
                         }
                     })
             }
@@ -224,6 +266,31 @@ function MexicoBeautyStation({ token }) {
     const handlePause = () => {
         pauseRef.current = true
         setIsPaused(true)
+    }
+
+    const autoSaveHistory = async () => {
+        const currentItems = itemsRef.current
+        const completedItems = currentItems.filter(t => t.status === STATUS.COMPLETED)
+        if (completedItems.length === 0) return
+        
+        try {
+            const titles = completedItems.map(item => ({
+                original: item.input,
+                translation: item.translation || '',
+                keywords: item.keywords || '',
+                status: 'completed'
+            }))
+            await fetch(`${BACKEND_URL}/api/v1/keywords/history`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ titles })
+            })
+        } catch (error) {
+            console.error('Auto save history failed:', error)
+        }
     }
 
     const handleSyncFeishu = async () => {
@@ -286,6 +353,109 @@ function MexicoBeautyStation({ token }) {
                 return <span className="status-dot status-pending" title="待处理">⚪</span>
         }
     }
+
+    const loadHistory = async () => {
+        setLoadingHistory(true)
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/v1/keywords/history`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setHistory(data.records || [])
+            }
+        } catch (error) {
+            console.error('Load history failed:', error)
+        }
+        setLoadingHistory(false)
+    }
+
+    const deleteHistory = async (index) => {
+        if (!confirm('确定删除这条历史记录？')) return
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/v1/keywords/history/${index}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            if (res.ok) {
+                loadHistory()
+                if (selectedHistoryIndex === index) {
+                    setSelectedHistoryIndex(null)
+                }
+            }
+        } catch (error) {
+            console.error('Delete history failed:', error)
+        }
+    }
+
+    const exportHistoryItem = async (record) => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/v1/keywords/export-excel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ titles: record.titles })
+            })
+
+            if (!response.ok) throw new Error('导出失败')
+
+            const blob = await response.blob()
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = `keywords_${new Date(record.created_at).toISOString().slice(0, 10)}.xlsx`
+            link.click()
+            URL.revokeObjectURL(url)
+        } catch (error) {
+            alert('导出失败: ' + error.message)
+        }
+    }
+
+    const handleExportExcel = async () => {
+        const completedItems = items.filter(t => t.status === STATUS.COMPLETED)
+        if (completedItems.length === 0) {
+            alert('没有已完成的记录可以导出')
+            return
+        }
+        try {
+            const titles = completedItems.map(item => ({
+                original: item.input,
+                translation: item.translation || '',
+                keywords: item.keywords || '',
+                status: 'completed'
+            }))
+            const response = await fetch(`${BACKEND_URL}/api/v1/keywords/export-excel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ titles })
+            })
+            if (!response.ok) throw new Error('导出失败')
+            const blob = await response.blob()
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = `keywords_${new Date().toISOString().slice(0, 10)}.xlsx`
+            link.click()
+            URL.revokeObjectURL(url)
+        } catch (error) {
+            alert('导出失败: ' + error.message)
+        }
+    }
+
+    const filteredHistory = history.filter(record => {
+        if (!historySearch.trim()) return true
+        const search = historySearch.toLowerCase()
+        return record.titles.some(t => 
+            t.original?.toLowerCase().includes(search) ||
+            t.translation?.toLowerCase().includes(search) ||
+            t.keywords?.toLowerCase().includes(search)
+        )
+    })
 
     return (
         <div className="mexico-beauty-container">
@@ -353,9 +523,9 @@ function MexicoBeautyStation({ token }) {
                             <h3>产品描述</h3>
                         </div>
                         <div className="mb-card-body">
-                            <p className="mb-card-desc">产品图+标题 → 使用说明（Modo de Uso）</p>
+                            <p className="mb-card-desc">产品图+标题 → 10个AI图片生成提示词</p>
                             <div className="mb-card-example">
-                                <small>TikTok商品详情页专用</small>
+                                <small>2张主图 + 8张详情图策略</small>
                             </div>
                         </div>
                     </div>
@@ -378,7 +548,14 @@ function MexicoBeautyStation({ token }) {
                 </div>
             )}
 
-            {activeModule && (
+            {activeModule === MODULES.DESCRIPTION && (
+                <ProductDescriptionModule 
+                    token={token} 
+                    onBack={handleClear}
+                />
+            )}
+
+            {activeModule && activeModule !== MODULES.DESCRIPTION && (
                 <>
                     <div className="mb-module-header">
                         <button 
@@ -391,7 +568,6 @@ function MexicoBeautyStation({ token }) {
                             {activeModule === MODULES.KEYWORD && '🔍 关键词分析'}
                             {activeModule === MODULES.TITLE && '✍️ 标题优化'}
                             {activeModule === MODULES.IMAGE && '🎨 图片提示词生成'}
-                            {activeModule === MODULES.DESCRIPTION && '📝 产品描述生成'}
                             {activeModule === MODULES.CORE_KEYWORD && '🎯 核心词提取'}
                         </h3>
                     </div>
@@ -423,7 +599,7 @@ function MexicoBeautyStation({ token }) {
                                 </div>
                             )}
 
-                            {(activeModule === MODULES.TITLE || activeModule === MODULES.DESCRIPTION) && (
+                            {activeModule === MODULES.TITLE && (
                                 <div>
                                     <textarea
                                         className="mb-textarea"
@@ -515,6 +691,13 @@ function MexicoBeautyStation({ token }) {
                                     </button>
                                 )}
                                 <button 
+                                    className="mb-btn mb-btn-success" 
+                                    onClick={handleExportExcel}
+                                    disabled={!items.some(t => t.status === STATUS.COMPLETED)}
+                                >
+                                    📥 导出 Excel
+                                </button>
+                                <button 
                                     className="mb-btn mb-btn-feishu" 
                                     onClick={handleSyncFeishu}
                                     disabled={syncingFeishu || !items.some(t => t.status === STATUS.COMPLETED)}
@@ -530,10 +713,33 @@ function MexicoBeautyStation({ token }) {
                                 <table className="mb-table">
                                     <thead>
                                         <tr>
-                                            <th style={{ width: '40px' }}>#</th>
+                                            <th style={{ width: '50px' }}>#</th>
                                             <th style={{ width: '50px' }}>状态</th>
-                                            <th style={{ width: '30%' }}>输入</th>
-                                            <th style={{ width: '60%' }}>输出</th>
+                                            {activeModule === MODULES.CORE_KEYWORD && (
+                                                <>
+                                                    <th style={{ width: '30%' }}>标题</th>
+                                                    <th style={{ width: '30%' }}>中文翻译</th>
+                                                    <th style={{ width: '30%' }}>核心词</th>
+                                                </>
+                                            )}
+                                            {activeModule === MODULES.KEYWORD && (
+                                                <>
+                                                    <th style={{ width: '25%' }}>输入标题</th>
+                                                    <th style={{ width: '65%' }}>分析报告</th>
+                                                </>
+                                            )}
+                                            {activeModule === MODULES.TITLE && (
+                                                <>
+                                                    <th style={{ width: '30%' }}>原标题</th>
+                                                    <th style={{ width: '60%' }}>优化标题</th>
+                                                </>
+                                            )}
+                                            {activeModule === MODULES.IMAGE && (
+                                                <>
+                                                    <th style={{ width: '20%' }}>图片</th>
+                                                    <th style={{ width: '70%' }}>生成结果</th>
+                                                </>
+                                            )}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -541,14 +747,61 @@ function MexicoBeautyStation({ token }) {
                                             <tr key={item.id} className={`mb-row mb-row-${item.status}`}>
                                                 <td>{index + 1}</td>
                                                 <td>{getStatusIndicator(item.status)}</td>
-                                                <td className="mb-cell-input">
-                                                    {item.input || '-'}
-                                                </td>
-                                                <td className="mb-cell-output">
-                                                    {item.status === STATUS.PROCESSING ? '分析中...' : 
-                                                     item.status === STATUS.FAILED ? `❌ ${item.error}` :
-                                                     item.output || '-'}
-                                                </td>
+                                                
+                                                {activeModule === MODULES.CORE_KEYWORD && (
+                                                    <>
+                                                        <td className="mb-cell-input">
+                                                            {item.input || '-'}
+                                                        </td>
+                                                        <td className="mb-cell-translation">
+                                                            {item.status === STATUS.PROCESSING ? '分析中...' : 
+                                                             item.status === STATUS.FAILED ? `❌ ${item.error}` :
+                                                             item.translation || '-'}
+                                                        </td>
+                                                        <td className="mb-cell-keywords">
+                                                            {item.keywords || '-'}
+                                                        </td>
+                                                    </>
+                                                )}
+                                                
+                                                {activeModule === MODULES.KEYWORD && (
+                                                    <>
+                                                        <td className="mb-cell-input">
+                                                            {item.input || '-'}
+                                                        </td>
+                                                        <td className="mb-cell-result">
+                                                            {item.status === STATUS.PROCESSING ? '分析中...' : 
+                                                             item.status === STATUS.FAILED ? `❌ ${item.error}` :
+                                                             <pre className="mb-result-pre">{item.analysisReport || '-'}</pre>}
+                                                        </td>
+                                                    </>
+                                                )}
+                                                
+                                                {activeModule === MODULES.TITLE && (
+                                                    <>
+                                                        <td className="mb-cell-input">
+                                                            {item.input || item.title || '-'}
+                                                        </td>
+                                                        <td className="mb-cell-result">
+                                                            {item.status === STATUS.PROCESSING ? '分析中...' : 
+                                                             item.status === STATUS.FAILED ? `❌ ${item.error}` :
+                                                             <pre className="mb-result-pre">{item.optimizedTitles || '-'}</pre>}
+                                                        </td>
+                                                    </>
+                                                )}
+                                                
+                                                {activeModule === MODULES.IMAGE && (
+                                                    <>
+                                                        <td className="mb-cell-input">
+                                                            {item.input || '-'}
+                                                        </td>
+                                                        <td className="mb-cell-result">
+                                                            {item.status === STATUS.PROCESSING ? '分析中...' : 
+                                                             item.status === STATUS.FAILED ? `❌ ${item.error}` :
+                                                             <pre className="mb-result-pre">{item.imagePrompt || '-'}</pre>}
+                                                        </td>
+                                                    </>
+                                                )}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -558,6 +811,138 @@ function MexicoBeautyStation({ token }) {
                     )}
                 </>
             )}
+        {showHistory && (
+                <div className="mb-modal-overlay" onClick={() => { setShowHistory(false); setSelectedHistoryIndex(null); }}>
+                    <div className="mb-modal mb-modal-large" onClick={(e) => e.stopPropagation()}>
+                        <div className="mb-modal-header">
+                            <h3>📜 核心词提取历史记录</h3>
+                            <div className="mb-history-search">
+                                <input 
+                                    type="text"
+                                    placeholder="搜索历史记录..."
+                                    value={historySearch}
+                                    onChange={(e) => setHistorySearch(e.target.value)}
+                                    className="mb-search-input"
+                                />
+                            </div>
+                            <button className="mb-modal-close" onClick={() => { setShowHistory(false); setSelectedHistoryIndex(null); }}>×</button>
+                        </div>
+                        <div className="mb-modal-body mb-history-body">
+                            {loadingHistory ? (
+                                <div className="mb-loading">加载中...</div>
+                            ) : filteredHistory.length === 0 ? (
+                                <div className="mb-empty">{historySearch ? '没有匹配的记录' : '暂无历史记录'}</div>
+                            ) : (
+                                <div className="mb-history-container">
+                                    <div className="mb-history-list">
+                                        {filteredHistory.map((record, idx) => (
+                                            <div 
+                                                key={idx} 
+                                                className={`mb-history-item ${selectedHistoryIndex === idx ? 'mb-history-item-selected' : ''}`}
+                                                onClick={() => setSelectedHistoryIndex(idx)}
+                                            >
+                                                <div className="mb-history-item-info">
+                                                    <span className="mb-history-date">
+                                                        {new Date(record.created_at).toLocaleString()}
+                                                    </span>
+                                                    <span className="mb-history-count">
+                                                        {record.count} 条记录
+                                                    </span>
+                                                </div>
+                                                <div className="mb-history-item-actions">
+                                                    <button 
+                                                        className="mb-btn-small mb-btn-primary"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            const coreKeywordItems = record.titles.map((t, i) => ({
+                                                                id: Date.now() + i,
+                                                                input: t.original,
+                                                                output: `翻译: ${t.translation}\n核心词: ${t.keywords}`,
+                                                                status: STATUS.COMPLETED,
+                                                                error: null
+                                                            }))
+                                                            setItems(coreKeywordItems)
+                                                            setActiveModule(MODULES.CORE_KEYWORD)
+                                                            setShowHistory(false)
+                                                            setSelectedHistoryIndex(null)
+                                                        }}
+                                                        title="加载"
+                                                    >
+                                                        📂
+                                                    </button>
+                                                    <button 
+                                                        className="mb-btn-small mb-btn-success"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            exportHistoryItem(record)
+                                                        }}
+                                                        title="导出"
+                                                    >
+                                                        📥
+                                                    </button>
+                                                    <button 
+                                                        className="mb-btn-small mb-btn-danger"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            deleteHistory(idx)
+                                                        }}
+                                                        title="删除"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {selectedHistoryIndex !== null && filteredHistory[selectedHistoryIndex] && (
+                                        <div className="mb-history-detail">
+                                            <div className="mb-history-detail-header">
+                                                <h4>详细内容</h4>
+                                                <span className="mb-history-detail-count">
+                                                    共 {filteredHistory[selectedHistoryIndex].titles.length} 条
+                                                </span>
+                                            </div>
+                                            <div className="mb-history-detail-table">
+                                                <table className="mb-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>#</th>
+                                                            <th>原标题</th>
+                                                            <th>中文翻译</th>
+                                                            <th>核心大词</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {filteredHistory[selectedHistoryIndex].titles.map((item, i) => (
+                                                            <tr key={i}>
+                                                                <td>{i + 1}</td>
+                                                                <td className="mb-cell-original">{item.original}</td>
+                                                                <td className="mb-cell-translation">{item.translation || '-'}</td>
+                                                                <td className="mb-cell-keywords">{item.keywords || '-'}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <button 
+                className="mb-history-btn"
+                onClick={() => {
+                    setShowHistory(true)
+                    loadHistory()
+                }}
+                title="查看核心词提取历史记录"
+            >
+                📜
+            </button>
         </div>
     )
 }

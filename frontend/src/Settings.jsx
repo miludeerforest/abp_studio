@@ -25,7 +25,18 @@ function Settings({ token, config, onConfigChange }) {
         feishu_app_id: '',
         feishu_app_secret: '',
         feishu_app_token: '',
-        feishu_table_id: ''
+        feishu_table_id: '',
+        feishu_description_app_token: '',
+        feishu_description_table_id: '',
+        content_review_enabled: false,
+        content_review_api_url: '',
+        content_review_api_key: '',
+        content_review_model: '',
+        thai_dubbing_url: '',
+        voice_clone_api_url: '',
+        voice_clone_api_key: '',
+        voice_clone_analysis_model: '',
+        voice_clone_tts_model: ''
     })
     const [saving, setSaving] = useState(false)
     const [msg, setMsg] = useState(null)
@@ -62,7 +73,18 @@ function Settings({ token, config, onConfigChange }) {
                 feishu_app_id: config.feishu_app_id || '',
                 feishu_app_secret: config.feishu_app_secret || '',
                 feishu_app_token: config.feishu_app_token || '',
-                feishu_table_id: config.feishu_table_id || ''
+                feishu_table_id: config.feishu_table_id || '',
+                feishu_description_app_token: config.feishu_description_app_token || '',
+                feishu_description_table_id: config.feishu_description_table_id || '',
+                content_review_enabled: config.content_review_enabled === true || config.content_review_enabled === 'true',
+                content_review_api_url: config.content_review_api_url || '',
+                content_review_api_key: config.content_review_api_key || '',
+                content_review_model: config.content_review_model || '',
+                thai_dubbing_url: config.thai_dubbing_url || '',
+                voice_clone_api_url: config.voice_clone_api_url || '',
+                voice_clone_api_key: config.voice_clone_api_key || '',
+                voice_clone_analysis_model: config.voice_clone_analysis_model || '',
+                voice_clone_tts_model: config.voice_clone_tts_model || ''
             })
         }
     }, [config])
@@ -135,7 +157,9 @@ function Settings({ token, config, onConfigChange }) {
         { id: 'all', label: '全部', icon: '🏠' },
         { id: 'image', label: '图片生成', icon: '📦' },
         { id: 'video', label: '视频生成', icon: '🎬' },
+        { id: 'voice_clone', label: '音色模仿', icon: '🎙️' },
         { id: 'review', label: '质量审查', icon: '🔍' },
+        { id: 'content_review', label: '内容审核', icon: '🛡️' },
         { id: 'feishu', label: '飞书集成', icon: '📋' },
         { id: 'system', label: '系统配置', icon: '🖥️' },
         { id: 'performance', label: '性能调优', icon: '⚡' }
@@ -305,8 +329,77 @@ function Settings({ token, config, onConfigChange }) {
                                     models={videoModels}
                                     loading={loadingModels.video}
                                     onRefresh={refreshVideoModels}
-                                    placeholder="veo-2.0"
+                                    placeholder="sora2-portrait-15s"
                                 />
+                                <span className="field-hint">支持 Sora、Veo 等视频生成模型</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {shouldShow('voice_clone') && (
+                    <div className="settings-card">
+                        <div className="card-header">
+                            <div className="card-icon voice-clone-icon">🎙️</div>
+                            <div className="card-title-group">
+                                <h3 className="card-title">音色模仿配置</h3>
+                                <p className="card-desc">多语种视频配音与合规功能的API和模型设置</p>
+                            </div>
+                        </div>
+                        <div className="card-content">
+                            <div className="form-group">
+                                <label className="field-label">API 地址</label>
+                                <input
+                                    type="text"
+                                    value={localConfig.voice_clone_api_url}
+                                    onChange={(e) => handleChange('voice_clone_api_url', e.target.value)}
+                                    placeholder="https://api.example.com/v1（留空使用默认API）"
+                                    className="field-input"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="field-label">API 密钥</label>
+                                <input
+                                    type="password"
+                                    value={localConfig.voice_clone_api_key}
+                                    onChange={(e) => handleChange('voice_clone_api_key', e.target.value)}
+                                    placeholder="sk-...（留空使用默认密钥）"
+                                    className="field-input"
+                                />
+                            </div>
+                            <div className="form-row-2">
+                                <div className="form-group">
+                                    <label className="field-label">视频分析模型</label>
+                                    <ModelSelect
+                                        value={localConfig.voice_clone_analysis_model}
+                                        onChange={(v) => handleChange('voice_clone_analysis_model', v)}
+                                        models={imageModels}
+                                        loading={loadingModels.image}
+                                        onRefresh={refreshImageModels}
+                                        placeholder="gemini-3-flash-preview"
+                                    />
+                                    <span className="field-hint">留空使用默认分析模型</span>
+                                </div>
+                                <div className="form-group">
+                                    <label className="field-label">TTS 语音合成模型</label>
+                                    <ModelSelect
+                                        value={localConfig.voice_clone_tts_model}
+                                        onChange={(v) => handleChange('voice_clone_tts_model', v)}
+                                        models={imageModels}
+                                        loading={loadingModels.image}
+                                        onRefresh={refreshImageModels}
+                                        placeholder="gemini-2.5-pro-preview-tts"
+                                    />
+                                    <span className="field-hint">用于将脚本转换为语音</span>
+                                </div>
+                            </div>
+                            <div className="form-hint-box">
+                                <p><strong>功能说明：</strong></p>
+                                <ul>
+                                    <li>支持泰语、西班牙语、英语、日语、韩语配音</li>
+                                    <li>自动品牌词脱敏，确保内容合规</li>
+                                    <li>10种声线可选，生成高质量音频</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -317,8 +410,8 @@ function Settings({ token, config, onConfigChange }) {
                         <div className="card-header">
                             <div className="card-icon review-icon">🔍</div>
                             <div className="card-title-group">
-                                <h3 className="card-title">视频质量审查</h3>
-                                <p className="card-desc">AI 自动评估视频质量</p>
+                                <h3 className="card-title">质量审查</h3>
+                                <p className="card-desc">AI 自动审查视频生成质量</p>
                             </div>
                             <label className="toggle-switch">
                                 <input
@@ -336,7 +429,7 @@ function Settings({ token, config, onConfigChange }) {
                                     type="text"
                                     value={localConfig.review_api_url}
                                     onChange={(e) => handleChange('review_api_url', e.target.value)}
-                                    placeholder="https://api.openai.com/v1"
+                                    placeholder="https://api.example.com/v1"
                                     className="field-input"
                                     disabled={!localConfig.review_enabled}
                                 />
@@ -363,7 +456,63 @@ function Settings({ token, config, onConfigChange }) {
                                     placeholder="gpt-4o"
                                     disabled={!localConfig.review_enabled}
                                 />
-                                <span className="field-hint">需支持图片输入</span>
+                                <span className="field-hint">用于评估视频生成质量</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {shouldShow('content_review') && (
+                    <div className="settings-card">
+                        <div className="card-header">
+                            <div className="card-icon review-icon">🛡️</div>
+                            <div className="card-title-group">
+                                <h3 className="card-title">内容审核</h3>
+                                <p className="card-desc">AI 自动审核生成内容的合规性</p>
+                            </div>
+                            <label className="toggle-switch">
+                                <input
+                                    type="checkbox"
+                                    checked={localConfig.content_review_enabled}
+                                    onChange={(e) => handleChange('content_review_enabled', e.target.checked)}
+                                />
+                                <span className="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div className="card-content">
+                            <div className="form-group">
+                                <label className="field-label">审核 API 地址</label>
+                                <input
+                                    type="text"
+                                    value={localConfig.content_review_api_url}
+                                    onChange={(e) => handleChange('content_review_api_url', e.target.value)}
+                                    placeholder="https://api.example.com/v1"
+                                    className="field-input"
+                                    disabled={!localConfig.content_review_enabled}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="field-label">审核 API 密钥</label>
+                                <input
+                                    type="password"
+                                    value={localConfig.content_review_api_key}
+                                    onChange={(e) => handleChange('content_review_api_key', e.target.value)}
+                                    placeholder="sk-..."
+                                    className="field-input"
+                                    disabled={!localConfig.content_review_enabled}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="field-label">审核模型</label>
+                                <input
+                                    type="text"
+                                    value={localConfig.content_review_model}
+                                    onChange={(e) => handleChange('content_review_model', e.target.value)}
+                                    placeholder="content-review"
+                                    className="field-input"
+                                    disabled={!localConfig.content_review_enabled}
+                                />
+                                <span className="field-hint">用于审核生成内容是否合规</span>
                             </div>
                         </div>
                     </div>
@@ -438,6 +587,48 @@ function Settings({ token, config, onConfigChange }) {
                     </div>
                 )}
 
+                {shouldShow('feishu') && (
+                    <div className="settings-card">
+                        <div className="card-header">
+                            <div className="card-icon feishu-icon">📝</div>
+                            <div className="card-title-group">
+                                <h3 className="card-title">产品描述飞书表格</h3>
+                                <p className="card-desc">同步产品描述生成结果到飞书</p>
+                            </div>
+                        </div>
+                        <div className="card-content">
+                            <div className="form-row-2">
+                                <div className="form-group">
+                                    <label className="field-label">App Token</label>
+                                    <input
+                                        type="text"
+                                        value={localConfig.feishu_description_app_token}
+                                        onChange={(e) => handleChange('feishu_description_app_token', e.target.value)}
+                                        placeholder="LLmVbHOOraZfjPsahfEcFGOpnLe"
+                                        className="field-input"
+                                    />
+                                    <span className="field-hint">从多维表格 URL 获取</span>
+                                </div>
+                                <div className="form-group">
+                                    <label className="field-label">Table ID</label>
+                                    <input
+                                        type="text"
+                                        value={localConfig.feishu_description_table_id}
+                                        onChange={(e) => handleChange('feishu_description_table_id', e.target.value)}
+                                        placeholder="tblE10w3uBiiDO7y"
+                                        className="field-input"
+                                    />
+                                    <span className="field-hint">数据表 ID</span>
+                                </div>
+                            </div>
+                            <div className="form-hint-box">
+                                <p><strong>表格列要求：</strong></p>
+                                <p>产品标题、序号、类型、策略标题、策略思路、提示词、时间</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {shouldShow('system') && (
                     <div className="settings-card">
                         <div className="card-header">
@@ -492,6 +683,17 @@ function Settings({ token, config, onConfigChange }) {
                                     />
                                     <span className="field-hint">0 = 永久保留</span>
                                 </div>
+                            </div>
+                            <div className="form-group">
+                                <label className="field-label">音色模仿工具链接</label>
+                                <input
+                                    type="text"
+                                    value={localConfig.thai_dubbing_url || ''}
+                                    onChange={(e) => handleChange('thai_dubbing_url', e.target.value)}
+                                    placeholder="https://ai.studio/apps/drive/..."
+                                    className="field-input"
+                                />
+                                <span className="field-hint">侧边栏「音色模仿」按钮将跳转到此链接</span>
                             </div>
                         </div>
                     </div>

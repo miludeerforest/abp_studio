@@ -228,6 +228,37 @@
     border-radius: 8px;
 }
 
+.video-expired-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    min-width: 400px;
+    padding: 2rem;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-radius: 8px;
+    color: #e2e8f0;
+    text-align: center;
+}
+
+.video-expired-placeholder .expired-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.video-expired-placeholder .expired-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #f59e0b;
+}
+
+.video-expired-placeholder .expired-desc {
+    font-size: 0.9rem;
+    color: #94a3b8;
+}
+
 .lightbox-info {
     margin-top: 1rem;
     text-align: center;

@@ -6,6 +6,7 @@ const PublicGallery = ({ onLoginClick, siteConfig }) => {
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [selectedVideo, setSelectedVideo] = useState(null);
+    const [videoError, setVideoError] = useState(false);
     const loadedIdsRef = useRef(new Set());
     const offsetRef = useRef(0);
     const LIMIT = 12; // Reduced for better lazy loading performance
@@ -75,7 +76,7 @@ const PublicGallery = ({ onLoginClick, siteConfig }) => {
                     <VideoCard
                         key={vid.id}
                         video={vid}
-                        onClick={() => setSelectedVideo(vid)}
+                        onClick={() => { setVideoError(false); setSelectedVideo(vid); }}
                     />
                 ))}
             </div>
@@ -90,12 +91,21 @@ const PublicGallery = ({ onLoginClick, siteConfig }) => {
             {selectedVideo && (
                 <div className="public-lightbox" onClick={() => setSelectedVideo(null)}>
                     <div className="lightbox-content" onClick={e => e.stopPropagation()}>
-                        <video
-                            src={selectedVideo.result_url}
-                            controls
-                            autoPlay
-                            className="lightbox-video"
-                        />
+                        {videoError ? (
+                            <div className="video-expired-placeholder">
+                                <div className="expired-icon">⏰</div>
+                                <div className="expired-title">视频链接已过期</div>
+                                <div className="expired-desc">外部视频资源已失效</div>
+                            </div>
+                        ) : (
+                            <video
+                                src={selectedVideo.result_url}
+                                controls
+                                autoPlay
+                                className="lightbox-video"
+                                onError={() => setVideoError(true)}
+                            />
+                        )}
                         <div className="lightbox-info">
                             <span className="creator-badge">👤 {selectedVideo.username}</span>
                             <p className="video-prompt">{selectedVideo.prompt}</p>

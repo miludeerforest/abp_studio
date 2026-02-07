@@ -21,7 +21,17 @@ Generate 3 variations following this sequence:
 - **NO False Promises:** Change "Blanqueamiento inmediato" to "Tono uniforme" or "Iluminador".
 
 # Output Format
-Provide 3 optimized title options based on the reference provided.
+**CRITICAL: Output ONLY the 3 optimized titles. NO explanations, NO analysis, NO additional text.**
+
+Format:
+1. [Optimized Title 1]
+2. [Optimized Title 2]
+3. [Optimized Title 3]
+
+Do NOT include:
+- "Basado en...", "He analizado...", "Aquí tienes..."
+- "### Cambios Clave", explanations, or reasoning
+- Any text before or after the 3 titles
 
 # Training Examples (Reference -> New Title)
 
