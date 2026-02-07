@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import './ImageGenerator.css'
 
 const BACKEND_URL = ''
 
@@ -589,75 +590,63 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
     }
 
     return (
-        <div className="image-workspace" style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 'var(--section-gap)' }}>
+        <div className="image-workspace">
 
             {/* Lightbox Modal */}
             {lightboxImage && (
                 <div
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0,0,0,0.9)',
-                        zIndex: 1000,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'zoom-out'
-                    }}
+                    className="lightbox-overlay"
                     onClick={() => setLightboxImage(null)}
                 >
                     <img
                         src={lightboxImage}
-                        style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}
+                        className="lightbox-image"
                         alt="Zoomed"
                     />
                 </div>
             )}
 
             {/* Progress Header */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '32px', padding: '12px 0', borderBottom: '1px solid var(--card-border)', fontSize: '0.9rem' }}>
-                <div style={{ opacity: step === 'input' ? 1 : 0.5, fontWeight: '600' }}>1. 输入与定义</div>
-                <div style={{ opacity: step === 'analyzing' || step === 'review' ? 1 : 0.5, fontWeight: '600' }}>2. 智能分析 & 确认</div>
-                <div style={{ opacity: step === 'generating' || step === 'done' ? 1 : 0.5, fontWeight: '600' }}>3. 生成与交付</div>
+            <div className="progress-header">
+                <div className={`progress-step ${step === 'input' ? 'active' : ''}`}>1. 输入与定义</div>
+                <div className={`progress-step ${step === 'analyzing' || step === 'review' ? 'active' : ''}`}>2. 智能分析 & 确认</div>
+                <div className={`progress-step ${step === 'generating' || step === 'done' ? 'active' : ''}`}>3. 生成与交付</div>
             </div>
 
             {/* Error Banner */}
             {error && (
-                <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--error-color)', color: 'var(--error-color)', padding: '10px', borderRadius: '6px', textAlign: 'center', fontSize: '0.9rem' }}>
+                <div className="error-banner">
                     ❌ {error}
                 </div>
             )}
 
             {/* Step 1: Input */}
             {step === 'input' && (
-                <div style={{ maxWidth: '900px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--section-gap)' }}>
+                <div className="step-input-container">
+                    <div className="upload-grid">
                         {/* Product Upload */}
-                        <div className="upload-zone" onClick={() => document.getElementById('prod-upload').click()} style={{ height: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed var(--card-border)', borderRadius: '10px', cursor: 'pointer', background: 'var(--card-bg)', backdropFilter: 'blur(20px)' }}>
+                        <div className="upload-zone" onClick={() => document.getElementById('prod-upload').click()}>
                             {productImg ? (
-                                <img src={URL.createObjectURL(productImg)} style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain' }} alt="Product" />
+                                <img src={URL.createObjectURL(productImg)} alt="Product" />
                             ) : (
                                 <>
-                                    <div className="icon" style={{ fontSize: '2.5rem', marginBottom: '10px' }}>📦</div>
-                                    <div style={{ fontSize: '1rem', fontWeight: '600' }}>上传产品主图</div>
-                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>支持 PNG/JPG (白底最佳)</div>
+                                    <div className="icon">📦</div>
+                                    <div className="title">上传产品主图</div>
+                                    <div className="hint">支持 PNG/JPG (白底最佳)</div>
                                 </>
                             )}
                             <input id="prod-upload" type="file" hidden onChange={(e) => handleFileChange(e, setProductImg)} accept="image/*" />
                         </div>
 
                         {/* Reference Upload */}
-                        <div className="upload-zone" onClick={() => document.getElementById('ref-upload').click()} style={{ height: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed var(--card-border)', borderRadius: '10px', cursor: 'pointer', background: 'var(--card-bg)', backdropFilter: 'blur(20px)' }}>
+                        <div className="upload-zone" onClick={() => document.getElementById('ref-upload').click()}>
                             {refImg ? (
-                                <img src={URL.createObjectURL(refImg)} style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain' }} alt="Ref" />
+                                <img src={URL.createObjectURL(refImg)} alt="Ref" />
                             ) : (
                                 <>
-                                    <div className="icon" style={{ fontSize: '2.5rem', marginBottom: '10px' }}>🖼️</div>
-                                    <div style={{ fontSize: '1rem', fontWeight: '600' }}>上传风格参考图</div>
-                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>提取光影与环境结构</div>
+                                    <div className="icon">🖼️</div>
+                                    <div className="title">上传风格参考图</div>
+                                    <div className="hint">提取光影与环境结构</div>
                                 </>
                             )}
                             <input id="ref-upload" type="file" hidden onChange={(e) => handleFileChange(e, setRefImg)} accept="image/*" />
@@ -666,29 +655,15 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
                     {/* Category Selection */}
                     <div>
-                        <div className="section-title" style={{ fontSize: '0.9rem', marginBottom: '8px' }}>选择产品类目</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px' }}>
+                        <div className="section-title category-section-title">选择产品类目</div>
+                        <div className="category-button-grid">
                             {CATEGORIES.map(cat => (
                                 <button
                                     key={cat.id}
                                     onClick={() => setCategory(cat.id)}
-                                    style={{
-                                        padding: '8px',
-                                        borderRadius: '6px',
-                                        border: category === cat.id ? '2px solid var(--primary-color)' : '1px solid var(--card-border)',
-                                        background: category === cat.id ? 'rgba(99, 102, 241, 0.2)' : 'var(--card-bg)',
-                                        backdropFilter: 'blur(20px)',
-                                        color: category === cat.id ? 'var(--primary-color)' : 'var(--text-muted)',
-                                        cursor: 'pointer',
-                                        fontSize: '0.85rem',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        transition: 'all 0.2s'
-                                    }}
+                                    className={`category-button ${category === cat.id ? 'active' : ''}`}
                                 >
-                                    <span className="icon" style={{ fontSize: '1.3rem' }}>{cat.icon}</span>
+                                    <span className="icon">{cat.icon}</span>
                                     <span>{cat.label}</span>
                                 </button>
                             ))}
@@ -696,21 +671,13 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
                         {/* Custom Product Name Input */}
                         {category === 'other' && (
-                            <div style={{ marginTop: '10px', animation: 'fadeIn 0.3s' }}>
+                            <div className="custom-product-wrapper">
                                 <input
                                     type="text"
+                                    className="custom-product-input"
                                     placeholder="请输入产品名称 (如: 运动鞋, 陶瓷花瓶...)"
                                     value={customProductName}
                                     onChange={(e) => setCustomProductName(e.target.value)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '10px',
-                                        borderRadius: '6px',
-                                        background: 'transparent',
-                                        border: '1px solid var(--primary-color)',
-                                        color: 'var(--text-main)',
-                                        outline: 'none'
-                                    }}
                                 />
                             </div>
                         )}
@@ -718,29 +685,15 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
                     {/* Aspect Ratio Selection */}
                     <div>
-                        <div className="section-title" style={{ fontSize: '0.9rem', marginBottom: '8px' }}>画面比例</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                        <div className="section-title category-section-title">画面比例</div>
+                        <div className="ratio-button-grid">
                             {ASPECT_RATIOS.map(ratio => (
                                 <button
                                     key={ratio.id}
                                     onClick={() => setAspectRatio(ratio.id)}
-                                    style={{
-                                        padding: '8px',
-                                        borderRadius: '6px',
-                                        border: aspectRatio === ratio.id ? '2px solid var(--primary-color)' : '1px solid var(--card-border)',
-                                        background: aspectRatio === ratio.id ? 'rgba(99, 102, 241, 0.2)' : 'var(--card-bg)',
-                                        backdropFilter: 'blur(20px)',
-                                        color: aspectRatio === ratio.id ? 'var(--primary-color)' : 'var(--text-muted)',
-                                        cursor: 'pointer',
-                                        fontSize: '0.85rem',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        gap: '2px',
-                                        transition: 'all 0.2s'
-                                    }}
+                                    className={`ratio-button ${aspectRatio === ratio.id ? 'active' : ''}`}
                                 >
-                                    <span className="icon" style={{ fontSize: '1.1rem' }}>{ratio.icon}</span>
+                                    <span className="icon">{ratio.icon}</span>
                                     <span>{ratio.label}</span>
                                 </button>
                             ))}
@@ -749,70 +702,58 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
                     {/* Count Slider */}
                     <div>
-                        <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '6px' }}>
+                        <div className="section-title slider-section-title">
                             <span><span className="icon">🔢</span> 生成数量</span>
-                            <span style={{ color: 'var(--primary-color)', fontWeight: '600' }}>{genCount} 张</span>
+                            <span className="slider-count-value">{genCount} 张</span>
                         </div>
                         <input
                             type="range"
+                            className="gen-count-slider"
                             min="1"
                             max="9"
                             value={genCount}
                             onChange={(e) => setGenCount(parseInt(e.target.value))}
-                            style={{ width: '100%', accentColor: 'var(--primary-color)' }}
                         />
                     </div>
 
                     {/* Scene Style Selector */}
                     <div>
-                        <div className="section-title" style={{ fontSize: '0.9rem', marginBottom: '6px' }}><span className="icon">🎨</span> 场景风格 (批量统一)</div>
+                        <div className="section-title category-section-title"><span className="icon">🎨</span> 场景风格 (批量统一)</div>
                         <select
+                            className="scene-style-selector"
                             value={sceneStyle}
                             onChange={(e) => setSceneStyle(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '10px 12px',
-                                background: 'var(--card-bg)',
-                                backdropFilter: 'blur(20px)',
-                                border: '1px solid var(--card-border)',
-                                borderRadius: '6px',
-                                color: 'var(--text-main)',
-                                fontSize: '0.9rem',
-                                cursor: 'pointer',
-                                outline: 'none'
-                            }}
                         >
                             {SCENE_STYLES.map(style => (
                                 <option key={style.id} value={style.id}>{style.label}</option>
                             ))}
                         </select>
                         {sceneStyle && (
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '6px', fontStyle: 'italic' }}>
+                            <p className="scene-style-hint">
                                 {SCENE_STYLES.find(s => s.id === sceneStyle)?.prompt.substring(0, 80)}...
                             </p>
                         )}
                     </div>
 
                     {/* Auto Mode Checkbox */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', padding: '8px 12px', borderRadius: '6px' }}>
+                    <div className="auto-mode-bar">
                         <input
                             type="checkbox"
+                            className="auto-mode-checkbox"
                             id="autoMode"
                             checked={isAutoMode}
                             onChange={(e) => setIsAutoMode(e.target.checked)}
-                            style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--success-color)' }}
                         />
-                        <label htmlFor="autoMode" style={{ cursor: 'pointer', color: isAutoMode ? 'var(--success-color)' : 'var(--text-muted)', fontWeight: isAutoMode ? '600' : 'normal', fontSize: '0.9rem' }}>
+                        <label htmlFor="autoMode" className={`auto-mode-label ${isAutoMode ? 'active' : ''}`}>
                             全自动模式 (一键生成+转视频)
                         </label>
                     </div>
 
                     {/* Action */}
                     <button
-                        className="btn-primary"
+                        className="btn-primary step-input-action"
                         onClick={handleAnalyze}
                         disabled={loading}
-                        style={{ padding: '12px', fontSize: '1rem', marginTop: '8px' }}
                     >
                         {loading ? <><span className="icon">🧠</span> 正在进行视觉分析...</> : <><span className="icon">✨</span> 第一步：智能视觉分析 (Gemini 3 Pro)</>}
                     </button>
@@ -821,52 +762,33 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
             {/* Step 1.5: Analyzing Loading State */}
             {step === 'analyzing' && (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    <div className="radar-spinner" style={{ marginBottom: '16px' }}></div>
-                    <h2 className="loading-gradient" style={{ fontSize: '1.6rem', marginBottom: '10px' }}>正在分析视觉结构...</h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', minHeight: '1.5em' }}>{loadingMessage || "识别产品特征 • 解析空间几何 • 推理物理逻辑"}</p>
-                    <button className="btn-secondary" onClick={stopAnalysis} style={{ marginTop: '16px', borderColor: 'var(--error-color)', color: 'var(--error-color)', fontSize: '0.9rem' }}>⏹ 停止分析</button>
+                <div className="analyzing-wrapper">
+                    <div className="radar-spinner analyzing-spinner"></div>
+                    <h2 className="loading-gradient analyzing-title">正在分析视觉结构...</h2>
+                    <p className="analyzing-message">{loadingMessage || "识别产品特征 • 解析空间几何 • 推理物理逻辑"}</p>
+                    <button className="btn-secondary analyzing-stop-button" onClick={stopAnalysis}>⏹ 停止分析</button>
                 </div>
             )}
 
             {/* Step 2: Review */}
             {step === 'review' && analysisResult && (
-                <div style={{ maxWidth: '1400px', margin: '0 auto', width: '100%', display: 'grid', gridTemplateColumns: '360px 1fr', gap: 'var(--section-gap)', height: '100%', overflow: 'hidden' }}>
+                <div className="review-container">
 
                     {/* Timeout Warning Banner (Full Width, spanning both columns) */}
                     {showTimeoutWarning && (
-                        <div style={{
-                            gridColumn: '1 / -1',
-                            background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.15))',
-                            border: '1px solid rgba(251, 191, 36, 0.5)',
-                            borderRadius: '6px',
-                            padding: '10px 14px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px',
-                            animation: 'pulse 2s infinite',
-                            marginBottom: '-12px'
-                        }}>
-                            <span style={{ fontSize: '1.5rem' }}>⚠️</span>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 'bold', color: '#f59e0b', marginBottom: '4px' }}>
+                        <div className="timeout-warning-banner">
+                            <span className="timeout-warning-icon">⚠️</span>
+                            <div className="timeout-warning-content">
+                                <div className="timeout-warning-title">
                                     页面可能即将刷新
                                 </div>
-                                <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                                <div className="timeout-warning-text">
                                     建议尽快完成生成操作。如页面刷新，您的分析结果将自动恢复。
                                 </div>
                             </div>
                             <button
+                                className="timeout-warning-dismiss"
                                 onClick={() => setShowTimeoutWarning(false)}
-                                style={{
-                                    background: 'transparent',
-                                    border: '1px solid rgba(251, 191, 36, 0.5)',
-                                    color: '#f59e0b',
-                                    padding: '4px 12px',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.85rem'
-                                }}
                             >
                                 知道了
                             </button>
@@ -874,22 +796,22 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                     )}
 
                     {/* Left: Sidebar Configuration (Reference Style) */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', paddingRight: '10px' }}>
+                    <div className="review-sidebar">
 
                         {/* Analysis Report Box */}
-                        <div style={{ border: '1px solid var(--primary-color)', background: 'rgba(99, 102, 241, 0.05)', borderRadius: '8px', padding: '16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: 'var(--primary-color)', fontWeight: 'bold' }}>
+                        <div className="analysis-report-card">
+                            <div className="analysis-report-header">
                                 <span><span className="icon">✨</span></span> 分析报告
                             </div>
-                            <div style={{ fontSize: '0.9rem', marginBottom: '8px' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>识别产品: </span>
+                            <div className="analysis-report-row">
+                                <span className="analysis-report-label">识别产品: </span>
                                 <b>{analysisResult.product_description}</b>
                             </div>
-                            <div style={{ fontSize: '0.9rem', marginBottom: '12px' }}>
-                                <span style={{ color: 'var(--text-muted)' }}>建议摆放: </span>
+                            <div className="analysis-report-row last">
+                                <span className="analysis-report-label">建议摆放: </span>
                                 <b>{analysisResult.placement_mode}</b>
                             </div>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: '1.4' }}>
+                            <div className="analysis-report-env">
                                 "{analysisResult.environment_analysis}"
                             </div>
                         </div>
@@ -897,20 +819,12 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                         {/* Placement Mode Selector */}
                         <div>
                             <div className="section-title"><span className="icon">📍</span> 确认产品摆放方式 (智能识别)</div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            <div className="placement-chips">
                                 {PLACEMENT_MODES.map(mode => (
                                     <button
                                         key={mode.id}
                                         onClick={() => setPlacementMode(mode.id)}
-                                        style={{
-                                            padding: '6px 12px',
-                                            borderRadius: '4px',
-                                            border: placementMode === mode.id ? '1px solid var(--primary-color)' : '1px solid var(--card-border)',
-                                            background: placementMode === mode.id ? 'var(--primary-color)' : 'transparent',
-                                            color: placementMode === mode.id ? '#fff' : 'var(--text-muted)',
-                                            cursor: 'pointer',
-                                            fontSize: '0.85rem'
-                                        }}
+                                        className={`placement-chip ${placementMode === mode.id ? 'active' : ''}`}
                                     >
                                         {mode.label}
                                     </button>
@@ -919,31 +833,29 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                         </div>
 
                         {/* Requirements Editor */}
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <div className="requirements-editor-wrapper">
                             <div className="section-title"><span className="icon">📝</span> 具体要求与建议 (可修改)</div>
                             <textarea
+                                className="requirements-textarea"
                                 onChange={(e) => {
                                     // Placeholder
                                 }}
                                 readOnly
-                                style={{ flex: 1, minHeight: '150px', background: 'var(--input-bg, rgba(0,0,0,0.05))', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '12px', color: 'var(--text-main)', resize: 'none', fontSize: '0.9rem', lineHeight: '1.5' }}
                                 defaultValue={`AI 建议: ${analysisResult.environment_analysis}\n\n(此分析将指导所有图片的生成)`}
                             />
                         </div>
 
                         {/* Action Buttons */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div className="review-actions">
                             <button
-                                className="btn-primary"
+                                className="btn-primary review-primary-button"
                                 onClick={handleGenerate}
-                                style={{ padding: '16px', fontSize: '1.1rem' }}
                             >
                                 确认方案并生成 ({genCount}张)
                             </button>
                             <button
-                                className="btn-secondary"
+                                className="btn-secondary review-secondary-button"
                                 onClick={resetFlow}
-                                style={{ padding: '12px', fontSize: '0.95rem' }}
                             >
                                 <span className="icon">🔄</span> 重新上传图片
                             </button>
@@ -951,19 +863,19 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                     </div>
 
                     {/* Right: Scripts Preview (Grid) */}
-                    <div style={{ overflowY: 'auto', paddingRight: '10px' }}>
-                        <h3 style={{ marginTop: 0, marginBottom: '20px' }}>生成脚本预览</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
+                    <div className="review-scripts-pane">
+                        <h3 className="scripts-preview-header">生成脚本预览</h3>
+                        <div className="scripts-grid">
                             {Array.isArray(scripts) && scripts.slice(0, genCount).map((item, idx) => (
-                                <div key={idx} style={{ background: 'var(--card-bg)', backdropFilter: 'blur(20px)', padding: '16px', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
-                                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '8px', fontSize: '0.9rem' }}>
+                                <div key={idx} className="script-card">
+                                    <div className="script-card-header">
                                         #{idx + 1} {item.angle_name}
                                     </div>
                                     <textarea
+                                        className="script-textarea"
                                         value={item.script}
                                         onChange={(e) => handleScriptChange(idx, e.target.value)}
                                         rows={6}
-                                        style={{ width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--card-border)', color: 'var(--text-muted)', padding: '8px', borderRadius: '4px', resize: 'none', fontSize: '0.8rem' }}
                                     />
                                 </div>
                             ))}
@@ -974,24 +886,23 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
             {/* Step 3: Generating / Results */}
             {(step === 'generating' || step === 'done') && (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="generation-wrapper">
                     {step === 'generating' && (
-                        <div style={{ textAlign: 'center', padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                            <div className="radar-spinner" style={{ marginBottom: '24px' }}></div>
-                            <h3 className="loading-gradient" style={{ fontSize: '1.8rem', marginBottom: '12px' }}>
+                        <div className="generating-state">
+                            <div className="radar-spinner generating-spinner"></div>
+                            <h3 className="loading-gradient generating-title">
                                 正在批量合成场景 ({results.length}/{genCount})...
                             </h3>
-                            <button className="btn-secondary" onClick={stopGeneration} style={{ marginTop: '10px', borderColor: 'var(--error-color)', color: 'var(--error-color)' }}>⏹ 停止生成</button>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', minHeight: '1.5em' }}>{loadingMessage || "主体抽离 • 风格迁移 • 物理约束渲染"}</p>
+                            <button className="btn-secondary generating-stop-button" onClick={stopGeneration}>⏹ 停止生成</button>
+                            <p className="generating-message">{loadingMessage || "主体抽离 • 风格迁移 • 物理约束渲染"}</p>
                         </div>
                     )}
 
                     {step === 'done' && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', padding: '0 20px' }}>
+                        <div className="done-header">
                             <h3>🎉 生成完成 (已自动清洗提示词)</h3>
-                            <div style={{ display: 'flex', gap: '12px' }}>
-                                <button className="btn-primary"
-                                    style={{ background: 'linear-gradient(45deg, #8b5cf6, #ec4899)' }}
+                            <div className="done-actions">
+                                <button className="btn-primary batch-video-button"
                                     onClick={handleBatchVideo}
                                 >
                                     <span className="icon">🎬</span> 一键批量转视频
@@ -1001,10 +912,10 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                         </div>
                     )}
 
-                    <div className="results-grid" style={{ padding: '0 20px 20px 20px' }}>
+                    <div className="results-grid results-grid-wrapper">
                         {Array.isArray(results) && results.map((res, idx) => (
-                            <div key={idx} className="result-card" style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ position: 'relative', cursor: 'zoom-in' }} onClick={() => setLightboxImage(res.image_base64.startsWith('http') || res.image_base64.startsWith('data:') ? res.image_base64 : `data:image/jpeg;base64,${res.image_base64}`)}>
+                            <div key={idx} className="result-card result-card-content">
+                                <div className="result-image-wrapper" onClick={() => setLightboxImage(res.image_base64.startsWith('http') || res.image_base64.startsWith('data:') ? res.image_base64 : `data:image/jpeg;base64,${res.image_base64}`)}>
                                     {res.image_base64 ? (
                                         <img
                                             src={res.image_base64.startsWith('http') || res.image_base64.startsWith('data:') ? res.image_base64 : `data:image/jpeg;base64,${res.image_base64}`}
@@ -1012,36 +923,25 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                             alt={res.angle_name}
                                         />
                                     ) : (
-                                        <div style={{ aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
+                                        <div className="result-image-placeholder">
                                             {res.error || 'Error'}
                                         </div>
                                     )}
-                                    <div style={{ position: 'absolute', top: '8px', left: '8px', background: 'rgba(0,0,0,0.6)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>
+                                    <div className="result-angle-badge">
                                         {res.angle_name}
                                     </div>
                                 </div>
 
                                 {/* Cleaned Prompt Display (Always Show if exists) */}
                                 {/* Cleaned Prompt Display */}
-                                <div style={{
-                                    padding: '12px',
-                                    background: 'rgba(0,0,0,0.3)',
-                                    borderTop: '1px solid var(--card-border)',
-                                    fontSize: '0.85rem',
-                                    color: 'var(--text-muted)',
-                                    minHeight: '60px',
-                                    maxHeight: '120px',
-                                    overflowY: 'auto',
-                                    whiteSpace: 'pre-wrap'
-                                }}>
-                                    <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '0.75rem', color: '#666' }}>VIDEO PROMPT:</div>
-                                    {res.video_prompt || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Pending prompt generation...</span>}
+                                <div className="result-prompt-display">
+                                    <div className="result-prompt-label">VIDEO PROMPT:</div>
+                                    {res.video_prompt || <span className="result-prompt-pending">Pending prompt generation...</span>}
                                 </div>
 
-                                <div className="result-actions" style={{ marginTop: 'auto' }}>
+                                <div className="result-actions">
                                     <button
-                                        className="btn-secondary"
-                                        style={{ fontSize: '0.8rem', padding: '4px 8px' }}
+                                        className="btn-secondary result-download-button"
                                         onClick={async (e) => {
                                             e.stopPropagation();
                                             // 1. Download Image
@@ -1098,8 +998,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
 
 
                                     <button
-                                        className="btn-secondary"
-                                        style={{ fontSize: '0.8rem', padding: '4px 8px', background: 'rgba(99, 102, 241, 0.2)', color: '#a5b4fc' }}
+                                        className="btn-secondary result-video-button"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             onSelectForVideo(

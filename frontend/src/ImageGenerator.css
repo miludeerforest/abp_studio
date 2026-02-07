@@ -1,0 +1,646 @@
+/* ImageGenerator - Wave 1A: TOP Section Styles */
+
+/* Root Workspace Container */
+.image-workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: var(--section-gap);
+}
+
+/* Lightbox Overlay */
+.lightbox-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+
+.lightbox-image {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+/* Progress Header (3-step indicator) */
+.progress-header {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--card-border);
+  font-size: 0.9rem;
+}
+
+.progress-step {
+  opacity: 0.5;
+  font-weight: 600;
+  transition: opacity 0.3s;
+}
+
+.progress-step.active {
+  opacity: 1;
+}
+
+/* Error Banner */
+.error-banner {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--error-color);
+  color: var(--error-color);
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+/* Step Input Container - Two-column grid for product/ref upload */
+.step-input-container {
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
+}
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--section-gap);
+}
+
+/* Upload Zone */
+.upload-zone {
+  height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--card-border);
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  transition: border-color 0.3s, transform 0.2s;
+}
+
+.upload-zone:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+}
+
+.upload-zone img {
+  max-width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+}
+
+.upload-zone .icon {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.upload-zone .title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.upload-zone .hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ===================================
+   Wave 1B: Category/Ratio/Custom Input Styles
+   =================================== */
+
+/* Section titles (category, ratio, slider, style, etc.) */
+.category-section-title {
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+.slider-section-title {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.slider-count-value {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+/* Category/Ratio button grids */
+.category-button-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.ratio-button-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+/* Category/Ratio buttons - base + active states */
+.category-button,
+.ratio-button {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+
+.category-button.active,
+.ratio-button.active {
+  border: 2px solid var(--primary-color);
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--primary-color);
+}
+
+.category-button .icon {
+  font-size: 1.3rem;
+}
+
+.ratio-button {
+  gap: 2px;
+}
+
+.ratio-button .icon {
+  font-size: 1.1rem;
+}
+
+/* Custom product name input */
+.custom-product-wrapper {
+  margin-top: 10px;
+  animation: fadeIn 0.3s;
+}
+
+.custom-product-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--primary-color);
+  color: var(--text-main);
+  outline: none;
+}
+
+/* Slider */
+.gen-count-slider {
+  width: 100%;
+  accent-color: var(--primary-color);
+}
+
+/* Scene style selector */
+.scene-style-selector {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.scene-style-hint {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* Auto mode bar */
+.auto-mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.auto-mode-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--success-color);
+}
+
+.auto-mode-label {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-weight: normal;
+  font-size: 0.9rem;
+}
+
+.auto-mode-label.active {
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+/* Step input primary action button override */
+.step-input-action {
+  padding: 12px;
+  font-size: 1rem;
+  margin-top: 8px;
+}
+
+/* ===================================
+   Wave 1B: Analyzing State Styles
+   =================================== */
+
+.analyzing-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.analyzing-spinner {
+  margin-bottom: 16px;
+}
+
+.analyzing-title {
+  font-size: 1.6rem;
+  margin-bottom: 10px;
+}
+
+.analyzing-message {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  min-height: 1.5em;
+}
+
+.analyzing-stop-button {
+  margin-top: 16px;
+  border-color: var(--error-color);
+  color: var(--error-color);
+  font-size: 0.9rem;
+}
+
+/* ===================================
+   Wave 1B: Review Layout Styles
+   =================================== */
+
+.review-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: var(--section-gap);
+  height: 100%;
+  overflow: hidden;
+}
+
+.review-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.review-scripts-pane {
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+/* Timeout warning banner */
+.timeout-warning-banner {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.15));
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: pulse 2s infinite;
+  margin-bottom: -12px;
+}
+
+.timeout-warning-icon {
+  font-size: 1.5rem;
+}
+
+.timeout-warning-content {
+  flex: 1;
+}
+
+.timeout-warning-title {
+  font-weight: bold;
+  color: #f59e0b;
+  margin-bottom: 4px;
+}
+
+.timeout-warning-text {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.timeout-warning-dismiss {
+  background: transparent;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  color: #f59e0b;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+/* Analysis report card */
+.analysis-report-card {
+  border: 1px solid var(--primary-color);
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.analysis-report-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--primary-color);
+  font-weight: bold;
+}
+
+.analysis-report-row {
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+.analysis-report-row.last {
+  margin-bottom: 12px;
+}
+
+.analysis-report-label {
+  color: var(--text-muted);
+}
+
+.analysis-report-env {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* Placement chips container */
+.placement-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.placement-chip {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--card-border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.placement-chip.active {
+  border: 1px solid var(--primary-color);
+  background: var(--primary-color);
+  color: #fff;
+}
+
+/* Requirements editor container */
+.requirements-editor-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.requirements-textarea {
+  flex: 1;
+  min-height: 150px;
+  background: var(--input-bg, rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--text-main);
+  resize: none;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Review action buttons container */
+.review-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.review-primary-button {
+  padding: 16px;
+  font-size: 1.1rem;
+}
+
+.review-secondary-button {
+  padding: 12px;
+  font-size: 0.95rem;
+}
+
+/* Scripts preview header */
+.scripts-preview-header {
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+/* Scripts grid */
+.scripts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.script-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+}
+
+.script-card-header {
+  font-weight: bold;
+  color: var(--text-main);
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.script-textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--card-border);
+  color: var(--text-muted);
+  padding: 8px;
+  border-radius: 4px;
+  resize: none;
+  font-size: 0.8rem;
+}
+
+/* ===================================
+   Wave 1B: Generating/Done States
+   =================================== */
+
+.generation-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.generating-state {
+  text-align: center;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.generating-spinner {
+  margin-bottom: 24px;
+}
+
+.generating-title {
+  font-size: 1.8rem;
+  margin-bottom: 12px;
+}
+
+.generating-stop-button {
+  margin-top: 10px;
+  border-color: var(--error-color);
+  color: var(--error-color);
+}
+
+.generating-message {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  min-height: 1.5em;
+}
+
+/* Done header */
+.done-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 0 20px;
+}
+
+.done-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.batch-video-button {
+  background: linear-gradient(45deg, #8b5cf6, #ec4899);
+}
+
+/* Results grid container */
+.results-grid-wrapper {
+  padding: 0 20px 20px 20px;
+}
+
+/* Result card meta/action section */
+.result-card-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.result-image-wrapper {
+  position: relative;
+  cursor: zoom-in;
+}
+
+.result-image-placeholder {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.result-angle-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.result-prompt-display {
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-top: 1px solid var(--card-border);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  min-height: 60px;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.result-prompt-label {
+  font-weight: bold;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.result-prompt-pending {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.result-actions {
+  margin-top: auto;
+}
+
+.result-download-button {
+  font-size: 0.8rem;
+  padding: 4px 8px;
+}
+
+.result-video-button {
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+}

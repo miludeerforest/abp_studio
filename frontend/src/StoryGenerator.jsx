@@ -450,35 +450,19 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
 
             {/* \u7f51\u7edc\u8fde\u63a5\u8b66\u544a - \u4e0d\u540c\u4e8e\u4efb\u52a1\u9519\u8bef */}
             {connectionWarning && !error && (
-                <div style={{
-                    background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(251, 191, 36, 0.15) 100%)',
-                    border: '1px solid rgba(251, 146, 60, 0.4)',
-                    borderRadius: '6px',
-                    padding: '10px 14px',
-                    margin: '0 16px 12px 16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px'
-                }}>
-                    <span style={{ fontSize: '1.1rem' }}>⚠️</span>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ color: '#fb923c', fontWeight: '600', marginBottom: '2px', fontSize: '0.9rem' }}>
+                <div className="connection-warning-banner">
+                    <span className="icon">⚠️</span>
+                    <div className="content">
+                        <div className="title">
                             网络连接不稳定
                         </div>
-                        <div style={{ color: '#fbbf24', fontSize: '0.8rem' }}>
+                        <div className="message">
                             无法获取最新状态，但您的任务仍在后台执行中，请稍候刷新页面查看结果
                         </div>
                     </div>
                     <button
                         onClick={() => setConnectionWarning(false)}
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#fb923c',
-                            cursor: 'pointer',
-                            fontSize: '1.1rem',
-                            padding: '2px'
-                        }}
+                        className="close-btn"
                     >
                         ✕
                     </button>
@@ -512,43 +496,23 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                             <h3>故事设定</h3>
 
                             {/* Generation Mode Toggle */}
-                            <div className="form-group" style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>生成模式</label>
-                                <div style={{ display: 'flex', gap: '6px' }}>
+                            <div className="form-group">
+                                <label className="form-group-label">生成模式</label>
+                                <div className="button-row">
                                     <button
                                         onClick={() => setGenerationMode('fission')}
-                                        style={{
-                                            flex: 1,
-                                            padding: '8px 12px',
-                                            borderRadius: '6px',
-                                            border: generationMode === 'fission' ? '2px solid #10b981' : '1px solid #444',
-                                            background: generationMode === 'fission' ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-                                            color: generationMode === 'fission' ? '#34d399' : 'var(--text-muted)',
-                                            cursor: 'pointer',
-                                            fontSize: '0.85rem',
-                                            fontWeight: generationMode === 'fission' ? '600' : '400'
-                                        }}
+                                        className={`mode-button ${generationMode === 'fission' ? 'fission' : ''}`}
                                     >
                                         🚀 裂变模式
                                     </button>
                                     <button
                                         onClick={() => setGenerationMode('linear')}
-                                        style={{
-                                            flex: 1,
-                                            padding: '8px 12px',
-                                            borderRadius: '6px',
-                                            border: generationMode === 'linear' ? '2px solid #6d28d9' : '1px solid #444',
-                                            background: generationMode === 'linear' ? 'rgba(109, 40, 217, 0.2)' : 'transparent',
-                                            color: generationMode === 'linear' ? '#a78bfa' : 'var(--text-muted)',
-                                            cursor: 'pointer',
-                                            fontSize: '0.85rem',
-                                            fontWeight: generationMode === 'linear' ? '600' : '400'
-                                        }}
+                                        className={`mode-button ${generationMode === 'linear' ? 'linear' : ''}`}
                                     >
                                         🔗 一镜到底
                                     </button>
                                 </div>
-                                <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>
+                                <p className="form-group-hint">
                                     {generationMode === 'fission'
                                         ? '从产品图片裂变出多个独立场景，并发生成后合并'
                                         : '分镜脚本串行生成，保持画面连贯性'}
@@ -556,22 +520,14 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                             </div>
 
                             {/* Product Category */}
-                            <div className="form-group" style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>产品类别</label>
-                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <div className="form-group">
+                                <label className="form-group-label">产品类别</label>
+                                <div className="button-grid">
                                     {CATEGORIES.map(cat => (
                                         <button
                                             key={cat.id}
                                             onClick={() => setCategory(cat.id)}
-                                            style={{
-                                                padding: '6px 10px',
-                                                borderRadius: '5px',
-                                                border: category === cat.id ? '2px solid #6d28d9' : '1px solid #444',
-                                                background: category === cat.id ? 'rgba(109, 40, 217, 0.2)' : 'transparent',
-                                                color: category === cat.id ? '#a78bfa' : 'var(--text-muted)',
-                                                cursor: 'pointer',
-                                                fontSize: '0.85rem'
-                                            }}
+                                            className={`category-button ${category === cat.id ? 'active' : ''}`}
                                         >
                                             {cat.icon} {cat.label}
                                         </button>
@@ -580,8 +536,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                             </div>
 
                             {/* Visual Style */}
-                            <div className="form-group" style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>视觉风格</label>
+                            <div className="form-group">
+                                <label className="form-group-label">视觉风格</label>
                                 <select
                                     value={visualStyle}
                                     onChange={(e) => setVisualStyle(e.target.value)}
@@ -594,8 +550,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                             </div>
 
                             {/* Camera Movement */}
-                            <div className="form-group" style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>运镜风格</label>
+                            <div className="form-group">
+                                <label className="form-group-label">运镜风格</label>
                                 <select
                                     value={cameraMovement}
                                     onChange={(e) => setCameraMovement(e.target.value)}
@@ -607,8 +563,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                 </select>
                             </div>
 
-                            <div className="form-group" style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', color: 'var(--text-main)', fontWeight: '600', fontSize: '0.9rem' }}>
+                            <div className="form-group">
+                                <label className="form-group-label-inline">
                                     镜头数量: {shotCount}
                                 </label>
                                 <input
@@ -617,7 +573,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                     max="5"
                                     value={shotCount}
                                     onChange={(e) => setShotCount(parseInt(e.target.value))}
-                                    style={{ width: '100%' }}
+                                    className="range-input-full"
                                 />
                             </div>
 
@@ -636,7 +592,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                 {loading ? '正在分析...' : '生成分镜脚本'}
                             </button>
                             {loading && (
-                                <button className="secondary-btn" onClick={stopAnalysis} style={{ marginTop: '8px', width: '100%', borderColor: 'var(--error-color)', color: 'var(--error-color)', fontSize: '0.9rem' }}>
+                                <button className="secondary-btn stop-button" onClick={stopAnalysis}>
                                     ⏹ 停止分析
                                 </button>
                             )}
@@ -648,7 +604,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                 {step === 2 && (
                     <div className="storyboard-editor">
                         <h3>确认分镜脚本 (共 {shots.length} 个镜头)</h3>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '10px' }}>
+                        <p className="form-group-hint">
                             无需生成关键帧。系统将自动串行生成视频，保证画面连贯。
                         </p>
                         <div className="shots-grid">
@@ -685,7 +641,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                 {/* Step 3: Generation Progress */}
                 {step === 3 && (
                     <div className="results-view">
-                        <div className="status-display" style={{ textAlign: 'center', padding: '40px' }}>
+                        <div className="status-display">
 
                             {/* Fission Mode Progress */}
                             {generationMode === 'fission' && (
@@ -695,8 +651,8 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                             <div className="spinner"></div>
                                             <h2>🚀 裂变生成中...</h2>
                                             {fissionStatus && (
-                                                <div style={{ marginTop: '20px' }}>
-                                                    <p style={{ fontSize: '1.1em', color: '#888' }}>
+                                                <div className="progress-wrapper">
+                                                    <p className="phase-text">
                                                         阶段: {fissionStatus.phase === 'analyzing' ? '分析裂变场景' :
                                                             fissionStatus.phase === 'generating_images' ? (
                                                                 fissionStatus.retry_round && fissionStatus.retry_round > 1
@@ -706,56 +662,36 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                                 fissionStatus.phase === 'generating_videos' ? '生成场景视频' :
                                                                     fissionStatus.phase === 'merging' ? '合并视频' : fissionStatus.phase}
                                                     </p>
-                                                    <p style={{ fontSize: '1.2em', marginTop: '10px' }}>
+                                                    <p className="progress-text">
                                                         完成 {fissionStatus.completed_branches || 0} / {fissionStatus.total_branches || shotCount} 个分支
                                                     </p>
 
                                                     {/* Retry Info */}
                                                     {fissionStatus.failed_count && fissionStatus.failed_count > 0 && (
-                                                        <p style={{
-                                                            fontSize: '0.95em',
-                                                            color: '#f59e0b',
-                                                            marginTop: '8px',
-                                                            fontWeight: '600'
-                                                        }}>
+                                                        <p className="retry-warning">
                                                             ⚠️ {fissionStatus.failed_count} 个分支失败，正在重试...
                                                         </p>
                                                     )}
 
                                                     {/* Branch Progress Grid */}
                                                     {fissionStatus.branches && fissionStatus.branches.length > 0 && (
-                                                        <div style={{
-                                                            display: 'grid',
-                                                            gridTemplateColumns: 'repeat(3, 1fr)',
-                                                            gap: '10px',
-                                                            maxWidth: '500px',
-                                                            margin: '20px auto'
-                                                        }}>
+                                                        <div className="branch-grid">
                                                             {fissionStatus.branches.map((branch, idx) => (
-                                                                <div key={idx} style={{
-                                                                    padding: '12px',
-                                                                    background: branch.status === 'done' ? 'rgba(16, 185, 129, 0.2)' :
-                                                                        branch.status === 'pending' ? 'rgba(100, 100, 100, 0.2)' :
-                                                                            branch.status?.includes('error') ? 'rgba(239, 68, 68, 0.2)' :
-                                                                                'rgba(109, 40, 217, 0.2)',
-                                                                    borderRadius: '8px',
-                                                                    border: `1px solid ${branch.status === 'done' ? '#10b981' :
-                                                                        branch.status?.includes('error') ? '#ef4444' :
-                                                                            '#6d28d9'
-                                                                        }`
-                                                                }}>
-                                                                    <div style={{ fontSize: '0.9rem', fontWeight: '600' }}>
+                                                                <div key={idx} className={`branch-card ${
+                                                                    branch.status === 'done' ? 'done' :
+                                                                    branch.status === 'pending' ? 'pending' :
+                                                                    branch.status?.includes('error') ? 'error' : ''
+                                                                }`}>
+                                                                    <div className="branch-id">
                                                                         分支 {branch.branch_id}
                                                                     </div>
-                                                                    <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '4px' }}>
+                                                                    <div className="branch-scene">
                                                                         {branch.scene_name || '等待中...'}
                                                                     </div>
-                                                                    <div style={{
-                                                                        fontSize: '0.7rem',
-                                                                        marginTop: '6px',
-                                                                        color: branch.status === 'done' ? '#34d399' :
-                                                                            branch.status?.includes('error') ? '#f87171' : '#a78bfa'
-                                                                    }}>
+                                                                    <div className={`branch-status ${
+                                                                        branch.status === 'done' ? 'done' :
+                                                                        branch.status?.includes('error') ? 'error' : 'processing'
+                                                                    }`}>
                                                                         {branch.status === 'done' ? '✅ 完成' :
                                                                             branch.status === 'pending' ? '⏳ 等待' :
                                                                                 branch.status === 'image_done' ? '🖼️ 图片完成' :
@@ -764,15 +700,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                                     </div>
                                                                     {/* Retry Count Badge */}
                                                                     {branch.retry_count && branch.retry_count > 0 && (
-                                                                        <div style={{
-                                                                            fontSize: '0.65rem',
-                                                                            marginTop: '4px',
-                                                                            padding: '2px 6px',
-                                                                            background: 'rgba(251, 146, 60, 0.2)',
-                                                                            color: '#fb923c',
-                                                                            borderRadius: '3px',
-                                                                            display: 'inline-block'
-                                                                        }}>
+                                                                        <div className="retry-badge">
                                                                             🔄 重试 {branch.retry_count} 次
                                                                         </div>
                                                                     )}
@@ -796,17 +724,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                                                     alert(`重试失败: ${e.message}`);
                                                                                 }
                                                                             }}
-                                                                            style={{
-                                                                                marginTop: '8px',
-                                                                                padding: '4px 10px',
-                                                                                fontSize: '0.7rem',
-                                                                                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                                                                                color: 'white',
-                                                                                border: 'none',
-                                                                                borderRadius: '4px',
-                                                                                cursor: 'pointer',
-                                                                                fontWeight: '600'
-                                                                            }}
+                                                                            className="retry-button"
                                                                         >
                                                                             🔄 重试
                                                                         </button>
@@ -817,21 +735,17 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                     )}
 
                                                     {/* Overall Progress Bar */}
-                                                    <div className="progress-bar-container" style={{ width: '300px', height: '10px', background: '#333', margin: '20px auto', borderRadius: '5px' }}>
+                                                    <div className="progress-bar-container">
                                                         <div
                                                             className="progress-bar-fill"
                                                             style={{
-                                                                width: `${((fissionStatus.completed_branches || 0) / (fissionStatus.total_branches || shotCount)) * 100}%`,
-                                                                height: '100%',
-                                                                background: '#10b981',
-                                                                borderRadius: '5px',
-                                                                transition: 'width 0.5s ease'
+                                                                width: `${((fissionStatus.completed_branches || 0) / (fissionStatus.total_branches || shotCount)) * 100}%`
                                                             }}
                                                         ></div>
                                                     </div>
 
                                                     {/* Estimated Time */}
-                                                    <p style={{ fontSize: '0.9em', color: '#888', marginTop: '10px' }}>
+                                                    <p className="time-estimate">
                                                         {(() => {
                                                             const completed = fissionStatus.completed_branches || 0;
                                                             const total = fissionStatus.total_branches || shotCount;
@@ -859,26 +773,12 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                             setShots([]);
                                                             setError(null);
                                                         }}
-                                                        style={{
-                                                            marginTop: '25px',
-                                                            padding: '12px 28px',
-                                                            fontSize: '1rem',
-                                                            fontWeight: '600',
-                                                            background: 'linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%)',
-                                                            color: 'white',
-                                                            border: 'none',
-                                                            borderRadius: '10px',
-                                                            cursor: 'pointer',
-                                                            boxShadow: '0 4px 15px rgba(109, 40, 217, 0.4)',
-                                                            transition: 'all 0.3s ease'
-                                                        }}
-                                                        onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
-                                                        onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+                                                        className="new-task-button-hover"
                                                     >
                                                         ➕ 新建任务 (当前任务后台运行)
                                                     </button>
 
-                                                    <p style={{ fontSize: '0.8em', color: '#666', marginTop: '10px' }}>
+                                                    <p className="result-hint">
                                                         💡 可继续上传新任务，系统将自动排队处理
                                                     </p>
                                                 </div>
@@ -889,29 +789,28 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                     {fissionStatus && fissionStatus.status === 'completed' && (
                                         <div className="completed-state">
                                             <h2>✨ 裂变故事生成完成!</h2>
-                                            <p style={{ color: '#888', marginBottom: '20px' }}>
+                                            <p className="result-message">
                                                 成功生成 {fissionStatus.completed_branches} 个场景并合并
                                             </p>
-                                            <div className="video-result" style={{ margin: '30px auto', maxWidth: '600px' }}>
+                                            <div className="video-result">
                                                 <video
                                                     src={fissionStatus.merged_video_url}
                                                     controls
                                                     autoPlay
-                                                    style={{ width: '100%', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}
+                                                    className="video-player"
                                                 />
                                             </div>
                                             <div className="actions-bar">
                                                 <a
                                                     href={fissionStatus.merged_video_url}
                                                     download={`story_fission_${fissionId}.mp4`}
-                                                    className="primary-btn"
-                                                    style={{ textDecoration: 'none', display: 'inline-block', lineHeight: '36px' }}
+                                                    className="primary-btn download-link"
                                                 >
                                                     ⬇️ 下载完整视频
                                                 </a>
                                                 {/* Remerge Button - useful after retrying failed branches */}
                                                 <button
-                                                    className="secondary-btn"
+                                                    className="secondary-btn gallery-link"
                                                     onClick={async () => {
                                                         try {
                                                             const res = await fetch(`/api/v1/story-fission/${fissionId}/remerge`, {
@@ -929,7 +828,6 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                             alert(`合成失败: ${e.message}`);
                                                         }
                                                     }}
-                                                    style={{ marginLeft: '10px' }}
                                                 >
                                                     🔄 重新合成
                                                 </button>
@@ -951,9 +849,9 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
 
                                     {fissionStatus && fissionStatus.status === 'failed' && (
                                         <div className="failed-state">
-                                            <h2 style={{ color: '#ef4444' }}>裂变生成失败</h2>
+                                            <h2 className="error-title">裂变生成失败</h2>
                                             <p>{fissionStatus.error}</p>
-                                            <button className="secondary-btn" onClick={() => {
+                                            <button className="secondary-btn retry-button-spacing" onClick={() => {
                                                 setStep(1);
                                                 setFissionId(null);
                                                 setFissionStatus(null);
@@ -963,7 +861,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                 setShots([]);
                                                 setError(null);
                                                 setLoading(false);
-                                            }} style={{ marginTop: '20px' }}>返回重试</button>
+                                            }}>返回重试</button>
                                         </div>
                                     )}
                                 </>
@@ -977,21 +875,17 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                             <div className="spinner"></div>
                                             <h2>正在生成故事...</h2>
                                             {chainStatus && (
-                                                <div style={{ marginTop: '20px' }}>
-                                                    <p style={{ fontSize: '1.2em' }}>
+                                                <div className="progress-wrapper">
+                                                    <p className="linear-progress-text">
                                                         {chainStatus.status === 'merging'
                                                             ? '所有镜头完成，正在合并视频...'
                                                             : `正在生成镜头 ${chainStatus.current_shot} / ${chainStatus.total_shots}`}
                                                     </p>
-                                                    <div className="progress-bar-container" style={{ width: '300px', height: '10px', background: '#333', margin: '20px auto', borderRadius: '5px' }}>
+                                                    <div className="progress-bar-container">
                                                         <div
-                                                            className="progress-bar-fill"
+                                                            className="progress-bar-fill linear-mode-fill"
                                                             style={{
-                                                                width: `${(chainStatus.current_shot / chainStatus.total_shots) * 100}%`,
-                                                                height: '100%',
-                                                                background: '#6d28d9',
-                                                                borderRadius: '5px',
-                                                                transition: 'width 0.5s ease'
+                                                                width: `${(chainStatus.current_shot / chainStatus.total_shots) * 100}%`
                                                             }}
                                                         ></div>
                                                     </div>
@@ -1003,20 +897,19 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                     {chainStatus && chainStatus.status === 'completed' && (
                                         <div className="completed-state">
                                             <h2>✨ 故事生成完成!</h2>
-                                            <div className="video-result" style={{ margin: '30px auto', maxWidth: '600px' }}>
+                                            <div className="video-result">
                                                 <video
                                                     src={chainStatus.merged_video_url}
                                                     controls
                                                     autoPlay
-                                                    style={{ width: '100%', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}
+                                                    className="video-player"
                                                 />
                                             </div>
                                             <div className="actions-bar">
                                                 <a
                                                     href={chainStatus.merged_video_url}
                                                     download={`story_chain_${chainId}.mp4`}
-                                                    className="primary-btn"
-                                                    style={{ textDecoration: 'none', display: 'inline-block', lineHeight: '36px' }}
+                                                    className="primary-btn download-link"
                                                 >
                                                     ⬇️ 下载完整视频
                                                 </a>
@@ -1027,9 +920,9 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
 
                                     {chainStatus && chainStatus.status === 'failed' && (
                                         <div className="failed-state">
-                                            <h2 style={{ color: '#ef4444' }}>生成失败</h2>
+                                            <h2 className="error-title">生成失败</h2>
                                             <p>{chainStatus.error}</p>
-                                            <button className="secondary-btn" onClick={() => setStep(1)} style={{ marginTop: '20px' }}>返回重试</button>
+                                            <button className="secondary-btn retry-button-spacing" onClick={() => setStep(1)}>返回重试</button>
                                         </div>
                                     )}
                                 </>

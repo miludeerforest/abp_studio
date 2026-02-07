@@ -223,9 +223,8 @@ function App() {
 
       {/* Mobile overlay */}
       <div 
-        className={`mobile-overlay ${mobileMenuOpen ? 'visible' : ''}`}
+        className={`mobile-overlay ${mobileMenuOpen ? 'visible' : 'hidden'}`}
         onClick={() => setMobileMenuOpen(false)}
-        style={{ display: mobileMenuOpen ? 'block' : 'none' }}
       />
 
       {/* Sidebar Navigation */}
@@ -365,31 +364,17 @@ function App() {
         </div>
 
         <div className="sidebar-footer">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+          <div className="theme-toggle-row">
             <button
               className="theme-toggle"
               onClick={toggleTheme}
               title={theme === 'dark' ? '切换到白天模式' : '切换到夜间模式'}
               aria-label={theme === 'dark' ? '切换到白天模式' : '切换到夜间模式'}
-              style={{
-                background: 'rgba(255, 255, 255, 0.15)',
-                border: 'none',
-                color: 'var(--text-main)',
-                width: '36px',
-                height: '36px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.1rem',
-                transition: 'background 0.2s'
-              }}
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </button>
             {!sidebarCollapsed && (
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              <span className="theme-label">
                 {theme === 'dark' ? '夜间模式' : '白天模式'}
               </span>
             )}
@@ -410,7 +395,7 @@ function App() {
       </aside>
 
       <main className="main-content" id="main-content" tabIndex={-1}>
-        <div style={{ display: activeTab === 'batch' ? 'block' : 'none', height: '100%' }}>
+        <div className={`tab-panel with-height ${activeTab === 'batch' ? 'active' : ''}`}>
           <ImageGenerator
             token={token}
             config={config}
@@ -421,7 +406,7 @@ function App() {
           />
         </div>
 
-        <div style={{ display: activeTab === 'story' ? 'block' : 'none' }}>
+        <div className={`tab-panel ${activeTab === 'story' ? 'active' : ''}`}>
           <StoryGenerator
             token={token}
             config={config}
@@ -429,7 +414,7 @@ function App() {
           />
         </div>
 
-        <div style={{ display: activeTab === 'simple-batch' ? 'block' : 'none' }}>
+        <div className={`tab-panel ${activeTab === 'simple-batch' ? 'active' : ''}`}>
           <SimpleBatchGenerator
             token={token}
             config={config}
@@ -437,21 +422,21 @@ function App() {
           />
         </div>
 
-        <div style={{ display: activeTab === 'mexico-beauty' ? 'block' : 'none', height: '100%' }}>
+        <div className={`tab-panel with-height ${activeTab === 'mexico-beauty' ? 'active' : ''}`}>
           <MexicoBeautyStation
             token={token}
             config={config}
           />
         </div>
 
-        <div style={{ display: activeTab === 'voice-clone' ? 'block' : 'none', height: '100%' }}>
+        <div className={`tab-panel with-height ${activeTab === 'voice-clone' ? 'active' : ''}`}>
           <VoiceClone
             token={token}
           />
         </div>
 
 
-        <div style={{ display: activeTab === 'video' ? 'block' : 'none' }}>
+        <div className={`tab-panel ${activeTab === 'video' ? 'active' : ''}`}>
           <VideoGenerator
             token={token}
             initialImage={selectedImage}
@@ -466,24 +451,24 @@ function App() {
 
         {/* FloatingGallery is rendered at root level, not here */}
 
-        <div style={{ display: activeTab === 'profile' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+        <div className={`tab-panel with-height with-overflow ${activeTab === 'profile' ? 'active' : ''}`}>
           <ProfileSettings token={token} onProfileUpdate={() => { }} />
         </div>
 
         {/* Admin Tabs */}
         {userRole === 'admin' && (
           <>
-            <div style={{ display: activeTab === 'monitor' ? 'block' : 'none', height: '100%' }}>
+            <div className={`tab-panel with-height ${activeTab === 'monitor' ? 'active' : ''}`}>
               <AdminDashboard token={token} isConnected={isConnected} lastMessage={lastMessage} />
             </div>
-            <div style={{ display: activeTab === 'settings' ? 'block' : 'none' }}>
+            <div className={`tab-panel ${activeTab === 'settings' ? 'active' : ''}`}>
               <Settings
                 token={token}
                 config={config}
                 onConfigChange={handleConfigChange}
               />
             </div>
-            <div style={{ display: activeTab === 'users' ? 'block' : 'none' }}>
+            <div className={`tab-panel ${activeTab === 'users' ? 'active' : ''}`}>
               <UserManagement token={token} />
             </div>
           </>

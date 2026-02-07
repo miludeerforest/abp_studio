@@ -1,0 +1,358 @@
+/* ============================================
+   UserManagement - Wave 4A CSS Extraction
+   ============================================ */
+
+/* Container & Layout */
+.user-management-container {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.user-management-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.user-management-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.user-management-add-button {
+    padding: 12px 24px;
+    font-size: 0.95rem;
+    border-radius: 10px;
+}
+
+/* Stats Grid */
+.user-management-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.user-management-stat-card {
+    padding: 14px;
+    text-align: center;
+    border-radius: 10px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.user-management-stat-card.highlight {
+    background: linear-gradient(135deg, 
+        color-mix(in srgb, var(--stat-color) 15%, transparent),
+        color-mix(in srgb, var(--stat-color) 8%, transparent)
+    );
+    border: 1px solid color-mix(in srgb, var(--stat-color) 40%, transparent);
+}
+
+.user-management-stat-label {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.user-management-stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    line-height: 1.2;
+    color: var(--stat-color);
+}
+
+/* Table Container & Structure */
+.user-management-table-wrapper {
+    padding: 24px;
+}
+
+.user-management-table-container {
+    overflow-x: auto;
+    border-radius: 10px;
+}
+
+.user-management-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 800px;
+}
+
+.user-management-table-head {
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.user-management-th {
+    padding: 10px 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #a5b4fc;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.user-management-th-id {
+    width: 70px;
+    text-align: center;
+}
+
+.user-management-th-username {
+    text-align: left;
+    min-width: 200px;
+}
+
+.user-management-th-role,
+.user-management-th-level,
+.user-management-th-exp,
+.user-management-th-images,
+.user-management-th-videos {
+    width: 100px;
+    text-align: center;
+}
+
+.user-management-th-level {
+    width: 120px;
+}
+
+.user-management-th-actions {
+    width: 180px;
+    text-align: center;
+}
+
+.user-management-td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--card-border);
+    vertical-align: middle;
+    font-size: 0.85rem;
+}
+
+.user-management-td-id {
+    text-align: center;
+    opacity: 0.6;
+    font-size: 0.9rem;
+}
+
+.user-management-td-username {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.user-management-td-center {
+    text-align: center;
+}
+
+.user-management-td-images,
+.user-management-td-videos {
+    text-align: center;
+    font-size: 0.95rem;
+}
+
+/* Row Hover State */
+.user-management-row {
+    transition: background 0.2s ease;
+}
+
+.user-management-row.hover {
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.user-management-row.even {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Badges */
+.user-management-role-badge {
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: inline-block;
+}
+
+.user-management-role-badge.admin {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+.user-management-role-badge.user {
+    background: rgba(156, 163, 175, 0.2);
+}
+
+.user-management-level-badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.user-management-level-badge.positive {
+    background: linear-gradient(135deg, rgba(255, 165, 0, 0.2), rgba(255, 215, 0, 0.15));
+    color: #fbbf24;
+    border: 1px solid rgba(255, 165, 0, 0.3);
+}
+
+.user-management-level-badge.negative {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1));
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.user-management-exp-text {
+    font-weight: 500;
+    font-size: 0.8rem;
+}
+
+.user-management-exp-text.positive {
+    color: #9ca3af;
+}
+
+.user-management-exp-text.negative {
+    color: #f87171;
+    font-weight: 600;
+}
+
+/* Action Buttons */
+.user-management-action-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.user-management-action-edit-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+}
+
+.user-management-action-button {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: 5px;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.user-management-delete-button {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: 5px;
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.user-management-password-input {
+    width: 100px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--card-border);
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--text-main);
+    font-size: 0.85rem;
+}
+
+/* Empty & Loading States */
+.user-management-empty-state,
+.user-management-loading-state {
+    text-align: center;
+    padding: 48px;
+    color: #9ca3af;
+}
+
+.user-management-empty-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+}
+
+.user-management-loading-text {
+    font-size: 1.5rem;
+}
+
+/* Modal Overlay & Content */
+.user-management-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.user-management-modal-content {
+    padding: 24px;
+    width: 380px;
+    max-width: 90vw;
+    border-radius: 14px;
+}
+
+.user-management-modal-title {
+    margin-bottom: 18px;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+/* Form Elements */
+.user-management-form-group {
+    margin-bottom: 14px;
+}
+
+.user-management-form-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #9ca3af;
+}
+
+.user-management-form-input {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--text-main);
+    font-size: 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.user-management-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 28px;
+}
+
+.user-management-modal-button-cancel {
+    padding: 10px 20px;
+    border-radius: 8px;
+}
+
+.user-management-modal-button-submit {
+    padding: 10px 24px;
+    border-radius: 8px;
+}

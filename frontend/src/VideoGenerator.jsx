@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import './VideoGenerator.css'
 
 const BACKEND_URL = ''
 
@@ -469,39 +470,21 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
     const processingNow = queue.filter(i => i.status === 'processing').length
 
     return (
-        <div className="video-generator" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div className="video-generator">
 
             {/* Top Controls Area */}
-            <div style={{
-                background: 'var(--card-bg)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid var(--card-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: 'var(--card-padding)',
-                marginBottom: 'var(--section-gap)',
-                display: 'grid',
-                gridTemplateColumns: '1fr 280px',
-                gap: 'var(--card-gap)'
-            }}>
+            <div className="video-top-controls">
 
                 {/* Left: Upload Area */}
                 <div
-                    className="upload-zone"
-                    style={{
-                        minHeight: '160px',
-                        borderStyle: 'dashed',
-                        borderWidth: '2px',
-                        borderColor: isDragging ? 'var(--primary-color)' : 'var(--card-border)',
-                        background: isDragging ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
-                        transition: 'all 0.3s ease'
-                    }}
+                    className={`upload-zone video-upload-zone ${isDragging ? 'dragging' : ''}`}
                     onClick={() => document.getElementById('vid-img-upload').click()}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                 >
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                        <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>☁️</div>
+                    <div className="video-upload-content">
+                        <div className="video-upload-icon">☁️</div>
                         <p>点击或拖拽上传图片/文本</p>
                         <small>支持 JPG, PNG, TXT (同名自动匹配)</small>
                     </div>
@@ -509,23 +492,14 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                 </div>
 
                 {/* Right: Controls */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--card-gap)' }}>
+                <div className="video-right-controls">
                     {/* Category Selector */}
                     <div>
-                        <span className="section-title" style={{ marginBottom: '6px', display: 'block', fontSize: '0.85rem' }}>产品类目</span>
+                        <span className="section-title video-category-label">产品类目</span>
                         <select
+                            className="video-category-select"
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '8px 10px',
-                                borderRadius: '6px',
-                                background: 'var(--card-bg)',
-                                backdropFilter: 'blur(20px)',
-                                border: '1px solid var(--card-border)',
-                                color: 'var(--text-main)',
-                                fontSize: '0.9rem'
-                            }}
                         >
                             {CATEGORIES.map(cat => (
                                 <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
@@ -535,49 +509,39 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                         {/* Custom Product Name Input */}
                         {category === 'other' && (
                             <input
+                                className="video-custom-product-input"
                                 type="text"
                                 placeholder="请输入产品名称 (如: 运动鞋, 陶瓷花瓶...)"
                                 value={customProductName}
                                 onChange={(e) => setCustomProductName(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 10px',
-                                    marginTop: '6px',
-                                    borderRadius: '6px',
-                                    background: 'var(--input-bg, transparent)',
-                                    border: '1px solid var(--primary-color)',
-                                    color: 'var(--text-main)',
-                                    outline: 'none',
-                                    fontSize: '0.9rem'
-                                }}
                             />
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="section-title" style={{ marginBottom: 0, fontSize: '0.85rem' }}>默认提示词</span>
+                    <div className="video-prompt-label-row">
+                        <span className="section-title video-prompt-label">默认提示词</span>
                     </div>
 
 <div>
                         <textarea
+                            className="video-prompt-textarea"
                             value={globalPrompt}
                             onChange={(e) => setGlobalPrompt(e.target.value)}
                             rows="2"
-                            style={{ resize: 'none', fontSize: '0.9rem', padding: '8px 10px' }}
                             placeholder="当未匹配到同名txt文件时使用此提示词"
                         />
                     </div>
 
-                    <div style={{ marginTop: 'auto', display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary-color)' }}></span>
+                    <div className="video-queue-status">
+                        <div className="video-status-item">
+                            <span className="video-status-dot active"></span>
                             进行中: {processingNow}/{CONCURRENT_LIMIT}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#666' }}></span>
+                        <div className="video-status-item">
+                            <span className="video-status-dot idle"></span>
                             等待中: {pendingCount}
                         </div>
-                        <div style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#666' }}>
+                        <div className="video-config-hint">
                             ⚙️ 更多配置请前往系统设置
                         </div>
                     </div>
@@ -585,40 +549,20 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
             </div>
 
             {connectionWarning && (
-                <div style={{
-                    background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(251, 191, 36, 0.15) 100%)',
-                    border: '1px solid rgba(251, 146, 60, 0.4)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '12px 16px',
-                    marginBottom: 'var(--section-gap)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px'
-                }}>
-                    <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ color: '#fb923c', fontWeight: '600', marginBottom: '2px', fontSize: '0.9rem' }}>
+                <div className="video-connection-warning">
+                    <span className="video-warning-icon">⚠️</span>
+                    <div className="video-warning-content">
+                        <div className="video-warning-title">
                             网络连接不稳定
                         </div>
-                        <div style={{ color: '#fbbf24', fontSize: '0.8rem', lineHeight: '1.4' }}>
-                            无法获取最新队列状态，但视频生成任务仍在后台执行。<br />
+                        <div className="video-warning-message">
+                            无法获取最新队列状态,但视频生成任务仍在后台执行。<br />
                             请稍候刷新页面或等待连接恢复后查看结果。
                         </div>
                     </div>
                     <button
+                        className="video-warning-close"
                         onClick={() => setConnectionWarning(false)}
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#fb923c',
-                            cursor: 'pointer',
-                            fontSize: '1.2rem',
-                            padding: '4px 8px',
-                            opacity: 0.8,
-                            transition: 'opacity 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.target.style.opacity = '1'}
-                        onMouseLeave={(e) => e.target.style.opacity = '0.8'}
                     >
                         ✕
                     </button>
@@ -626,39 +570,26 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
             )}
 
             {/* Queue / Result Area */}
-            <div style={{
-                background: 'var(--card-bg)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid var(--card-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: 'var(--card-padding)',
-                minHeight: '250px'
-            }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--card-gap)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--card-gap)' }}>
-                        <div className="section-title" style={{ marginBottom: 0, fontSize: '0.95rem' }}>任务队列 ({queue.length})</div>
+            <div className="video-queue-area">
+                <div className="video-queue-header">
+                    <div className="video-queue-header-left">
+                        <div className="section-title video-queue-title">任务队列 ({queue.length})</div>
                         {/* Merge Button */}
                         {selectedVideoIds.size > 0 && (
                             <button
-                                className="btn-primary"
+                                className={`btn-primary video-merge-btn ${isMerging ? 'merging' : ''}`}
                                 onClick={handleMergeVideos}
                                 disabled={isMerging}
-                                style={{
-                                    padding: '5px 12px',
-                                    fontSize: '0.8rem',
-                                    background: 'var(--primary-color)',
-                                    opacity: isMerging ? 0.7 : 1
-                                }}
                             >
                                 {isMerging ? '🔄 合成中...' : `🔗 合成选中 (${selectedVideoIds.size})`}
                             </button>
                         )}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn-secondary" onClick={clearDone} style={{ fontSize: '0.75rem', padding: '5px 10px' }}>
+                    <div className="video-queue-actions">
+                        <button className="btn-secondary video-clear-btn" onClick={clearDone}>
                             {userRole === 'admin' ? '清除已完成' : '清除我的已完成'}
                         </button>
-                        <button className="btn-secondary" onClick={clearAll} style={{ fontSize: '0.75rem', padding: '5px 10px', color: 'var(--error-color)' }}>
+                        <button className="btn-secondary video-clear-all-btn" onClick={clearAll}>
                             {userRole === 'admin' ? '清除全部' : '清除我的任务'}
                         </button>
                     </div>
@@ -666,117 +597,88 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
 
                 {/* Queue List Item Update: Add Checkbox */}
                 {queue.length === 0 ? (
-                    <div style={{
-                        height: '180px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--text-muted)',
-                        border: '1px dashed var(--card-border)',
-                        borderRadius: 'var(--radius-md)'
-                    }}>
-                        <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>📹</div>
-                            <p style={{ fontSize: '0.9rem' }}>暂无任务，请上传图片开始生成</p>
+                    <div className="video-queue-empty">
+                        <div className="video-queue-empty-content">
+                            <div className="video-queue-empty-icon">📹</div>
+                            <p className="video-queue-empty-text">暂无任务，请上传图片开始生成</p>
                         </div>
                     </div>
                 ) : (
-                    <div className="queue-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div className="video-queue-list">
                         {queue.map(item => (
-                            <div key={item.id} className="queue-item" style={{
-                                display: 'grid',
-                                gridTemplateColumns: '32px 64px 1fr 100px 90px',
-                                gap: '10px',
-                                background: selectedVideoIds.has(item.id) ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-secondary, rgba(255,255,255,0.03))',
-                                backdropFilter: 'blur(10px)',
-                                border: selectedVideoIds.has(item.id) ? '1px solid var(--primary-color)' : '1px solid var(--card-border)',
-                                borderRadius: '6px',
-                                padding: '10px',
-                                alignItems: 'center',
-                                transition: 'all 0.2s'
-                            }}>
+                            <div key={item.id} className={`video-queue-item ${selectedVideoIds.has(item.id) ? 'selected' : ''}`}>
                                 {/* Checkbox */}
-                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                <div className="video-item-checkbox-wrapper">
                                     {item.status === 'done' && (
                                         <input
+                                            className="video-item-checkbox"
                                             type="checkbox"
                                             checked={selectedVideoIds.has(item.id)}
                                             onChange={() => toggleSelection(item.id)}
-                                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                                         />
                                     )}
                                 </div>
 
                                 {/* Thumbnail */}
                                 <div
-                                    style={{
-                                        width: '64px',
-                                        height: '64px',
-                                        borderRadius: '4px',
-                                        overflow: 'hidden',
-                                        background: '#000',
-                                        cursor: item.status === 'done' ? 'pointer' : 'default',
-                                        border: item.status === 'done' ? '2px solid var(--primary-color)' : 'none'
-                                    }}
+                                    className={`video-item-thumbnail ${item.status === 'done' ? 'done' : ''}`}
                                     onClick={() => item.status === 'done' && item.result_url && setSelectedVideo(item.result_url)}
                                 >
                                     {item.status === 'done' && item.result_url ? (
-                                        <video src={item.result_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />
+                                        <video src={item.result_url} muted />
                                     ) : (
                                         <img
                                             src={item.preview_url ? `${BACKEND_URL}${item.preview_url}` : ''}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                             alt="preview"
                                         />
                                     )}
                                 </div>
 
                                 {/* Info */}
-                                <div style={{ overflow: 'hidden' }}>
-                                    <div style={{ fontWeight: 'bold', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div className="video-item-info">
+                                    <div className="video-item-filename">
                                         {item.filename}
                                     </div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.prompt}>
+                                    <div className="video-item-prompt" title={item.prompt}>
                                         📝 {item.prompt}
                                     </div>
                                     {item.error_msg && (
-                                        <div style={{ color: 'var(--error-color)', fontSize: '0.8rem', marginTop: '4px' }}>
+                                        <div className="video-item-error">
                                             ❌ {item.error_msg}
                                         </div>
                                     )}
                                     {item.retry_count > 0 && item.status !== 'done' && (
-                                        <div style={{ color: 'var(--warning-color, #f59e0b)', fontSize: '0.75rem', marginTop: '2px' }}>
+                                        <div className="video-item-retry-count">
                                             🔄 已重试 {item.retry_count} 次
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Status */}
-                                <div style={{ textAlign: 'center' }}>
-                                    {item.status === 'pending' && <span style={{ color: '#ccc', fontSize: '0.9rem' }}>⏳ 等待中</span>}
+                                <div className="video-item-status">
+                                    {item.status === 'pending' && <span className="video-item-status-pending">⏳ 等待中</span>}
                                     {item.status === 'processing' && (
-                                        <div style={{ color: 'var(--primary-color)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                                            <div className="status-dot" style={{ background: 'var(--primary-color)', animation: 'pulse 1s infinite' }}></div>
+                                        <div className="video-item-status-processing">
+                                            <div className="status-dot video-item-status-dot"></div>
                                             生成中
                                         </div>
                                     )}
-                                    {item.status === 'done' && <span style={{ color: '#4ade80', fontSize: '0.9rem' }}>✅ 完成</span>}
-                                    {item.status === 'error' && <span style={{ color: 'var(--error-color)', fontSize: '0.9rem' }}>❌ 失败</span>}
+                                    {item.status === 'done' && <span className="video-item-status-done">✅ 完成</span>}
+                                    {item.status === 'error' && <span className="video-item-status-error">❌ 失败</span>}
                                 </div>
 
                                 {/* Actions */}
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                                <div className="video-item-actions">
                                     {item.status === 'done' && item.result_url && (
-                                        <a href={item.result_url} download className="btn-icon" title="下载" style={{ textDecoration: 'none', fontSize: '1.2rem' }}>
+                                        <a href={item.result_url} download className="btn-icon video-download-btn" title="下载">
                                             ⬇️
                                         </a>
                                     )}
                                     {item.status === 'done' && item.result_url && (
                                         <button
+                                            className="btn-icon video-preview-btn"
                                             onClick={() => setSelectedVideo(item.result_url)}
-                                            className="btn-icon"
                                             title="预览"
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}
                                         >
                                             ▶️
                                         </button>
@@ -785,10 +687,9 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                     {item.status === 'error' &&
                                         (userRole === 'admin' || item.user_id === currentUserId) && (
                                             <button
+                                                className="btn-icon video-retry-btn"
                                                 onClick={() => retryItem(item.id)}
-                                                className="btn-icon"
                                                 title="手动重试"
-                                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'var(--warning-color, #f59e0b)' }}
                                             >
                                                 🔄
                                             </button>
@@ -796,8 +697,8 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
                                     {/* 只有管理员或任务所有者能看到删除按钮 */}
                                     {(userRole === 'admin' || item.user_id === currentUserId) && (
                                         <button
+                                            className="video-delete-btn"
                                             onClick={() => removeItem(item.id)}
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', opacity: 0.7 }}
                                             title="删除"
                                         >
                                             🗑️
@@ -809,19 +710,11 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
 
                         {/* 队列底部说明 */}
                         {queue.some(item => item.status === 'error') && (
-                            <div style={{
-                                marginTop: '16px',
-                                padding: '12px 16px',
-                                background: 'rgba(245, 158, 11, 0.1)',
-                                border: '1px solid rgba(245, 158, 11, 0.3)',
-                                borderRadius: '8px',
-                                fontSize: '0.9rem',
-                                color: 'var(--text-muted, #888)'
-                            }}>
-                                <p style={{ margin: 0, lineHeight: 1.6 }}>
+                            <div className="video-queue-notice">
+                                <p>
                                     🔄 <strong>失败任务自动重试中</strong>（最多 3 次，间隔 30-60 秒）
                                 </p>
-                                <p style={{ margin: '8px 0 0 0', fontSize: '0.85rem', opacity: 0.8 }}>
+                                <p>
                                     💡 超时任务需手动点击 🔄 重试，其他错误将自动重试
                                 </p>
                             </div>
@@ -833,46 +726,19 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
             {/* Video Preview Modal */}
             {
                 selectedVideo && (
-                    <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        zIndex: 9999,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexDirection: 'column',
-                        padding: '20px'
-                    }} onClick={() => setSelectedVideo(null)}>
-                        <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }} onClick={e => e.stopPropagation()}>
+                    <div className="video-lightbox-overlay" onClick={() => setSelectedVideo(null)}>
+                        <div className="video-lightbox-content" onClick={e => e.stopPropagation()}>
                             <button
+                                className="video-lightbox-close"
                                 onClick={() => setSelectedVideo(null)}
-                                style={{
-                                    position: 'absolute',
-                                    top: '-40px',
-                                    right: '-10px',
-                                    background: 'transparent',
-                                    border: 'none',
-                                    color: 'white',
-                                    fontSize: '24px',
-                                    cursor: 'pointer'
-                                }}
                             >
                                 ✕
                             </button>
                             <video
+                                className="video-lightbox-player"
                                 src={selectedVideo}
                                 controls
                                 autoPlay
-                                style={{
-                                    maxWidth: '100%',
-                                    maxHeight: '85vh',
-                                    boxShadow: '0 0 20px rgba(0,0,0,0.5)',
-                                    borderRadius: '8px'
-                                }}
                             />
                         </div>
                     </div>

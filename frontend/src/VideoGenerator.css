@@ -1,0 +1,510 @@
+/* ============================================
+   VideoGenerator.css
+   Wave 2 Visual Extraction - All inline styles refactored
+   ============================================ */
+
+/* Root container */
+.video-generator {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* ============================================
+   Top Controls Area
+   ============================================ */
+
+.video-top-controls {
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    padding: var(--card-padding);
+    margin-bottom: var(--section-gap);
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: var(--card-gap);
+}
+
+/* Upload Zone */
+.video-upload-zone {
+    min-height: 160px;
+    border-style: dashed;
+    border-width: 2px;
+    border-color: var(--card-border);
+    background: transparent;
+    transition: all 0.3s ease;
+}
+
+.video-upload-zone.dragging {
+    border-color: var(--primary-color);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.video-upload-content {
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.video-upload-icon {
+    font-size: 1.8rem;
+    margin-bottom: 8px;
+}
+
+/* Right Controls Panel */
+.video-right-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--card-gap);
+}
+
+.video-category-label {
+    margin-bottom: 6px;
+    display: block;
+    font-size: 0.85rem;
+}
+
+.video-category-select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--card-border);
+    color: var(--text-main);
+    font-size: 0.9rem;
+}
+
+.video-custom-product-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-top: 6px;
+    border-radius: 6px;
+    background: var(--input-bg, transparent);
+    border: 1px solid var(--primary-color);
+    color: var(--text-main);
+    outline: none;
+    font-size: 0.9rem;
+}
+
+.video-prompt-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.video-prompt-label {
+    margin-bottom: 0;
+    font-size: 0.85rem;
+}
+
+.video-prompt-textarea {
+    resize: none;
+    font-size: 0.9rem;
+    padding: 8px 10px;
+}
+
+/* Queue Status Row */
+.video-queue-status {
+    margin-top: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.video-status-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.video-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.video-status-dot.active {
+    background: var(--primary-color);
+}
+
+.video-status-dot.idle {
+    background: #666;
+}
+
+.video-config-hint {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: #666;
+}
+
+/* ============================================
+   Connection Warning Banner
+   ============================================ */
+
+.video-connection-warning {
+    background: linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(251, 191, 36, 0.15) 100%);
+    border: 1px solid rgba(251, 146, 60, 0.4);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    margin-bottom: var(--section-gap);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.video-warning-icon {
+    font-size: 1.2rem;
+}
+
+.video-warning-content {
+    flex: 1;
+}
+
+.video-warning-title {
+    color: #fb923c;
+    font-weight: 600;
+    margin-bottom: 2px;
+    font-size: 0.9rem;
+}
+
+.video-warning-message {
+    color: #fbbf24;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.video-warning-close {
+    background: transparent;
+    border: none;
+    color: #fb923c;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 4px 8px;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.video-warning-close:hover {
+    opacity: 1;
+}
+
+/* ============================================
+   Queue / Result Area
+   ============================================ */
+
+.video-queue-area {
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    padding: var(--card-padding);
+    min-height: 250px;
+}
+
+.video-queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--card-gap);
+}
+
+.video-queue-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--card-gap);
+}
+
+.video-queue-title {
+    margin-bottom: 0;
+    font-size: 0.95rem;
+}
+
+.video-merge-btn {
+    padding: 5px 12px;
+    font-size: 0.8rem;
+    background: var(--primary-color);
+    opacity: 1;
+}
+
+.video-merge-btn.merging {
+    opacity: 0.7;
+}
+
+.video-queue-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.video-clear-btn {
+    font-size: 0.75rem;
+    padding: 5px 10px;
+}
+
+.video-clear-all-btn {
+    font-size: 0.75rem;
+    padding: 5px 10px;
+    color: var(--error-color);
+}
+
+/* Empty Queue State */
+.video-queue-empty {
+    height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    border: 1px dashed var(--card-border);
+    border-radius: var(--radius-md);
+}
+
+.video-queue-empty-content {
+    text-align: center;
+}
+
+.video-queue-empty-icon {
+    font-size: 1.8rem;
+    margin-bottom: 8px;
+}
+
+.video-queue-empty-text {
+    font-size: 0.9rem;
+}
+
+/* Queue List */
+.video-queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* ============================================
+   Queue Item
+   ============================================ */
+
+.video-queue-item {
+    display: grid;
+    grid-template-columns: 32px 64px 1fr 100px 90px;
+    gap: 10px;
+    background: var(--bg-secondary, rgba(255, 255, 255, 0.03));
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    padding: 10px;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+.video-queue-item.selected {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid var(--primary-color);
+}
+
+.video-item-checkbox-wrapper {
+    display: flex;
+    justify-content: center;
+}
+
+.video-item-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* Thumbnail */
+.video-item-thumbnail {
+    width: 64px;
+    height: 64px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #000;
+    cursor: default;
+}
+
+.video-item-thumbnail.done {
+    cursor: pointer;
+    border: 2px solid var(--primary-color);
+}
+
+.video-item-thumbnail.done video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.video-item-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Info Section */
+.video-item-info {
+    overflow: hidden;
+}
+
+.video-item-filename {
+    font-weight: bold;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.video-item-prompt {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.video-item-error {
+    color: var(--error-color);
+    font-size: 0.8rem;
+    margin-top: 4px;
+}
+
+.video-item-retry-count {
+    color: var(--warning-color, #f59e0b);
+    font-size: 0.75rem;
+    margin-top: 2px;
+}
+
+/* Status Section */
+.video-item-status {
+    text-align: center;
+}
+
+.video-item-status-pending {
+    color: #ccc;
+    font-size: 0.9rem;
+}
+
+.video-item-status-processing {
+    color: var(--primary-color);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.video-item-status-dot {
+    background: var(--primary-color);
+    animation: pulse 1s infinite;
+}
+
+.video-item-status-done {
+    color: #4ade80;
+    font-size: 0.9rem;
+}
+
+.video-item-status-error {
+    color: var(--error-color);
+    font-size: 0.9rem;
+}
+
+/* Actions Section */
+.video-item-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.video-download-btn {
+    text-decoration: none;
+    font-size: 1.2rem;
+}
+
+.video-preview-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.video-retry-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: var(--warning-color, #f59e0b);
+}
+
+.video-delete-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    opacity: 0.7;
+}
+
+/* ============================================
+   Queue Bottom Notice
+   ============================================ */
+
+.video-queue-notice {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--text-muted, #888);
+}
+
+.video-queue-notice p {
+    margin: 0;
+    line-height: 1.6;
+}
+
+.video-queue-notice p:nth-child(2) {
+    margin: 8px 0 0 0;
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+/* ============================================
+   Video Preview Modal / Lightbox
+   ============================================ */
+
+.video-lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.9);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.video-lightbox-content {
+    position: relative;
+    max-width: 90%;
+    max-height: 90%;
+}
+
+.video-lightbox-close {
+    position: absolute;
+    top: -40px;
+    right: -10px;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.video-lightbox-player {
+    max-width: 100%;
+    max-height: 85vh;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+}

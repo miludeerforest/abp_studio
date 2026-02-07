@@ -353,6 +353,376 @@
     margin-bottom: 1rem;
 }
 
+/* Wave 3: Connection Warning Banner */
+.story-generator-root .connection-warning-banner {
+    background: linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(251, 191, 36, 0.15) 100%);
+    border: 1px solid rgba(251, 146, 60, 0.4);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 0 16px 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.story-generator-root .connection-warning-banner .icon {
+    font-size: 1.1rem;
+}
+
+.story-generator-root .connection-warning-banner .content {
+    flex: 1;
+}
+
+.story-generator-root .connection-warning-banner .title {
+    color: #fb923c;
+    font-weight: 600;
+    margin-bottom: 2px;
+    font-size: 0.9rem;
+}
+
+.story-generator-root .connection-warning-banner .message {
+    color: #fbbf24;
+    font-size: 0.8rem;
+}
+
+.story-generator-root .connection-warning-banner .close-btn {
+    background: transparent;
+    border: none;
+    color: #fb923c;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 2px;
+}
+
+/* Wave 3: Form Groups */
+.story-generator-root .form-group {
+    margin-bottom: 12px;
+}
+
+.story-generator-root .form-group-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text-main);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.story-generator-root .form-group-label-inline {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-main);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.story-generator-root .form-group-hint {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-top: 4px;
+}
+
+/* Wave 3: Mode/Category/Style Buttons */
+.story-generator-root .button-row {
+    display: flex;
+    gap: 6px;
+}
+
+.story-generator-root .button-grid {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.story-generator-root .mode-button {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+.story-generator-root .mode-button.fission {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    font-weight: 600;
+}
+
+.story-generator-root .mode-button.linear {
+    border-color: #6d28d9;
+    background: rgba(109, 40, 217, 0.2);
+    color: #a78bfa;
+    font-weight: 600;
+}
+
+.story-generator-root .category-button {
+    padding: 6px 10px;
+    border-radius: 5px;
+    border: 1px solid #444;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.story-generator-root .category-button.active {
+    border: 2px solid #6d28d9;
+    background: rgba(109, 40, 217, 0.2);
+    color: #a78bfa;
+}
+
+/* Wave 3: Progress/Loading Wrappers */
+.story-generator-root .status-display {
+    text-align: center;
+    padding: 40px;
+}
+
+.story-generator-root .processing-state {
+    /* Contained styles handled by children */
+}
+
+.story-generator-root .phase-text {
+    font-size: 1.1em;
+    color: #888;
+}
+
+.story-generator-root .progress-text {
+    font-size: 1.2em;
+    margin-top: 10px;
+}
+
+.story-generator-root .retry-warning {
+    font-size: 0.95em;
+    color: #f59e0b;
+    margin-top: 8px;
+    font-weight: 600;
+}
+
+/* Wave 3: Branch Progress Grid */
+.story-generator-root .branch-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    max-width: 500px;
+    margin: 20px auto;
+}
+
+.story-generator-root .branch-card {
+    padding: 12px;
+    background: rgba(100, 100, 100, 0.2);
+    border-radius: 8px;
+    border: 1px solid #6d28d9;
+}
+
+.story-generator-root .branch-card.done {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: #10b981;
+}
+
+.story-generator-root .branch-card.pending {
+    background: rgba(100, 100, 100, 0.2);
+    border-color: #6d28d9;
+}
+
+.story-generator-root .branch-card.error {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+}
+
+.story-generator-root .branch-card .branch-id {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.story-generator-root .branch-card .branch-scene {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 4px;
+}
+
+.story-generator-root .branch-card .branch-status {
+    font-size: 0.7rem;
+    margin-top: 6px;
+}
+
+.story-generator-root .branch-card .branch-status.done {
+    color: #34d399;
+}
+
+.story-generator-root .branch-card .branch-status.error {
+    color: #f87171;
+}
+
+.story-generator-root .branch-card .branch-status.processing {
+    color: #a78bfa;
+}
+
+.story-generator-root .branch-card .retry-badge {
+    font-size: 0.65rem;
+    margin-top: 4px;
+    padding: 2px 6px;
+    background: rgba(251, 146, 60, 0.2);
+    color: #fb923c;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.story-generator-root .branch-card .retry-button {
+    margin-top: 8px;
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+/* Wave 3: Progress Bar */
+.story-generator-root .progress-bar-container {
+    width: 300px;
+    height: 10px;
+    background: #333;
+    margin: 20px auto;
+    border-radius: 5px;
+}
+
+.story-generator-root .progress-bar-fill {
+    height: 100%;
+    background: #10b981;
+    border-radius: 5px;
+    transition: width 0.5s ease;
+}
+
+.story-generator-root .time-estimate {
+    font-size: 0.9em;
+    color: #888;
+    margin-top: 10px;
+}
+
+.story-generator-root .new-task-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.story-generator-root .new-task-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Wave 3: Result Display Styles */
+.story-generator-root .result-message {
+    color: #888;
+    margin-bottom: 20px;
+}
+
+.story-generator-root .result-hint {
+    font-size: 0.8em;
+    color: #666;
+    margin-top: 10px;
+}
+
+.story-generator-root .video-result {
+    margin: 30px auto;
+    max-width: 600px;
+}
+
+.story-generator-root .video-result video {
+    width: 100%;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+
+/* Wave 5A: Video Player (extracted from inline) */
+.story-generator-root .video-player {
+    width: 100%;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+
+/* Wave 5A: New Task Button with Hover (extracted from inline) */
+.story-generator-root .new-task-button-hover {
+    margin-top: 25px;
+    padding: 12px 28px;
+    font-size: 1rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(109, 40, 217, 0.4);
+    transition: all 0.3s ease;
+}
+
+.story-generator-root .new-task-button-hover:hover {
+    transform: scale(1.05);
+}
+
+/* Wave 5A: Linear Mode Progress Fill (extracted from inline) */
+.story-generator-root .linear-mode-fill {
+    height: 100%;
+    background: #6d28d9;
+    border-radius: 5px;
+    transition: width 0.5s ease;
+}
+
+.story-generator-root .download-link {
+    text-decoration: none;
+    display: inline-block;
+    line-height: 36px;
+}
+
+.story-generator-root .error-title {
+    color: #ef4444;
+}
+
+.story-generator-root .gallery-link {
+    margin-left: 10px;
+}
+
+.story-generator-root .linear-progress-text {
+    font-size: 1.2em;
+}
+
+.story-generator-root .range-input-full {
+    width: 100%;
+}
+
+.story-generator-root .stop-button {
+    margin-top: 8px;
+    width: 100%;
+}
+
+.story-generator-root .retry-button-spacing {
+    margin-top: 20px;
+}
+
+.story-generator-root .progress-wrapper {
+    margin-top: 20px;
+}
+
 @media (max-width: 768px) {
     .story-generator-root {
         padding: 12px;
