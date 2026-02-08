@@ -6,6 +6,8 @@ function UserManagement({ token }) {
     const [loading, setLoading] = useState(false)
     const [showAddModal, setShowAddModal] = useState(false)
     const [stats, setStats] = useState(null)
+    const [statsLoading, setStatsLoading] = useState(false)
+    const [statsError, setStatsError] = useState('')
     const [lastRefreshed, setLastRefreshed] = useState(Date.now())
     const [hoveredRow, setHoveredRow] = useState(null)
 
@@ -39,16 +41,27 @@ function UserManagement({ token }) {
     }
 
     const fetchStats = async () => {
+        setStatsLoading(true)
+        setStatsError('')
         try {
             const res = await fetch('/api/v1/stats', {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             if (res.ok) {
                 setStats(await res.json())
+            } else {
+                setStatsError('加载统计数据失败')
             }
         } catch (e) {
             console.error("Fetch stats failed", e)
+            setStatsError('网络错误，无法加载统计数据')
+        } finally {
+            setStatsLoading(false)
         }
+    }
+
+    const handleRefresh = () => {
+        setLastRefreshed(Date.now())
     }
 
     const handleAddUser = async (e) => {
@@ -124,16 +137,18 @@ function UserManagement({ token }) {
     }
 
     const getUserStats = (uid) => {
-        if (!stats || !stats.user_stats) return { image_count: 0, video_count: 0 }
+        // Return placeholder object when stats unavailable to show '--' instead of misleading zeros
+        if (!stats || !stats.user_stats) return null
         const s = stats.user_stats.find(u => u.id === uid)
-        return s || { image_count: 0, video_count: 0 }
+        return s || null
     }
 
-    // 计算统计总数
+    // 计算统计总数 - Calibrated for data source consistency
     const getTotalStats = () => {
         if (!stats || !stats.user_stats) return { users: 0, images: 0, videos: 0, todayImages: 0, todayVideos: 0 }
         return {
-            users: stats.user_stats.length,
+            // Total users count from users array (table source) for consistency
+            users: users.length,
             images: stats.user_stats.reduce((a, b) => a + (b.image_count || 0), 0),
             videos: stats.user_stats.reduce((a, b) => a + (b.video_count || 0), 0),
             todayImages: stats.user_stats.reduce((a, b) => a + (b.today_images || 0), 0),
@@ -154,6 +169,24 @@ function UserManagement({ token }) {
 
     return (
         <div className="user-management-container">
+            <div className="user-management-toolbar">
+                <div className="user-management-toolbar-meta">
+                    <span className="user-management-helper">
+                        实时监控全站用户活动与资源消耗情况，数据来源：系统日志与数据库统计。
+                    </span>
+                    <span className="user-management-last-update">
+                        上次更新: {new Date(lastRefreshed).toLocaleTimeString()}
+                    </span>
+                </div>
+                <button 
+                    className="user-management-refresh-button"
+                    onClick={handleRefresh}
+                    disabled={loading || statsLoading}
+                >
+                    {loading || statsLoading ? '🔄 更新中...' : '🔄 刷新数据'}
+                </button>
+            </div>
+
             <div className="user-management-header">
                 <h2 className="user-management-title">👥 用户管理 & 统计</h2>
                 <button 
@@ -164,7 +197,16 @@ function UserManagement({ token }) {
                 </button>
             </div>
 
-            {stats && stats.user_stats && (
+            {statsLoading ? (
+                <div className="user-management-stats-loading">
+                    📊 正在校准统计数据...
+                </div>
+            ) : statsError ? (
+                <div className="user-management-stats-error">
+                    ⚠️ {statsError}
+                    <button onClick={fetchStats} className="btn-secondary">重试</button>
+                </div>
+            ) : stats && stats.user_stats && (
                 <div className="user-management-stats-grid">
                     {statCards.map((card, index) => (
                         <div 
@@ -234,10 +276,10 @@ function UserManagement({ token }) {
                                             {exp.toLocaleString()}
                                         </td>
                                         <td className="user-management-td user-management-td-images">
-                                            {uStats.image_count.toLocaleString()}
+                                            {uStats ? uStats.image_count.toLocaleString() : '--'}
                                         </td>
                                         <td className="user-management-td user-management-td-videos">
-                                            {uStats.video_count.toLocaleString()}
+                                            {uStats ? uStats.video_count.toLocaleString() : '--'}
                                         </td>
                                         <td className="user-management-td user-management-td-center">
                                             {editUserId === u.id ? (

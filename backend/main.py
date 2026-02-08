@@ -885,12 +885,9 @@ def get_stats(db: Session = Depends(get_db), admin: User = Depends(get_current_a
     users = db.query(User).all()
     user_stats = []
     
-    # Get today's start in China timezone (00:00), then convert to UTC for comparison
-    # This handles both old UTC data and new China timezone data
+    # Today boundary: China-local day-start (naive datetime matching stored timestamps)
     now = get_china_now()
-    today_start_china = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    # Convert China time 00:00 to UTC (subtract 8 hours): yesterday 16:00 UTC
-    today_start_utc = today_start_china - timedelta(hours=8)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
     for u in users:
         # Count actual saved images in gallery (not just generation attempts) - Total
@@ -901,16 +898,15 @@ def get_stats(db: Session = Depends(get_db), admin: User = Depends(get_current_a
             VideoQueueItem.status.in_(["done", "archived"])
         ).count()
         
-        # Today's counts - use UTC start time for comparison
-        # This counts items where created_at >= yesterday 16:00 UTC (= today 00:00 Beijing)
+        # Today's counts - use China-local day-start for consistency with naive timestamps
         today_img = db.query(SavedImage).filter(
             SavedImage.user_id == u.id,
-            SavedImage.created_at >= today_start_utc
+            SavedImage.created_at >= today_start
         ).count()
         today_vid = db.query(VideoQueueItem).filter(
             VideoQueueItem.user_id == u.id,
             VideoQueueItem.status.in_(["done", "archived"]),
-            VideoQueueItem.created_at >= today_start_utc
+            VideoQueueItem.created_at >= today_start
         ).count()
         
         user_stats.append({
@@ -924,19 +920,22 @@ def get_stats(db: Session = Depends(get_db), admin: User = Depends(get_current_a
         })
 
     # 2. Daily Activity (Last 30 Days)
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    thirty_days_ago = get_china_now() - timedelta(days=30)
     
-    # SQLite uses strftime or date function. func.date works in most.
-    # Group by Date only (All users combined) for the main chart
+    # Image trend: use SavedImage counts (not generation attempt logs)
     img_daily = db.query(
-        func.date(ImageGenerationLog.created_at).label('date'),
-        func.count(ImageGenerationLog.id).label('count')
-    ).filter(ImageGenerationLog.created_at >= thirty_days_ago).group_by('date').all()
+        func.date(SavedImage.created_at).label('date'),
+        func.count(SavedImage.id).label('count')
+    ).filter(SavedImage.created_at >= thirty_days_ago).group_by('date').all()
     
+    # Video trend: include completion filter matching totals
     vid_daily = db.query(
         func.date(VideoQueueItem.created_at).label('date'),
         func.count(VideoQueueItem.id).label('count')
-    ).filter(VideoQueueItem.created_at >= thirty_days_ago).group_by('date').all()
+    ).filter(
+        VideoQueueItem.created_at >= thirty_days_ago,
+        VideoQueueItem.status.in_(["done", "archived"])
+    ).group_by('date').all()
 
     # Format for JSON
     by_day_img = [{"date": str(r.date), "count": r.count, "type": "image"} for r in img_daily]
