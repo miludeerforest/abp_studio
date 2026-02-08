@@ -1,398 +1,172 @@
-# ABP Studio - 智能商品场景生成系统
+# ABP Studio（智能商品场景生成系统）
 
-基于 AI 的自动化商品场景生成与视频制作平台。上传商品图片，自动分析特征、生成多角度场景图，一键生成营销短视频。
+## 项目简介
+ABP Studio 是一个面向电商与内容团队的 AI 生产平台，用于把商品图自动转化为营销场景图与短视频素材。
+系统提供从图片分析、文案生成、批量出图、视频生成到资源管理的一体化流程，支持多用户权限与运营管理。
 
-## ✨ 核心功能
+## 核心能力
+| 模块 | 说明 |
+|---|---|
+| 批量场景生成 | 上传商品图后自动分析并生成多角度营销场景图 |
+| 视频生成 | 将图片任务一键加入视频队列并异步生成视频 |
+| 一镜到底（Story） | 支持故事化生成链路，输出连贯视频内容 |
+| 裂变模式 | 单图多分支生成并支持后续合并处理 |
+| 画廊管理 | 图片/视频筛选、预览、删除、批量下载 |
+| 多用户管理 | 用户权限、经验值、活动记录与监控 |
 
-| 功能 | 说明 |
-|------|------|
-| 🎨 **批量场景生成** | 上传白底图，自动生成 9 种不同角度的营销场景图 |
-| 📹 **视频生成** | 图片一键转换动态视频（支持 Sora/Veo） |
-| 🎬 **一镜到底** | 自动编排分镜，生成连贯故事视频 |
-| 💥 **裂变模式** | 单图生成多分支场景，自动合成完整视频 |
-| 👥 **多用户管理** | 用户权限隔离、用量统计 |
-| 🏆 **等级系统** | 基于视频质量评分的用户等级成长 |
-| 🖼️ **浮动画廊** | 方便的图片/视频管理与批量下载 |
+## 技术栈与架构
+- 前端：React 19 + Vite
+- 后端：FastAPI + SQLAlchemy
+- 数据库：PostgreSQL（外部服务）
+- 缓存/队列：Redis（外部服务）
+- 容器编排：Docker Compose（当前 compose 文件包含 `backend` 和 `frontend` 两个服务）
 
----
+默认端口：
+- 前端：`33012`
+- 后端 API：`33013`
+- API 文档：`http://localhost:33013/docs`
 
-## 🛠️ 技术架构
+## 快速开始（Docker）
+### 1) 环境要求
+- Docker 24+
+- Docker Compose v2+
+- 可用的 PostgreSQL 与 Redis 服务
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      前端 (React + Vite)                 │
-│                        端口: 33012                       │
-├─────────────────────────────────────────────────────────┤
-│                    后端 (FastAPI + Python)               │
-│                        端口: 33013                       │
-├─────────────────────────────────────────────────────────┤
-│  PostgreSQL (数据库)  │  Redis (消息队列)                 │
-└─────────────────────────────────────────────────────────┘
-```
-
-**核心依赖:**
-- Python 3.11+ / FastAPI / SQLAlchemy
-- React 18 / Vite
-- PostgreSQL (数据存储)
-- Redis (任务队列 & WebSocket)
-
----
-
-## 🚀 快速部署
-
-### 1. 环境要求
-
-- **Docker** 24.0+ 
-- **Docker Compose** v2.0+
-- **PostgreSQL** 14+ (可使用现有实例或 Docker 部署)
-- **Redis** 6+ (可使用现有实例或 Docker 部署)
-
-### 2. 克隆项目
-
+### 2) 获取代码
 ```bash
-git clone https://github.com/your-username/abp_studio.git
+git clone https://github.com/miludeerforest/abp_studio.git
 cd abp_studio
 ```
 
-### 3. 配置环境变量
-
+### 3) 配置环境变量
 ```bash
-# 复制示例配置
 cp .env.example .env
-
-# 编辑配置文件
-nano .env
+# 按需编辑 .env
 ```
 
-### 4. 必填配置说明
-
-编辑 `.env` 文件，填入以下必填项：
-
-#### 📦 数据库配置
-
-```ini
-# PostgreSQL 连接串
-# 格式: postgresql://用户名:密码@主机:端口/数据库名
-DATABASE_URL=postgresql://abp_user:your_password@postgres:5432/abp_studio
-```
-
-#### 🔐 安全配置
-
-```ini
-# JWT 签名密钥 (必须修改! 使用以下命令生成)
-# openssl rand -hex 32
-SECRET_KEY=your-random-32-char-secret-key-here
-
-# 管理员账号 (首次启动自动创建)
-# 注意：首次启动后，修改此处的 ADMIN_PASSWORD 不会生效，除非开启 FORCE_RESET_ADMIN_PASSWORD
-ADMIN_USER=admin
-ADMIN_PASSWORD=your_secure_admin_password
-
-# 管理员密码强制重置 (默认 false)
-# 如果忘记管理员密码，可设为 true 并重启服务，系统会将密码重置为 ADMIN_PASSWORD
-# 重置成功后请务必设回 false
-FORCE_RESET_ADMIN_PASSWORD=false
-```
-
-### 🛡️ 管理员密码策略
-
-1. **首次启动**: 系统会根据 `.env` 中的 `ADMIN_USER` 和 `ADMIN_PASSWORD` 创建初始管理员账号。
-2. **常规重启**: 为了安全，系统在后续启动时**默认不会**覆盖数据库中的管理员密码。
-3. **密码重置**: 
-   - 如需重置管理员密码，请在 `.env` 中设置 `FORCE_RESET_ADMIN_PASSWORD=true`。
-   - 重启容器：`docker compose restart backend`。
-   - 登录成功后，**必须**将该项改回 `false`，防止下次非预期的密码覆盖。
-
-> 💡 **迁移提示**: 现有部署在更新代码后，默认将启用此保护机制，不再自动同步环境变量中的密码到数据库。
-
-#### 📮 Redis 配置
-
-```ini
-# Redis 服务地址 (容器名或 IP)
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PASSWORD=your_redis_password
-REDIS_DB=0
-```
-
-### 5. 可选配置 (API 设置)
-
-> 💡 **提示**: 以下 API 配置也可在登录后通过「系统设置」页面进行配置。
-
-```ini
-# --- 图片生成 API (OpenAI 兼容) ---
-DEFAULT_API_URL=https://your-api-provider.com/v1
-DEFAULT_API_KEY=sk-your-api-key
-DEFAULT_MODEL_NAME=gemini-2.0-flash-exp
-
-# --- 视频生成 API ---
-VIDEO_API_URL=https://your-video-api.com/v1
-VIDEO_API_KEY=sk-your-video-api-key
-VIDEO_MODEL_NAME=sora2-portrait-15s
-```
-
-### 6. 启动服务
-
+### 4) 启动服务
 ```bash
-# 构建并启动所有服务 (后台运行)
 docker compose up -d --build
-
-# 查看启动日志
-docker compose logs -f
 ```
 
-### 7. 验证部署
+### 5) 访问服务
+- 前端：`http://localhost:33012`
+- 后端：`http://localhost:33013`
+- OpenAPI 文档：`http://localhost:33013/docs`
 
-- **前端界面**: http://localhost:33012
-- **后端 API**: http://localhost:33013
-- **API 文档**: http://localhost:33013/docs
+## 关键环境变量说明
+以下字段建议在 `.env` 中优先确认：
 
-使用 `ADMIN_USER` / `ADMIN_PASSWORD` 登录管理后台。
+| 变量 | 用途 | 示例/默认 |
+|---|---|---|
+| `DATABASE_URL` | PostgreSQL 连接串 | `postgresql://user:password@hostname:5432/database_name` |
+| `SECRET_KEY` | JWT 签名密钥 | `your-secret-key-change-this-in-production` |
+| `ADMIN_USER` | 初始管理员用户名 | `admin` |
+| `ADMIN_PASSWORD` | 初始管理员密码 | `your_secure_password_here` |
+| `FORCE_RESET_ADMIN_PASSWORD` | 是否强制按 env 重置管理员密码 | `false` |
+| `REDIS_HOST` | Redis 主机 | `redis_container_name` |
+| `REDIS_PORT` | Redis 端口 | `6379` |
+| `REDIS_PASSWORD` | Redis 密码 | `your_redis_password_here` |
+| `REDIS_DB` | Redis DB 索引 | `0` |
+| `DEFAULT_API_URL` | 图像生成 API 地址 | `https://your-api-provider.com/v1` |
+| `DEFAULT_API_KEY` | 图像生成 API Key | `sk-your-api-key-here` |
+| `DEFAULT_MODEL_NAME` | 图像生成模型名 | `gemini-2.0-flash-exp` |
+| `VIDEO_API_URL` | 视频生成 API 地址 | `https://your-video-api.com/v1` |
+| `VIDEO_API_KEY` | 视频生成 API Key | `sk-your-video-api-key-here` |
+| `VIDEO_MODEL_NAME` | 视频生成模型名 | `sora2-portrait-15s` |
 
----
+## 管理员密码策略
+系统启动时的管理员密码行为如下：
 
-## 🌐 网络配置
+1. **首次启动（管理员不存在）**：
+   - 使用 `ADMIN_USER` / `ADMIN_PASSWORD` 创建管理员。
+2. **后续启动（管理员已存在）**：
+   - 默认**不覆盖**数据库中的现有管理员密码。
+3. **强制重置**：
+   - 仅当 `FORCE_RESET_ADMIN_PASSWORD=true` 时，启动阶段才会把管理员密码重置为 `ADMIN_PASSWORD`。
+   - 重置后请立即把该开关改回 `false`，避免后续重启再次覆盖。
 
-### Docker 网络
+迁移提示：旧版本“每次启动覆盖密码”的行为已收敛为“默认不覆盖”。
 
-项目使用以下 Docker 网络：
-
-| 网络 | 用途 |
-|------|------|
-| `default` | 项目内部通信（frontend ↔ backend） |
-| `1panel-network` | 与 1Panel 管理的服务通信（OpenResty、Redis、PostgreSQL 等） |
-| `外部 API 网络` | **可选** - 如需直接访问其他 Docker 服务（如 API 代理），可添加对应网络 |
-
-**基础配置** (docker-compose.yml):
-
-```yaml
-networks:
-  1panel-network:
-    external: true
-```
-
-**扩展配置** - 如需连接其他服务的 Docker 网络：
-
-```yaml
-# 在 backend 服务的 networks 下添加
-networks:
-  - default
-  - 1panel-network
-  - your_api_service_network  # 添加需要连接的网络
-
-# 在文件底部的 networks 配置中声明
-networks:
-  1panel-network:
-    external: true
-  your_api_service_network:
-    external: true
-```
-
-> 💡 **提示**: 通过共享 Docker 网络，可以使用容器名直接访问服务，无需暴露端口到宿主机。
-
-### 反向代理 (1Panel OpenResty)
-
-本项目推荐使用 **1Panel** 面板自带的 **OpenResty** 容器配置反向代理和 HTTPS。
-
-#### 1Panel 配置步骤
-
-1. 进入 **1Panel** → **网站** → **创建网站** → **反向代理**
-2. 填写域名，选择 HTTPS (可自动申请 Let's Encrypt 证书)
-3. 代理目标配置如下：
-
-| 路径 | 代理目标 | 说明 |
-|------|----------|------|
-| `/` | `http://frontend:5173` | 前端服务 |
-| `/api/` | `http://backend:8000` | 后端 API |
-| `/uploads/` | `http://backend:8000` | 静态资源 |
-| `/ws` | `http://backend:8000` | WebSocket |
-
-> 💡 **提示**: 由于服务都在 `1panel-network` 网络中，可直接使用容器名作为主机名。
-
-#### OpenResty 配置示例
-
-如果需要手动配置，在 1Panel 的「配置文件」中添加：
-
-```nginx
-# WebSocket 支持
-location /ws {
-    proxy_pass http://backend:8000;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_read_timeout 86400;
-}
-
-# 后端 API
-location /api/ {
-    proxy_pass http://backend:8000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-
-# 静态文件 (7天缓存)
-location /uploads/ {
-    proxy_pass http://backend:8000;
-    proxy_cache_valid 200 7d;
-    add_header Cache-Control "public, max-age=604800";
-}
-
-# 前端
-location / {
-    proxy_pass http://frontend:5173;
-    proxy_set_header Host $host;
-}
-```
-
-> ⚠️ **注意**: 确保 `docker-compose.yml` 中的服务已加入 `1panel-network` 网络。
-
----
-
-## 📖 使用指南
-
-### 基本操作流程
-
-| 功能 | 步骤 |
-|------|------|
-| **场景生成** | 上传商品图 → 智能分析 → 生成脚本 → 批量生成图片 |
-| **视频生成** | 选择图片 → 点击"转为视频" → 队列处理 → 预览下载 |
-| **故事模式** | 上传图片 → 输入主题 → 生成分镜 → 合成视频 |
-| **批量下载** | 画廊 → 批量管理 → 选择多个 → 📦下载 → ZIP打包 |
-
-### 管理功能 (Admin)
-
-- **系统设置**: 配置 API 密钥、并发数、站点标题等
-- **用户管理**: 创建/删除用户，查看用户等级和经验值
-- **监控面板**: 查看生成统计、队列状态
-
----
-
-## 🔧 运维操作
-
-### 查看日志
-
+## 常用运维命令
 ```bash
-# 后端日志
+# 查看日志
 docker compose logs -f backend
-
-# 前端日志
 docker compose logs -f frontend
 
-# 查看所有服务
-docker compose logs -f
-```
-
-### 重启服务
-
-```bash
-# 重启后端
+# 重启服务
 docker compose restart backend
-
-# 重启所有
+docker compose restart frontend
 docker compose restart
-```
 
-### 更新部署
-
-```bash
-# 拉取最新代码
+# 更新部署（示例）
 git pull
-
-# 重新构建并启动
 docker compose up -d --build
+
+# 停止服务
+docker compose down
 ```
 
-### 数据备份
-
+## 开发说明
+### 前端
 ```bash
-# 备份 PostgreSQL 数据
-docker exec postgres pg_dump -U your_user your_db > backup.sql
-
-# 备份上传的文件
-tar -czf uploads_backup.tar.gz backend/uploads/
+cd frontend
+npm install
+npm run dev
+npm run build
+npm run lint
+npm run preview
 ```
 
----
-
-## 📁 目录结构
-
+### 后端
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
 ```
-abp_studio/
-├── backend/               # FastAPI 后端
-│   ├── main.py            # 主应用入口
-│   ├── queue_manager.py   # 任务队列
-│   ├── video_reviewer.py  # 视频质量审核
-│   ├── websocket_manager.py
-│   ├── uploads/           # 用户上传文件 (git忽略)
-│   └── requirements.txt
-├── frontend/              # React 前端
+
+## 目录结构
+```text
+.
+├── backend/
+│   ├── main.py
+│   ├── requirements.txt
+│   ├── uploads/
+│   └── ...
+├── frontend/
 │   ├── src/
-│   │   ├── App.jsx        # 主应用
-│   │   ├── ImageGenerator.jsx
-│   │   ├── VideoGenerator.jsx
-│   │   ├── Gallery.jsx
-│   │   └── ...
-│   └── package.json
-├── docker-compose.yml     # 容器编排
-├── .env.example           # 环境变量模板
-├── .env                   # 实际配置 (git忽略)
-└── README.md              # 本文档
+│   ├── package.json
+│   └── ...
+├── docker-compose.yml
+├── .env.example
+└── README.md
 ```
 
----
+## 安全建议
+1. 生产环境务必更换 `SECRET_KEY`，并保证强随机性。
+2. `ADMIN_PASSWORD`、`REDIS_PASSWORD` 使用高强度密码并定期轮换。
+3. 对外暴露时请在反向代理层启用 HTTPS。
+4. 避免把 `.env`、数据库备份、上传目录暴露到公网仓库。
+5. `FORCE_RESET_ADMIN_PASSWORD` 仅用于恢复场景，恢复完成后及时关闭。
 
-## ⚠️ 安全注意事项
+## 故障排查（FAQ）
+1. **后端启动失败提示数据库连接错误**
+   - 检查 `DATABASE_URL` 是否可达，用户名/密码/库名是否正确。
+2. **登录失败或管理员密码不生效**
+   - 先确认是否已有管理员账号；后续启动默认不覆盖密码。
+   - 需要重置时将 `FORCE_RESET_ADMIN_PASSWORD=true` 并重启 backend。
+3. **前端无法请求后端**
+   - 检查 `33013` 是否正常监听；确认反向代理与 CORS 配置。
+4. **视频队列卡住或长时间 pending**
+   - 检查 Redis 可用性与视频 API 配置（`VIDEO_API_*`）。
+5. **上传后文件不存在或无法预览**
+   - 检查 `backend/uploads` 挂载与文件权限。
+6. **WebSocket 状态更新异常**
+   - 检查 Redis 与网络连通；反向代理是否放行升级头。
+7. **构建失败**
+   - 前端执行 `npm install` 后重试 `npm run build`；后端确认虚拟环境依赖齐全。
 
-1. **必须修改 `SECRET_KEY`**: 默认值会导致 JWT 无效
-2. **使用强密码**: `ADMIN_PASSWORD` 和 `REDIS_PASSWORD`
-3. **配置 HTTPS**: 生产环境必须使用 HTTPS
-4. **限制端口暴露**: 仅暴露必要端口给反向代理
-5. **定期备份**: 数据库和上传文件
-
----
-
-## 📝 更新日志
-
-### v1.7.0 (2026-01-23)
-- 🏆 完整用户等级体系 (27级修仙境界)
-- 📊 视频质量 AI 审核系统
-- 🖼️ 浮动画廊增强 (分页、跳转)
-
-### v1.6.0 (2026-01-07)
-- ✨ **批量下载**: 画廊支持批量选择图片/视频打包为ZIP下载
-- 🔧 视频下载修复: 确保下载MP4而非预览图
-
-### v1.5.0 (2025-12-31)
-- 🔍 AI视频质量审查 (多维度评分)
-- 🖼️ 浮动画廊 (右侧抽屉式)
-- 📅 日期筛选功能
-
-### v1.4.0 (2025-12-14)
-- 🌐 公开画廊 (无登录访问)
-- 👤 用户档案管理
-- 🔐 Turnstile人机验证
-
-### v1.3.0 (2025-12-13)
-- 💥 裂变生成模式
-- 📊 实时监控增强
-
----
-
-## 🤝 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-1. Fork 本仓库
-2. 创建特性分支: `git checkout -b feature/amazing-feature`
-3. 提交更改: `git commit -m 'Add amazing feature'`
-4. 推送分支: `git push origin feature/amazing-feature`
-5. 提交 Pull Request
-
----
-
-## 📜 License
-
-MIT License - 详见 [LICENSE](LICENSE) 文件
+## 许可证
+本项目使用 MIT License。
