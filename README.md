@@ -84,9 +84,26 @@ DATABASE_URL=postgresql://abp_user:your_password@postgres:5432/abp_studio
 SECRET_KEY=your-random-32-char-secret-key-here
 
 # 管理员账号 (首次启动自动创建)
+# 注意：首次启动后，修改此处的 ADMIN_PASSWORD 不会生效，除非开启 FORCE_RESET_ADMIN_PASSWORD
 ADMIN_USER=admin
 ADMIN_PASSWORD=your_secure_admin_password
+
+# 管理员密码强制重置 (默认 false)
+# 如果忘记管理员密码，可设为 true 并重启服务，系统会将密码重置为 ADMIN_PASSWORD
+# 重置成功后请务必设回 false
+FORCE_RESET_ADMIN_PASSWORD=false
 ```
+
+### 🛡️ 管理员密码策略
+
+1. **首次启动**: 系统会根据 `.env` 中的 `ADMIN_USER` 和 `ADMIN_PASSWORD` 创建初始管理员账号。
+2. **常规重启**: 为了安全，系统在后续启动时**默认不会**覆盖数据库中的管理员密码。
+3. **密码重置**: 
+   - 如需重置管理员密码，请在 `.env` 中设置 `FORCE_RESET_ADMIN_PASSWORD=true`。
+   - 重启容器：`docker compose restart backend`。
+   - 登录成功后，**必须**将该项改回 `false`，防止下次非预期的密码覆盖。
+
+> 💡 **迁移提示**: 现有部署在更新代码后，默认将启用此保护机制，不再自动同步环境变量中的密码到数据库。
 
 #### 📮 Redis 配置
 

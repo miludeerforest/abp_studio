@@ -368,7 +368,6 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
     const handleDragLeave = (e) => {
         e.preventDefault()
         setIsDragging(false)
-        setIsDragging(false)
     }
 
     const handleDrop = (e) => {
@@ -398,10 +397,11 @@ function VideoGenerator({ token, initialImage, initialPrompt, initialCategory, r
 
             const data = await res.json()
             // Backend updates DB, we just fetchQueue or update local
-            if (data.status === 'success') {
-                // Success
+            // Success if HTTP OK (backend returns {status: "processing"} on successful queue)
+            if (res.ok) {
+                // Success - task queued
             } else {
-                // Error
+                // Error - HTTP error
             }
         } catch (e) {
             console.error("Processing failed", e)

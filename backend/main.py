@@ -296,12 +296,6 @@ class ConfigItem(BaseModel):
 
 
 
-# --- Background Task for Video Generation ---
-async def process_video_background(item_id: str, video_api_url: str, video_api_key: str, video_model_name: str):
-    logger.info(f"Background Task: Starting Video Generation for {item_id}")
-    
-    # Create a fresh DB session for the background task
-    db = SessionLocal()
 # --- Prompt Matrix ---
 ANGLES_PROMPTS = {
     "01_Front_View": "Generate a photorealistic front-view product shot. The product should be centered, facing the camera directly. Lighting should highlight the main features.",
@@ -481,11 +475,13 @@ async def startup_event():
 
         admin_user = os.getenv("ADMIN_USER", "admin")
         admin_pass = os.getenv("ADMIN_PASSWORD", "change_this_password")
+        force_reset_admin_password = os.getenv("FORCE_RESET_ADMIN_PASSWORD", "false").lower() == "true"
         
         # Check if admin user exists
         user = db.query(User).filter(User.username == admin_user).first()
         if not user:
-            print(f"Creating default admin user: {admin_user}...")
+            # First startup: create admin user
+            print(f"[Startup] Creating default admin user: {admin_user}")
             admin = User(
                 username=admin_user,
                 hashed_password=get_password_hash(admin_pass),
@@ -494,10 +490,17 @@ async def startup_event():
             db.add(admin)
             db.commit()
         else:
-            # Always update password to match ENV (so user can reset via ENV)
-            print(f"Updating admin user password for: {admin_user}")
-            user.hashed_password = get_password_hash(admin_pass)
-            # Ensure role is admin
+            # Existing admin user: preserve password unless force-reset flag is enabled
+            if force_reset_admin_password:
+                # Explicit force-reset requested via environment variable
+                print(f"[Startup] FORCE_RESET_ADMIN_PASSWORD=true detected - Resetting admin password for: {admin_user}")
+                user.hashed_password = get_password_hash(admin_pass)
+                logger.warning(f"Admin password forcefully reset from environment variable for user: {admin_user}")
+            else:
+                # Default secure behavior: preserve existing password
+                print(f"[Startup] Admin user exists: {admin_user} - Password preserved (set FORCE_RESET_ADMIN_PASSWORD=true to reset)")
+            
+            # Always enforce admin role regardless of password reset policy
             user.role = "admin"
             db.commit()
         
@@ -2731,7 +2734,8 @@ class QueueItemResponse(BaseModel):
     error_msg: Optional[str] = None
     created_at: datetime
     preview_url: Optional[str] = None
-    user_id: Optional[int] = None  # 任务所有者ID，用于前端权限判断
+    user_id: Optional[int] = None  # 任务所有者ID,用于前端权限判断
+    retry_count: Optional[int] = 0  # 累计重试次数，与VideoQueueItem.retry_count对齐
     
     class Config:
         from_attributes = True
@@ -3407,7 +3411,7 @@ async def add_to_queue(
 
     # Create DB record
     item = VideoQueueItem(
-        id=str(int(datetime.now().timestamp() * 1000)), # Simple ID
+        id=uuid.uuid4().hex,  # UUID-based ID (stability hardening)
         filename=filename,
         file_path=file_path,
         prompt=prompt,
@@ -3455,8 +3459,6 @@ def update_queue_item(
     if update.error_msg:
         item.error_msg = update.error_msg
         
-    db.commit()
-    db.refresh(item)
     db.commit()
     db.refresh(item)
     return item
@@ -3539,7 +3541,7 @@ async def merge_videos_endpoint(
 
         # 5. Create new Queue Item for the merged video
         new_item = VideoQueueItem(
-            id=str(int(datetime.now().timestamp() * 1000)),
+            id=uuid.uuid4().hex,  # UUID-based ID (stability hardening)
             filename=output_filename,
             file_path=output_path,
             prompt="Merged Video: " + ", ".join([v.filename for v in videos]),
