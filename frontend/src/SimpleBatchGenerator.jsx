@@ -239,7 +239,7 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
                                                 type="file"
                                                 accept="image/*"
                                                 onChange={(e) => handleImageUpload(e, 0)}
-                                                style={{ display: 'none' }}
+                                                className="sbg-hidden-file-input"
                                             />
                                             <div className="upload-placeholder">
                                                 <span className="upload-icon">+</span>

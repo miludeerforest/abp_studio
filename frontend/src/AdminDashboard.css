@@ -472,3 +472,19 @@
         max-height: 300px;
     }
 }
+
+.activity-heading-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.clear-activities-btn.compact {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #ef4444;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}

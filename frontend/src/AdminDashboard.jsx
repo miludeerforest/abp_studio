@@ -199,10 +199,10 @@ function AdminDashboard({ token, isConnected = false, lastMessage = null }) {
 
                 {/* Activity Feed */}
                 <div className="panel activity-panel">
-                    <h3 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 className="activity-heading-row">
                         📋 活动记录
                         <button
-                            className="clear-activities-btn"
+                            className="clear-activities-btn compact"
                             onClick={async () => {
                                 if (!window.confirm('确定要清空所有活动记录吗？')) return;
                                 try {
@@ -217,15 +217,7 @@ function AdminDashboard({ token, isConnected = false, lastMessage = null }) {
                                     console.error('Failed to clear activities:', e);
                                 }
                             }}
-                            style={{
-                                background: 'rgba(239, 68, 68, 0.2)',
-                                border: '1px solid rgba(239, 68, 68, 0.5)',
-                                color: '#ef4444',
-                                padding: '4px 10px',
-                                borderRadius: '4px',
-                                fontSize: '0.75rem',
-                                cursor: 'pointer'
-                            }}
+
                             title="清空活动记录"
                         >
                             🗑️ 清空

@@ -922,3 +922,7 @@
         border-radius: 6px;
     }
 }
+
+.sbg-hidden-file-input {
+    display: none;
+}
