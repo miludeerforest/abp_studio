@@ -223,115 +223,121 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
 
             {step === 'upload' && (
                 <div className="upload-section">
-                    <div className="section-title">📸 上传产品图</div>
-                    <div className="upload-grid" style={{justifyContent: 'center'}}>
-                        <div className="upload-slot" style={{width: '200px', height: '200px'}}>
-                            {uploadedImages[0] ? (
-                                <div className="image-preview">
-                                    <img src={URL.createObjectURL(uploadedImages[0])} alt="产品图" />
-                                    <button className="remove-btn" onClick={() => removeImage(0)}>✕</button>
-                                </div>
-                            ) : (
-                                <label className="upload-zone">
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => handleImageUpload(e, 0)}
-                                            style={{ display: 'none' }}
-                                        />
-                                        <div className="upload-placeholder">
-                                            <span className="upload-icon">+</span>
-                                            <span>点击上传</span>
+                    <div className="sbg-form-grid">
+                        <div className="sbg-left-col">
+                            <div className="section-title">📸 产品图</div>
+                            <div className="upload-slot-wrapper">
+                                <div className="upload-slot">
+                                    {uploadedImages[0] ? (
+                                        <div className="image-preview">
+                                            <img src={URL.createObjectURL(uploadedImages[0])} alt="产品图" />
+                                            <button className="remove-btn" onClick={() => removeImage(0)}>✕</button>
                                         </div>
-                                    </label>
-                                )}
-                            </div>
-                    </div>
-
-                    <div className="section-title">✨ 场景描述</div>
-                    <textarea
-                        className="prompt-input"
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="描述你想要的场景，例如：现代简约的客厅环境，柔和的自然光，产品放置在白色大理石桌面上..."
-                        rows={4}
-                    />
-
-                    <div className="config-section">
-                        <div className="config-group">
-                            <label>产品类目</label>
-                            <div className="category-grid">
-                                {CATEGORIES.map(cat => (
-                                    <button
-                                        key={cat.id}
-                                        className={`category-btn ${category === cat.id ? 'active' : ''}`}
-                                        onClick={() => setCategory(cat.id)}
-                                    >
-                                        {cat.icon} {cat.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="config-row">
-                            <div className="config-group">
-                                <label>图片比例</label>
-                                <div className="ratio-grid">
-                                    {ASPECT_RATIOS.map(ar => (
-                                        <button
-                                            key={ar.id}
-                                            className={`ratio-btn ${aspectRatio === ar.id ? 'active' : ''}`}
-                                            onClick={() => setAspectRatio(ar.id)}
-                                        >
-                                            {ar.icon} {ar.label}
-                                        </button>
-                                    ))}
+                                    ) : (
+                                        <label className="upload-zone">
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={(e) => handleImageUpload(e, 0)}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <div className="upload-placeholder">
+                                                <span className="upload-icon">+</span>
+                                                <span>上传</span>
+                                            </div>
+                                        </label>
+                                    )}
                                 </div>
                             </div>
-
-                            <div className="config-group">
-                                <label>视觉风格</label>
-                                <select
-                                    value={sceneStyle}
-                                    onChange={(e) => setSceneStyle(e.target.value)}
-                                    className="style-select"
-                                >
-                                    {SCENE_STYLES.map(style => (
-                                        <option key={style.id} value={style.id}>{style.label}</option>
-                                    ))}
-                                </select>
+                        </div>
+                        
+                        <div className="sbg-right-col">
+                            <div className="section-title">✨ 场景描述</div>
+                            <textarea
+                                className="prompt-input"
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                                placeholder="描述你想要的场景，例如：现代简约的客厅，柔和自然光，产品放在白色大理石桌面..."
+                                rows={3}
+                            />
+                            
+                            <div className="sbg-config-inline">
+                                <div className="sbg-config-item">
+                                    <label>类目</label>
+                                    <div className="category-grid">
+                                        {CATEGORIES.map(cat => (
+                                            <button
+                                                key={cat.id}
+                                                className={`category-btn ${category === cat.id ? 'active' : ''}`}
+                                                onClick={() => setCategory(cat.id)}
+                                            >
+                                                {cat.icon} {cat.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                
+                                <div className="sbg-config-row">
+                                    <div className="sbg-config-item sbg-config-sm">
+                                        <label>比例</label>
+                                        <div className="ratio-grid">
+                                            {ASPECT_RATIOS.map(ar => (
+                                                <button
+                                                    key={ar.id}
+                                                    className={`ratio-btn ${aspectRatio === ar.id ? 'active' : ''}`}
+                                                    onClick={() => setAspectRatio(ar.id)}
+                                                >
+                                                    {ar.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="sbg-config-item sbg-config-sm">
+                                        <label>风格</label>
+                                        <select
+                                            value={sceneStyle}
+                                            onChange={(e) => setSceneStyle(e.target.value)}
+                                            className="style-select"
+                                        >
+                                            {SCENE_STYLES.map(style => (
+                                                <option key={style.id} value={style.id}>{style.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    
+                                    <div className="sbg-config-item sbg-config-sm">
+                                        <label>数量: {genCountPerImage}</label>
+                                        <input
+                                            type="range"
+                                            min="1"
+                                            max="9"
+                                            value={genCountPerImage}
+                                            onChange={(e) => setGenCountPerImage(parseInt(e.target.value))}
+                                            className="count-slider"
+                                        />
+                                    </div>
+                                </div>
                             </div>
-
-                            <div className="config-group">
-                                <label>生成数量: {genCountPerImage}</label>
-                                <input
-                                    type="range"
-                                    min="1"
-                                    max="9"
-                                    value={genCountPerImage}
-                                    onChange={(e) => setGenCountPerImage(parseInt(e.target.value))}
-                                    className="count-slider"
-                                />
-                            </div>
+                            
+                            <div className="section-title sbg-section-sm">🎬 视频提示词 (可选)</div>
+                            <textarea
+                                className="prompt-input"
+                                value={videoPrompt}
+                                onChange={(e) => setVideoPrompt(e.target.value)}
+                                placeholder="视频动作效果，如：缓慢推进镜头，产品轻微旋转..."
+                                rows={2}
+                            />
                         </div>
                     </div>
-
-                    <div className="section-title">🎬 视频提示词 (可选)</div>
-                    <textarea
-                        className="prompt-input"
-                        value={videoPrompt}
-                        onChange={(e) => setVideoPrompt(e.target.value)}
-                        placeholder="描述视频动作效果，例如：缓慢推进镜头，产品轻微旋转展示细节..."
-                        rows={2}
-                    />
-
-                    <div className="action-bar">
+                    
+                    <div className="action-bar sbg-action-compact">
                         <button
                             className="generate-btn"
                             onClick={handleGenerate}
                             disabled={uploadedImages.length === 0 || !prompt.trim() || loading}
                         >
-                            🚀 开始生成 (生成 {genCountPerImage} 张场景图)
+                            🚀 开始生成 ({genCountPerImage} 张)
                         </button>
                     </div>
                 </div>

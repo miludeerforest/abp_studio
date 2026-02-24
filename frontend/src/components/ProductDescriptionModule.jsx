@@ -1,7 +1,182 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 
 const BACKEND_URL = ''
 const STORAGE_KEY = 'mexico_beauty_prompts_history'
+const DRAFT_STORAGE_KEY = 'mexico_beauty_form_draft_v1'
+const DRAFT_DB_NAME = 'mexico_beauty_product_draft_db'
+const DRAFT_DB_VERSION = 1
+const DRAFT_IMAGE_STORE = 'draft_images'
+const DEFAULT_ASPECT_RATIO = '1:1'
+const DEFAULT_TARGET_LANGUAGE = 'es-MX'
+
+const createDraftBlobId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID()
+    }
+    return `draft_blob_${Date.now()}_${Math.random().toString(16).slice(2)}`
+}
+
+const openDraftDB = () => new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+        reject(new Error('IndexedDB is not supported in this environment'))
+        return
+    }
+
+    const request = indexedDB.open(DRAFT_DB_NAME, DRAFT_DB_VERSION)
+
+    request.onupgradeneeded = () => {
+        const db = request.result
+        if (!db.objectStoreNames.contains(DRAFT_IMAGE_STORE)) {
+            db.createObjectStore(DRAFT_IMAGE_STORE)
+        }
+    }
+
+    request.onsuccess = () => {
+        resolve(request.result)
+    }
+
+    request.onerror = () => {
+        reject(request.error || new Error('Failed to open draft IndexedDB'))
+    }
+})
+
+const saveDraftBlob = async (blobId, blob) => {
+    const db = await openDraftDB()
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(DRAFT_IMAGE_STORE, 'readwrite')
+        tx.objectStore(DRAFT_IMAGE_STORE).put(blob, blobId)
+
+        tx.oncomplete = () => {
+            db.close()
+            resolve()
+        }
+        tx.onerror = () => {
+            db.close()
+            reject(tx.error || new Error('Failed to save draft image blob'))
+        }
+        tx.onabort = () => {
+            db.close()
+            reject(tx.error || new Error('Saving draft image blob aborted'))
+        }
+    })
+}
+
+const getDraftBlob = async (blobId) => {
+    const db = await openDraftDB()
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(DRAFT_IMAGE_STORE, 'readonly')
+        const request = tx.objectStore(DRAFT_IMAGE_STORE).get(blobId)
+
+        request.onsuccess = () => {
+            resolve(request.result || null)
+        }
+        request.onerror = () => {
+            reject(request.error || new Error('Failed to read draft image blob'))
+        }
+
+        tx.oncomplete = () => {
+            db.close()
+        }
+        tx.onerror = () => {
+            db.close()
+        }
+        tx.onabort = () => {
+            db.close()
+        }
+    })
+}
+
+const deleteDraftBlob = async (blobId) => {
+    const db = await openDraftDB()
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(DRAFT_IMAGE_STORE, 'readwrite')
+        tx.objectStore(DRAFT_IMAGE_STORE).delete(blobId)
+
+        tx.oncomplete = () => {
+            db.close()
+            resolve()
+        }
+        tx.onerror = () => {
+            db.close()
+            reject(tx.error || new Error('Failed to delete draft image blob'))
+        }
+        tx.onabort = () => {
+            db.close()
+            reject(tx.error || new Error('Deleting draft image blob aborted'))
+        }
+    })
+}
+
+const listDraftBlobIds = async () => {
+    const db = await openDraftDB()
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(DRAFT_IMAGE_STORE, 'readonly')
+        const request = tx.objectStore(DRAFT_IMAGE_STORE).getAllKeys()
+
+        request.onsuccess = () => {
+            resolve(Array.isArray(request.result) ? request.result : [])
+        }
+        request.onerror = () => {
+            reject(request.error || new Error('Failed to list draft image blobs'))
+        }
+
+        tx.oncomplete = () => {
+            db.close()
+        }
+        tx.onerror = () => {
+            db.close()
+        }
+        tx.onabort = () => {
+            db.close()
+        }
+    })
+}
+
+const cleanupDraftBlobs = async (keepBlobIds = []) => {
+    const keepSet = new Set((keepBlobIds || []).filter(Boolean))
+    const allBlobIds = await listDraftBlobIds()
+    const staleBlobIds = allBlobIds.filter(blobId => !keepSet.has(blobId))
+
+    if (staleBlobIds.length === 0) return
+
+    await Promise.all(staleBlobIds.map(blobId => deleteDraftBlob(blobId)))
+}
+
+const previewToBlob = (preview, fallbackType = 'image/jpeg') => {
+    if (!preview || typeof preview !== 'string') return null
+
+    try {
+        const hasDataUrlPrefix = preview.startsWith('data:')
+        const base64Data = hasDataUrlPrefix ? (preview.split(',')[1] || '') : preview
+        if (!base64Data) return null
+
+        const mimeMatch = hasDataUrlPrefix
+            ? preview.match(/^data:([^;]+);base64,/)
+            : null
+        const mimeType = mimeMatch?.[1] || fallbackType
+
+        const byteChars = atob(base64Data)
+        const byteNumbers = new Array(byteChars.length)
+        for (let i = 0; i < byteChars.length; i++) {
+            byteNumbers[i] = byteChars.charCodeAt(i)
+        }
+        return new Blob([new Uint8Array(byteNumbers)], { type: mimeType })
+    } catch (error) {
+        console.warn('Failed to convert preview to blob:', error)
+        return null
+    }
+}
+
+const normalizeDraftImageMeta = (image) => ({
+    blobId: image?.blobId || null,
+    name: image?.name || image?.file?.name || 'product.jpg',
+    type: image?.type || image?.file?.type || 'image/jpeg',
+    size: typeof image?.size === 'number' ? image.size : (image?.file?.size || 0),
+    lastModified: typeof image?.lastModified === 'number'
+        ? image.lastModified
+        : (image?.file?.lastModified || Date.now()),
+    preview: image?.preview || ''
+})
 
 const ImageType = {
     MAIN: 'Main Image',
@@ -34,8 +209,8 @@ function ProductDescriptionModule({ token, onBack }) {
         keywords: '',
         description: '',
         images: [],           // Array of { file, preview }
-        aspectRatio: '1:1',
-        targetLanguage: 'es-MX'
+        aspectRatio: DEFAULT_ASPECT_RATIO,
+        targetLanguage: DEFAULT_TARGET_LANGUAGE
     })
     
     const [prompts, setPrompts] = useState([])
@@ -51,6 +226,16 @@ function ProductDescriptionModule({ token, onBack }) {
     const [isBatchGenerating, setIsBatchGenerating] = useState(false)
     const [batchProgress, setBatchProgress] = useState({ completed: 0, total: 0 })
     const [maxConcurrent, setMaxConcurrent] = useState(5)
+    const isDraftRestoringRef = useRef(true)
+    const draftSaveTimerRef = useRef(null)
+    const activeSessionIdRef = useRef(null)
+
+    const draftTitle = formData.title
+    const draftKeywords = formData.keywords
+    const draftDescription = formData.description
+    const draftImages = formData.images
+    const draftAspectRatio = formData.aspectRatio
+    const draftTargetLanguage = formData.targetLanguage
 
     useEffect(() => {
         const fetchConfig = async () => {
@@ -81,6 +266,172 @@ function ProductDescriptionModule({ token, onBack }) {
             }
         }
     }, [])
+
+    useEffect(() => {
+        activeSessionIdRef.current = activeSessionId
+    }, [activeSessionId])
+
+    useEffect(() => {
+        let cancelled = false
+
+        const restoreDraft = async () => {
+            try {
+                const savedDraftRaw = localStorage.getItem(DRAFT_STORAGE_KEY)
+                if (!savedDraftRaw) {
+                    return
+                }
+
+                const parsedDraft = JSON.parse(savedDraftRaw)
+                const draftImages = Array.isArray(parsedDraft?.images) ? parsedDraft.images : []
+
+                const restoredImages = await Promise.all(
+                    draftImages.map(async (rawImage, index) => {
+                        const imageMeta = normalizeDraftImageMeta(rawImage)
+                        let restoredFile = null
+
+                        if (imageMeta.blobId) {
+                            try {
+                                const blob = await getDraftBlob(imageMeta.blobId)
+                                if (blob instanceof Blob) {
+                                    restoredFile = new File(
+                                        [blob],
+                                        imageMeta.name || `product-${index + 1}.jpg`,
+                                        {
+                                            type: imageMeta.type || blob.type || 'image/jpeg',
+                                            lastModified: imageMeta.lastModified || Date.now()
+                                        }
+                                    )
+                                }
+                            } catch (blobError) {
+                                console.warn(`Failed to restore blob for draft image ${imageMeta.blobId}:`, blobError)
+                            }
+                        }
+
+                        return {
+                            ...imageMeta,
+                            file: restoredFile,
+                            preview: imageMeta.preview || ''
+                        }
+                    })
+                )
+
+                if (cancelled) return
+
+                const normalizedImages = restoredImages.filter(image => image.preview || image.file)
+
+                if (!activeSessionIdRef.current) {
+                    setFormData(prev => ({
+                        ...prev,
+                        title: parsedDraft?.title || '',
+                        keywords: parsedDraft?.keywords || '',
+                        description: parsedDraft?.description || '',
+                        images: normalizedImages,
+                        aspectRatio: parsedDraft?.aspectRatio || DEFAULT_ASPECT_RATIO,
+                        targetLanguage: parsedDraft?.targetLanguage || DEFAULT_TARGET_LANGUAGE
+                    }))
+                }
+
+                try {
+                    await cleanupDraftBlobs(
+                        normalizedImages.map(image => image.blobId).filter(Boolean)
+                    )
+                } catch (cleanupError) {
+                    console.warn('Failed to cleanup orphan draft blobs after restore:', cleanupError)
+                }
+            } catch (error) {
+                console.warn('Failed to restore form draft metadata:', error)
+            } finally {
+                if (!cancelled) {
+                    isDraftRestoringRef.current = false
+                }
+            }
+        }
+
+        restoreDraft()
+
+        return () => {
+            cancelled = true
+            if (draftSaveTimerRef.current) {
+                clearTimeout(draftSaveTimerRef.current)
+                draftSaveTimerRef.current = null
+            }
+        }
+    }, [])
+
+    useEffect(() => {
+        if (isDraftRestoringRef.current) return
+        if (activeSessionId) return
+
+        if (draftSaveTimerRef.current) {
+            clearTimeout(draftSaveTimerRef.current)
+        }
+
+        draftSaveTimerRef.current = setTimeout(() => {
+            const normalizedDraftImages = (draftImages || []).map(normalizeDraftImageMeta)
+            const hasTextDraft = Boolean(
+                draftTitle?.trim() ||
+                draftKeywords?.trim() ||
+                draftDescription?.trim()
+            )
+            const hasImageDraft = normalizedDraftImages.length > 0
+            const hasCustomAspectRatio = draftAspectRatio !== DEFAULT_ASPECT_RATIO
+            const hasCustomLanguage = draftTargetLanguage !== DEFAULT_TARGET_LANGUAGE
+
+            const isEmptyDraft = !hasTextDraft && !hasImageDraft && !hasCustomAspectRatio && !hasCustomLanguage
+
+            if (isEmptyDraft) {
+                let previousBlobIds = []
+
+                try {
+                    const previousDraftRaw = localStorage.getItem(DRAFT_STORAGE_KEY)
+                    if (previousDraftRaw) {
+                        const previousDraft = JSON.parse(previousDraftRaw)
+                        previousBlobIds = (Array.isArray(previousDraft?.images) ? previousDraft.images : [])
+                            .map(image => normalizeDraftImageMeta(image).blobId)
+                            .filter(Boolean)
+                    }
+
+                    localStorage.removeItem(DRAFT_STORAGE_KEY)
+                } catch (removeError) {
+                    console.warn('Failed to clear empty form draft metadata:', removeError)
+                }
+
+                previousBlobIds.forEach(blobId => {
+                    deleteDraftBlob(blobId).catch(cleanupError => {
+                        console.warn('Failed to cleanup cleared draft blob:', cleanupError)
+                    })
+                })
+                return
+            }
+
+            const draftPayload = {
+                title: draftTitle,
+                keywords: draftKeywords,
+                description: draftDescription,
+                aspectRatio: draftAspectRatio,
+                targetLanguage: draftTargetLanguage,
+                images: normalizedDraftImages,
+                updatedAt: Date.now()
+            }
+
+            try {
+                localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftPayload))
+            } catch (error) {
+                console.warn('Failed to save form draft metadata:', error)
+            }
+
+            cleanupDraftBlobs(normalizedDraftImages.map(image => image.blobId).filter(Boolean)).catch(cleanupError => {
+                console.warn('Failed to cleanup orphan draft blobs on save:', cleanupError)
+            })
+        }, 300)
+
+        return () => {
+            if (draftSaveTimerRef.current) {
+                clearTimeout(draftSaveTimerRef.current)
+                draftSaveTimerRef.current = null
+            }
+        }
+    }, [activeSessionId, draftTitle, draftKeywords, draftDescription, draftImages, draftAspectRatio, draftTargetLanguage])
 
     useEffect(() => {
         if (history.length > 0) {
@@ -132,30 +483,58 @@ function ProductDescriptionModule({ token, onBack }) {
         [displayPrompts]
     )
 
-    const handleImageUpload = (e) => {
+    const handleImageUpload = async (e) => {
         const files = Array.from(e.target.files || [])
         if (files.length === 0) return
 
-        const promises = files.map(file => {
+        const promises = files.map(async (file) => {
+            const draftBlobId = createDraftBlobId()
+            let persistedBlobId = null
+
+            try {
+                await saveDraftBlob(draftBlobId, file)
+                persistedBlobId = draftBlobId
+            } catch (blobSaveError) {
+                console.warn('Failed to persist uploaded file to draft IndexedDB:', blobSaveError)
+            }
+
             return new Promise((resolve) => {
                 const reader = new FileReader()
-                reader.onloadend = () => resolve({ file, preview: reader.result })
+                reader.onloadend = () => resolve({
+                    file,
+                    preview: reader.result,
+                    blobId: persistedBlobId,
+                    name: file.name,
+                    type: file.type,
+                    size: file.size,
+                    lastModified: file.lastModified
+                })
                 reader.readAsDataURL(file)
             })
         })
 
-        Promise.all(promises).then(newImages => {
-            setFormData(prev => ({ ...prev, images: [...prev.images, ...newImages] }))
-        })
+        const newImages = await Promise.all(promises)
+        setFormData(prev => ({ ...prev, images: [...prev.images, ...newImages] }))
 
         e.target.value = ''
     }
 
     const handleRemoveImage = (index) => {
-        setFormData(prev => ({
-            ...prev,
-            images: prev.images.filter((_, i) => i !== index)
-        }))
+        setFormData(prev => {
+            const removedImage = prev.images[index]
+            const nextImages = prev.images.filter((_, i) => i !== index)
+
+            if (removedImage?.blobId) {
+                deleteDraftBlob(removedImage.blobId).catch(error => {
+                    console.warn('Failed to remove draft blob for deleted image:', error)
+                })
+            }
+
+            return {
+                ...prev,
+                images: nextImages
+            }
+        })
     }
 
     const handleGenerate = async () => {
@@ -171,7 +550,18 @@ function ProductDescriptionModule({ token, onBack }) {
         try {
             const fd = new FormData()
             if (formData.images.length > 0) {
-                fd.append('image', formData.images[0].file)
+                if (formData.images[0].file instanceof File) {
+                    fd.append('image', formData.images[0].file)
+                } else {
+                    const fallbackBlob = previewToBlob(formData.images[0].preview, formData.images[0].type)
+                    if (fallbackBlob) {
+                        fd.append('image', fallbackBlob, formData.images[0].name || 'product.jpg')
+                    }
+                }
+            }
+
+            if (!fd.get('image')) {
+                throw new Error('缺少可用的产品图片文件')
             }
             if (formData.title) fd.append('title', formData.title)
             if (formData.keywords) fd.append('keywords', formData.keywords)
@@ -218,6 +608,21 @@ productInput: {
 
             setHistory(prev => [newHistoryItem, ...prev].slice(0, 20))
             setActiveSessionId(newHistoryItem.id)
+
+            try {
+                localStorage.removeItem(DRAFT_STORAGE_KEY)
+            } catch (error) {
+                console.warn('Failed to clear draft metadata after successful generation:', error)
+            }
+
+            const currentBlobIds = formData.images
+                .map(image => image?.blobId)
+                .filter(Boolean)
+            currentBlobIds.forEach(blobId => {
+                deleteDraftBlob(blobId).catch(error => {
+                    console.warn('Failed to cleanup draft image blob after generation:', error)
+                })
+            })
             
             alert('策略生成完毕!')
 
@@ -307,9 +712,17 @@ setFormData({
                      title: session.productInput.title || '',
                      keywords: session.productInput.keywords || '',
                      description: session.productInput.description || '',
-                     images: imagePreviews.map(preview => ({ file: null, preview })),
-                     aspectRatio: session.productInput.aspectRatio || '1:1',
-                     targetLanguage: session.productInput.targetLanguage || 'es-MX'
+                     images: imagePreviews.map(preview => ({
+                         file: null,
+                         preview,
+                         blobId: null,
+                         name: 'history-preview.jpg',
+                         type: 'image/jpeg',
+                         size: 0,
+                         lastModified: Date.now()
+                     })),
+                     aspectRatio: session.productInput.aspectRatio || DEFAULT_ASPECT_RATIO,
+                     targetLanguage: session.productInput.targetLanguage || DEFAULT_TARGET_LANGUAGE
                  })
             }
         }
@@ -361,36 +774,32 @@ setFormData({
             fd.append('aspect_ratio', activeSession?.productInput?.aspectRatio || formData.aspectRatio)
             
             let refImageBlob = null
+            let refImageName = 'product.jpg'
             
-            if (formData.images.length > 0 && formData.images[0]?.file) {
-                refImageBlob = formData.images[0].file
-            } else if (activeSession?.productInput?.imagePreviews?.length > 0) {
-                const base64 = activeSession.productInput.imagePreviews[0]
-                const base64Data = base64.split(',')[1] || base64
-                const byteChars = atob(base64Data)
-                const byteNumbers = new Array(byteChars.length)
-                for (let i = 0; i < byteChars.length; i++) {
-                    byteNumbers[i] = byteChars.charCodeAt(i)
+            if (formData.images.length > 0) {
+                const primaryImage = formData.images[0]
+                if (primaryImage?.file instanceof File) {
+                    refImageBlob = primaryImage.file
+                    refImageName = primaryImage.name || primaryImage.file.name || refImageName
+                } else if (primaryImage?.preview) {
+                    refImageBlob = previewToBlob(primaryImage.preview, primaryImage.type)
+                    refImageName = primaryImage.name || refImageName
                 }
-                const byteArray = new Uint8Array(byteNumbers)
-                refImageBlob = new Blob([byteArray], { type: 'image/jpeg' })
-            } else if (activeSession?.productInput?.imagePreview) {
-                const base64 = activeSession.productInput.imagePreview
-                const base64Data = base64.split(',')[1] || base64
-                const byteChars = atob(base64Data)
-                const byteNumbers = new Array(byteChars.length)
-                for (let i = 0; i < byteChars.length; i++) {
-                    byteNumbers[i] = byteChars.charCodeAt(i)
-                }
-                const byteArray = new Uint8Array(byteNumbers)
-                refImageBlob = new Blob([byteArray], { type: 'image/jpeg' })
+            }
+
+            if (!refImageBlob && activeSession?.productInput?.imagePreviews?.length > 0) {
+                refImageBlob = previewToBlob(activeSession.productInput.imagePreviews[0], 'image/jpeg')
+            }
+
+            if (!refImageBlob && activeSession?.productInput?.imagePreview) {
+                refImageBlob = previewToBlob(activeSession.productInput.imagePreview, 'image/jpeg')
             }
             
             if (!refImageBlob) {
                 throw new Error('缺少参考产品图')
             }
             
-            fd.append('reference_image', refImageBlob, 'product.jpg')
+            fd.append('reference_image', refImageBlob, refImageName)
 
             const response = await fetch(`${BACKEND_URL}/api/v1/mexico-beauty/generate-image`, {
                 method: 'POST',
@@ -824,7 +1233,6 @@ function PromptCard({
     const isFeature = prompt.type === ImageType.FEATURE
     const [showRefineForm, setShowRefineForm] = useState(false)
     const [feedbackImages, setFeedbackImages] = useState([])
-    const fileInputRef = useState(null)
 
     const handleStartRefine = () => {
         setShowRefineForm(true)

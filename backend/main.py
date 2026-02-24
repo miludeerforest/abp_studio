@@ -7542,7 +7542,135 @@ async def mexico_image_prompts_batch(
     )
     
     image_b64 = await file_to_base64_compressed(image, max_size=800, quality=75)
-    
+
+    title_clean = (title or "").strip()
+    keywords_clean = (keywords or "").strip()
+    description_clean = (description or "").strip()
+
+    default_title_tokens = {
+        "",
+        "not provided",
+        "title",
+        "product title",
+        "default title",
+        "untitled",
+        "título del producto",
+        "titulo del producto",
+        "nombre del producto",
+        "标题",
+        "产品标题",
+        "商品标题",
+    }
+    normalized_title = re.sub(r"\s+", " ", title_clean).strip().lower()
+    is_weak_context = (normalized_title in default_title_tokens) and (not keywords_clean) and (not description_clean)
+
+    def extract_json_object(text: str) -> Optional[Dict[str, Any]]:
+        if not text:
+            return None
+        clean_text = text.strip()
+        if clean_text.startswith("```"):
+            clean_text = re.sub(r"^```(?:json)?\s*", "", clean_text, flags=re.IGNORECASE)
+            clean_text = re.sub(r"\s*```$", "", clean_text)
+            clean_text = clean_text.strip()
+
+        candidates = [clean_text]
+        json_object_match = re.search(r'\{[\s\S]*\}', clean_text)
+        if json_object_match:
+            candidates.append(json_object_match.group(0))
+
+        for candidate in candidates:
+            try:
+                parsed = json.loads(candidate)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                continue
+        return None
+
+    def normalize_anchor_text(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, list):
+            lines = [str(item).strip() for item in value if str(item).strip()]
+            if not lines:
+                return ""
+            return "\n".join(f"- {line}" if not line.startswith("-") else line for line in lines)
+        if isinstance(value, dict):
+            lines = []
+            for key, item in value.items():
+                key_text = str(key).strip()
+                item_text = str(item).strip()
+                if key_text and item_text:
+                    lines.append(f"- {key_text}: {item_text}")
+            return "\n".join(lines)
+        return str(value).strip()
+
+    stage1_anchor_block = ""
+    if is_weak_context:
+        stage1_system_prompt = """You are a strict product-image analyst for e-commerce creative planning.
+Return ONLY valid JSON with this exact schema:
+{
+  "image_style_anchor": "Concise visual style summary grounded in image evidence",
+  "pain_point_anchor": "Concise pain-point strategy summary grounded in image evidence",
+  "style_evidence": ["evidence item 1", "evidence item 2"],
+  "pain_point_evidence": ["evidence item 1", "evidence item 2"]
+}
+Rules:
+- Use only evidence visible in the uploaded image.
+- Prioritize conversion-relevant product pain points solved by visible features.
+- Do not invent neon/cyberpunk style unless clearly visible in the uploaded image.
+- Keep outputs compact and actionable for downstream prompt generation."""
+
+        stage1_user_message = (
+            "Weak-context request detected (default/empty title, empty keywords, empty description). "
+            "Analyze the uploaded product image first and produce style and pain-point anchors for generating 10 consistent marketing prompts."
+        )
+
+        stage1_payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": stage1_system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": stage1_user_message},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+                    ]
+                }
+            ],
+            "temperature": 0.2,
+            "max_tokens": 1024
+        }
+
+        try:
+            stage1_result_text = await call_chat_completion_api(api_url, api_key, stage1_payload)
+            stage1_data = extract_json_object(stage1_result_text)
+            if not stage1_data:
+                raise ValueError("no valid JSON object in stage-1 output")
+
+            image_style_anchor = normalize_anchor_text(stage1_data.get("image_style_anchor"))
+            pain_point_anchor = normalize_anchor_text(stage1_data.get("pain_point_anchor"))
+
+            if not image_style_anchor:
+                image_style_anchor = normalize_anchor_text(stage1_data.get("style_evidence"))
+            if not pain_point_anchor:
+                pain_point_anchor = normalize_anchor_text(stage1_data.get("pain_point_evidence"))
+
+            if not image_style_anchor or not pain_point_anchor:
+                raise ValueError("missing stage-1 anchors")
+
+            stage1_anchor_block = (
+                f"[IMAGE STYLE ANCHOR]\n{image_style_anchor}\n\n"
+                f"[PAIN-POINT ANCHOR]\n{pain_point_anchor}\n\n"
+                "*** GUARDRAIL - STYLE EVIDENCE BOUNDARY ***\n"
+                "Do not introduce neon/cyberpunk style unless clearly supported by uploaded image evidence.\n"
+                "Use the two anchors above as mandatory constraints for all 10 prompts."
+            )
+        except Exception as stage1_error:
+            logger.warning(
+                f"Weak-context Stage-1 analysis failed, fallback to single-stage path: {stage1_error}"
+            )
+
     user_message = f"""
 Product Title: {title or "Not provided"}
 Keywords: {keywords or "Not provided"}
@@ -7561,8 +7689,39 @@ DO NOT use any other aspect ratio. This is mandatory.
 
 The user has provided an image of the product. Analyze the image to understand the product's features.
 
+{stage1_anchor_block}
+
 Generate 10 prompts in JSON format following the strict structure defined above.
 """
+
+    # Shared request-level anchor keeps product identity consistent across all 10 prompts.
+    dna_parts = []
+    if title and title.strip():
+        dna_parts.append(f"Title: {title.strip()}")
+    if keywords and keywords.strip():
+        dna_parts.append(f"Keywords: {keywords.strip()}")
+    if description and description.strip():
+        dna_parts.append(f"Description: {description.strip()}")
+    product_dna_anchor = "\n".join(dna_parts) if dna_parts else (
+        "Use the uploaded reference product as the source of truth for shape, material, color, logo, and key details."
+    )
+
+    # Fixed style lock reduces visual drift while preserving each prompt's original structure.
+    style_lock_block = (
+        "Photorealistic commercial product photography with premium e-commerce finish.\n"
+        "Lighting: soft key light plus controlled rim light, clean shadows, no harsh color cast.\n"
+        "Color: consistent white balance, stable saturation and contrast, no random palette shifts.\n"
+        "Composition: product-first framing, clean hierarchy, balanced negative space, typography-safe zones.\n"
+        "Style consistency: keep camera language, texture rendering, and finishing style aligned across all outputs."
+    )
+
+    anti_drift_block = (
+        "Identity lock: preserve identical product silhouette, proportions, material finish, logo/label placement, and key details.\n"
+        "Palette lock: keep the same dominant product colors and support palette, no random theme changes.\n"
+        "Lighting family lock: keep one lighting family (soft commercial key + controlled fill/rim), no mixed lighting logic.\n"
+        "Composition language lock: maintain product-first hierarchy, similar camera feel, stable negative space, typography-safe layout.\n"
+        "Variation scope: only change scenario props/background elements required by each item."
+    )
     
     payload = {
         "model": model_name,
@@ -7576,10 +7735,11 @@ Generate 10 prompts in JSON format following the strict structure defined above.
                 ]
             }
         ],
-        "temperature": 0.8,
+        "temperature": 0.25,
         "max_tokens": 8192
     }
     
+    result_text = ""
     try:
         result_text = await call_chat_completion_api(api_url, api_key, payload)
         
@@ -7591,13 +7751,27 @@ Generate 10 prompts in JSON format following the strict structure defined above.
         
         prompts = []
         for i, p in enumerate(prompts_data[:10]):
-            original_prompt_text = p.get("promptText", "")
+            original_prompt_text = (p.get("promptText") or "").strip()
+            if not original_prompt_text:
+                original_prompt_text = (
+                    "Generate a conversion-focused e-commerce product scene that follows this item's title and rationale."
+                )
+
+            enhanced_prompt_text = (
+                f"[PRODUCT DNA ANCHOR]\n{product_dna_anchor}\n\n"
+                f"[STYLE LOCK]\n{style_lock_block}\n\n"
+                f"[ANTI-DRIFT CONSTRAINTS]\n{anti_drift_block}\n\n"
+                f"[TASK PROMPT]\n{original_prompt_text}\n\n"
+                "[SET CONSISTENCY]\n"
+                "Maintain exact same product identity and visual language across the 10-image set. "
+                "Keep palette, lighting family, and composition language consistent across all 10 images."
+            )
             
             prompts.append(ImagePromptItem(
                 id=p.get("id", i + 1),
                 type=p.get("type", "Main Image" if i < 2 else "Detail/Scenario"),
                 title=p.get("title", f"Prompt {i + 1}"),
-                promptText=original_prompt_text,
+                promptText=enhanced_prompt_text,
                 rationale=p.get("rationale", ""),
                 review_status=None
             ))
@@ -7618,6 +7792,7 @@ class RefinePromptRequest(BaseModel):
     feedback: str
     product_title: Optional[str] = None
     product_description: Optional[str] = None
+    feedback_images: Optional[List[str]] = None
 
 @app.post("/api/v1/mexico-beauty/refine-prompt", response_model=ImagePromptItem)
 async def mexico_refine_prompt(
@@ -7627,6 +7802,84 @@ async def mexico_refine_prompt(
 ):
     """Refine a specific prompt based on user feedback."""
     await throttle_request()
+
+    wrapper_section_names = [
+        "PRODUCT DNA ANCHOR",
+        "STYLE LOCK",
+        "ANTI-DRIFT CONSTRAINTS",
+        "TASK PROMPT",
+        "SET CONSISTENCY",
+    ]
+
+    def extract_wrapper_section(prompt_text: str, section_name: str) -> str:
+        if not prompt_text:
+            return ""
+        section_marker = f"[{section_name}]"
+        marker_index = prompt_text.find(section_marker)
+        if marker_index == -1:
+            return ""
+
+        section_start = marker_index + len(section_marker)
+        remaining_text = prompt_text[section_start:]
+        section_end = len(remaining_text)
+
+        for next_section_name in wrapper_section_names:
+            if next_section_name == section_name:
+                continue
+            next_section_index = remaining_text.find(f"[{next_section_name}]")
+            if next_section_index != -1 and next_section_index < section_end:
+                section_end = next_section_index
+
+        return remaining_text[:section_end].strip()
+
+    def has_any_wrapper_marker(prompt_text: str) -> bool:
+        if not prompt_text:
+            return False
+        return any(f"[{section_name}]" in prompt_text for section_name in wrapper_section_names)
+
+    def strip_wrapper_markers(text: str) -> str:
+        if not text:
+            return ""
+        cleaned_text = text
+        for section_name in wrapper_section_names:
+            cleaned_text = re.sub(rf"\[{re.escape(section_name)}\]", "", cleaned_text, flags=re.IGNORECASE)
+        return cleaned_text.strip()
+
+    style_lock_block_default = (
+        "Photorealistic commercial product photography with premium e-commerce finish.\n"
+        "Lighting: soft key light plus controlled rim light, clean shadows, no harsh color cast.\n"
+        "Color: consistent white balance, stable saturation and contrast, no random palette shifts.\n"
+        "Composition: product-first framing, clean hierarchy, balanced negative space, typography-safe zones.\n"
+        "Style consistency: keep camera language, texture rendering, and finishing style aligned across all outputs."
+    )
+    anti_drift_block_default = (
+        "Identity lock: preserve identical product silhouette, proportions, material finish, logo/label placement, and key details.\n"
+        "Palette lock: keep the same dominant product colors and support palette, no random theme changes.\n"
+        "Lighting family lock: keep one lighting family (soft commercial key + controlled fill/rim), no mixed lighting logic.\n"
+        "Composition language lock: maintain product-first hierarchy, similar camera feel, stable negative space, typography-safe layout.\n"
+        "Variation scope: only change scenario props/background elements required by each item."
+    )
+    set_consistency_block_default = (
+        "Maintain exact same product identity and visual language across the 10-image set. "
+        "Keep palette, lighting family, and composition language consistent across all 10 images."
+    )
+
+    original_prompt_text = request.original_prompt.promptText or ""
+    product_dna_anchor = strip_wrapper_markers(extract_wrapper_section(original_prompt_text, "PRODUCT DNA ANCHOR"))
+    style_lock_block = strip_wrapper_markers(extract_wrapper_section(original_prompt_text, "STYLE LOCK")) or style_lock_block_default
+    anti_drift_block = strip_wrapper_markers(extract_wrapper_section(original_prompt_text, "ANTI-DRIFT CONSTRAINTS")) or anti_drift_block_default
+    set_consistency_block = strip_wrapper_markers(extract_wrapper_section(original_prompt_text, "SET CONSISTENCY")) or set_consistency_block_default
+    original_task_prompt = strip_wrapper_markers(extract_wrapper_section(original_prompt_text, "TASK PROMPT"))
+
+    if not product_dna_anchor:
+        dna_parts = []
+        if request.product_title and request.product_title.strip():
+            dna_parts.append(f"Title: {request.product_title.strip()}")
+        if request.product_description and request.product_description.strip():
+            dna_parts.append(f"Description: {request.product_description.strip()}")
+        product_dna_anchor = "\n".join(dna_parts) if dna_parts else (
+            "Use the uploaded reference product as the source of truth for shape, material, color, logo, and key details."
+        )
     
     config_dict = {item.key: item.value for item in db.query(SystemConfig).all()}
     api_url = config_dict.get("api_url")
@@ -7661,12 +7914,33 @@ Rewrite the 'promptText', 'title', and 'rationale' to strictly address the User 
 - Ensure NO MINORS are mentioned.
 - Keep the output strict JSON.
 """
+
+    feedback_image_urls = []
+    for raw_image in request.feedback_images or []:
+        if not isinstance(raw_image, str):
+            continue
+        image_url = raw_image.strip()
+        if not image_url:
+            continue
+        lowered = image_url.lower()
+        if lowered.startswith("data:image/") or lowered.startswith("http://") or lowered.startswith("https://"):
+            feedback_image_urls.append(image_url)
+        if len(feedback_image_urls) >= 3:
+            break
+
+    if feedback_image_urls:
+        content_parts: List[Dict[str, Any]] = [{"type": "text", "text": user_message}]
+        for image_url in feedback_image_urls:
+            content_parts.append({"type": "image_url", "image_url": {"url": image_url}})
+        user_content = content_parts
+    else:
+        user_content = user_message
     
     payload = {
         "model": model_name,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
+            {"role": "user", "content": user_content}
         ],
         "temperature": 0.7,
         "max_tokens": 2048
@@ -7680,12 +7954,43 @@ Rewrite the 'promptText', 'title', and 'rationale' to strictly address the User 
             refined_data = json.loads(json_match.group())
         else:
             refined_data = json.loads(result_text)
+
+        refined_prompt_text = (refined_data.get("promptText") or "").strip()
+        if not refined_prompt_text:
+            refined_prompt_text = original_prompt_text.strip()
+
+        refined_task_prompt = strip_wrapper_markers(extract_wrapper_section(refined_prompt_text, "TASK PROMPT"))
+
+        if refined_task_prompt:
+            task_prompt_text = refined_task_prompt
+        else:
+            if has_any_wrapper_marker(refined_prompt_text):
+                task_prompt_text = original_task_prompt
+            else:
+                task_prompt_text = strip_wrapper_markers(refined_prompt_text)
+
+        if not task_prompt_text:
+            task_prompt_text = original_task_prompt
+        if not task_prompt_text:
+            task_prompt_text = (
+                "Generate a conversion-focused e-commerce product scene that follows this item's title and rationale."
+            )
+
+        task_prompt_text = strip_wrapper_markers(task_prompt_text)
+
+        safe_prompt_text = (
+            f"[PRODUCT DNA ANCHOR]\n{product_dna_anchor}\n\n"
+            f"[STYLE LOCK]\n{style_lock_block}\n\n"
+            f"[ANTI-DRIFT CONSTRAINTS]\n{anti_drift_block}\n\n"
+            f"[TASK PROMPT]\n{task_prompt_text.strip()}\n\n"
+            f"[SET CONSISTENCY]\n{set_consistency_block}"
+        )
         
         return ImagePromptItem(
             id=refined_data.get("id", request.original_prompt.id),
             type=refined_data.get("type", request.original_prompt.type),
             title=refined_data.get("title", request.original_prompt.title),
-            promptText=refined_data.get("promptText", request.original_prompt.promptText),
+            promptText=safe_prompt_text,
             rationale=refined_data.get("rationale", "Refined based on user feedback")
         )
         
@@ -7729,7 +8034,15 @@ async def mexico_generate_image(
     
     image_b64 = await file_to_base64_compressed(reference_image, max_size=800, quality=75)
     
-    final_prompt = f"{prompt_text}\n\nFINAL RENDER INSTRUCTIONS:\n1. Ensure the reference product is the star.\n2. STRICTLY follow the text rendering instructions for Spanish overlays.\n3. Use {aspect_ratio} aspect ratio.\n4. DO NOT include realistic people/faces to ensure safety compliance."
+    final_prompt = (
+        f"{prompt_text}\n\n"
+        "FINAL RENDER INSTRUCTIONS:\n"
+        "1. Product identity lock: reproduce the exact reference product (shape, proportions, material, colorway, logo/label placement) with zero redesign.\n"
+        "2. Text/layout lock: render all requested overlays exactly (language, spelling, punctuation, line breaks, hierarchy); do not paraphrase, translate, or add extra text.\n"
+        f"3. Ratio/composition lock: output strict {aspect_ratio} framing with stable product-first layout and clean typography-safe areas.\n"
+        "4. Style lock: keep one consistent palette and lighting family; avoid random color cast, mixed light directions, or inconsistent rendering style.\n"
+        "5. No-unwanted-elements: no extra products, brands, logos, watermarks, QR codes, or realistic people/faces/hands unless explicitly required by the prompt."
+    )
     
     # Map aspect ratio to size
     size_map = {

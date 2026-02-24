@@ -9,6 +9,18 @@ const SUPPORTED_LANGUAGES = [
   { code: 'ko-KR', name: '韩语', flag: '🇰🇷', nativeName: '한국어' },
 ];
 
+// 语调风格预设（自然语言给 Gemini TTS 的提示词）
+const SPEECH_STYLE_PRESETS = [
+  { label: '默认自然', value: '', emoji: '🎙️' },
+  { label: '活泼欢快', value: 'happy, upbeat, and energetic, like an enthusiastic product promoter', emoji: '😄' },
+  { label: '温柔亲切', value: 'warm, gentle, and caring, like talking to a close friend', emoji: '🤗' },
+  { label: '专业可信', value: 'professional, confident, and trustworthy, like a brand ambassador', emoji: '💼' },
+  { label: '悬疡吸引', value: 'mysterious, suspenseful, and intriguing, building anticipation', emoji: '🔮' },
+  { label: '迷人个性', value: 'charming, playful, and flirtatious, with a big smile', emoji: '✨' },
+  { label: '急迫呼唤', value: 'urgent, excited, and persuasive, like a limited-time offer', emoji: '⚡' },
+  { label: '慈祥温斨', value: 'calm, soothing, and comforting, like a reassuring narration', emoji: '🌸' },
+];
+
 const VOICES_METADATA = [
   { name: 'Puck', gender: 'Male', label: '成熟磁性', languages: ['th-TH', 'en-US', 'es-ES', 'ja-JP', 'ko-KR'] },
   { name: 'Charon', gender: 'Male', label: '稳重厚实', languages: ['th-TH', 'en-US', 'es-ES'] },
@@ -36,13 +48,14 @@ function VoiceClone({ token }) {
   const [videoDuration, setVideoDuration] = useState(0);
   const [targetLang, setTargetLang] = useState('th-TH');
   const [selectedVoice, setSelectedVoice] = useState('Kore');
+  const [speechStyle, setSpeechStyle] = useState('');  // 语调风格自然语言描述
   const [appState, setAppState] = useState(AppState.IDLE);
   const [showInstructions, setShowInstructions] = useState(true);
-  
+
   const [segments, setSegments] = useState([]);
   const [flaggedWords, setFlaggedWords] = useState([]);
   const [detectedLang, setDetectedLang] = useState(null);
-  
+
   const [audioBuffer, setAudioBuffer] = useState(null);
   const [audioBase64, setAudioBase64] = useState(null);
   const [subtitleTimings, setSubtitleTimings] = useState([]);
@@ -52,8 +65,8 @@ function VoiceClone({ token }) {
   const [dragActive, setDragActive] = useState(false);
 
   const activeLang = useMemo(() => SUPPORTED_LANGUAGES.find(l => l.code === targetLang), [targetLang]);
-  
-  const filteredVoices = useMemo(() => 
+
+  const filteredVoices = useMemo(() =>
     VOICES_METADATA.filter(v => v.languages.includes(targetLang)),
     [targetLang]
   );
@@ -85,6 +98,7 @@ function VoiceClone({ token }) {
     setAppState(AppState.IDLE);
     setErrorMessage(null);
     setDetectedLang(null);
+    setSpeechStyle('');
   };
 
   const handleReset = useCallback(() => {
@@ -136,7 +150,7 @@ function VoiceClone({ token }) {
     if (!videoFile) return;
     setErrorMessage(null);
     setAppState(AppState.PROCESSING_VIDEO);
-    
+
     try {
       const formData = new FormData();
       formData.append('video', videoFile);
@@ -172,7 +186,7 @@ function VoiceClone({ token }) {
     if (segments.length === 0) return;
     setErrorMessage(null);
     setAppState(AppState.GENERATING_AUDIO);
-    
+
     try {
       const response = await fetch('/api/v1/voice-clone/synthesize-speech', {
         method: 'POST',
@@ -183,7 +197,8 @@ function VoiceClone({ token }) {
         body: JSON.stringify({
           segments: segments,
           voice_name: selectedVoice,
-          target_lang: targetLang
+          target_lang: targetLang,
+          speech_style: speechStyle.trim() || null  // 语调风格，空则不传
         })
       });
 
@@ -194,13 +209,13 @@ function VoiceClone({ token }) {
 
       const data = await response.json();
       const { audio_base64, segment_durations } = data;
-      
+
       if (!audio_base64 || audio_base64.length === 0) {
         throw new Error('服务器返回空音频数据，请检查TTS模型配置');
       }
-      
+
       setAudioBase64(audio_base64);
-      
+
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
       const buffer = await decodeAudioData(audio_base64, audioCtx, 24000);
       setAudioBuffer(buffer);
@@ -235,22 +250,22 @@ function VoiceClone({ token }) {
     if (!data || data.length === 0) {
       throw new Error('音频数据为空');
     }
-    
+
     let bytes = typeof data === 'string' ? base64ToBytes(data) : data;
-    
+
     if (bytes.length === 0) {
       throw new Error('解码后音频数据为空');
     }
-    
+
     if (bytes.length % 2 !== 0) {
       bytes = bytes.subarray(0, bytes.length - 1);
     }
-    
+
     const numSamples = Math.floor(bytes.byteLength / 2);
     if (numSamples === 0) {
       throw new Error('音频采样数为0，TTS模型可能未正确配置');
     }
-    
+
     const dataInt16 = new Int16Array(bytes.buffer, bytes.byteOffset, numSamples);
     const buffer = ctx.createBuffer(1, numSamples, sampleRate);
     const channelData = buffer.getChannelData(0);
@@ -261,7 +276,7 @@ function VoiceClone({ token }) {
   };
 
   const handleTextChange = (id, field, value) => {
-    const newSegments = segments.map(seg => 
+    const newSegments = segments.map(seg =>
       seg.id === id ? { ...seg, [field]: value } : seg
     );
     setSegments(newSegments);
@@ -282,7 +297,7 @@ function VoiceClone({ token }) {
             </div>
             <h1 className="voice-clone-title">多语种视频配音 & 合规</h1>
           </div>
-          
+
           <div className="voice-clone-header-actions">
             {videoFile && (
               <button onClick={handleReset} className="voice-clone-reset-btn">
@@ -323,7 +338,7 @@ function VoiceClone({ token }) {
                 <span className="section-indicator indicator-blue"></span>
                 1. 上传与语种选择
               </h2>
-              
+
               <div className="voice-clone-lang-selector">
                 <label className="voice-clone-field-label">选择目标生成语种</label>
                 <div className="voice-clone-lang-grid">
@@ -359,9 +374,9 @@ function VoiceClone({ token }) {
                 />
                 {videoFile ? (
                   <div className="voice-clone-video-preview">
-                    <video 
-                      src={URL.createObjectURL(videoFile)} 
-                      controls 
+                    <video
+                      src={URL.createObjectURL(videoFile)}
+                      controls
                       className="voice-clone-video-player"
                     />
                     <div className="voice-clone-video-name">{videoFile.name}</div>
@@ -378,7 +393,7 @@ function VoiceClone({ token }) {
                   </div>
                 )}
               </div>
-              
+
               {videoFile && (appState === AppState.IDLE || appState === AppState.ERROR) && (
                 <button onClick={analyzeVideo} className="voice-clone-analyze-btn">
                   开始分析 (生成{activeLang?.name})
@@ -410,16 +425,16 @@ function VoiceClone({ token }) {
                   <span className="section-indicator indicator-purple"></span>
                   2. 语音合成
                 </h2>
-                
+
                 <div className="voice-clone-voice-selector">
                   <div className="voice-clone-voice-header">
                     <h3>选择配音声线</h3>
                     <span className="voice-clone-voice-count">支持该语言的声线: {filteredVoices.length}</span>
                   </div>
-                  
+
                   <div className="voice-clone-voice-list">
                     {filteredVoices.map((voice) => (
-                      <div 
+                      <div
                         key={voice.name}
                         onClick={() => !isLoading && appState !== AppState.COMPLETED && setSelectedVoice(voice.name)}
                         className={`voice-clone-voice-item ${selectedVoice === voice.name ? 'active' : ''} ${isLoading || appState === AppState.COMPLETED ? 'disabled' : ''}`}
@@ -437,7 +452,40 @@ function VoiceClone({ token }) {
                     ))}
                   </div>
                 </div>
-                
+
+                {/* 语调风格控制 */}
+                <div className="voice-clone-style-selector">
+                  <div className="voice-clone-style-header">
+                    <h3>语音语调风格</h3>
+                    <span className="voice-clone-style-tip">通过自然语言指定情感与语气</span>
+                  </div>
+                  <div className="voice-clone-style-presets">
+                    {SPEECH_STYLE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.label}
+                        onClick={() => !isLoading && appState !== AppState.COMPLETED && setSpeechStyle(preset.value)}
+                        disabled={isLoading || appState === AppState.COMPLETED}
+                        className={`voice-clone-style-preset-btn ${speechStyle === preset.value ? 'active' : ''} ${isLoading || appState === AppState.COMPLETED ? 'disabled' : ''}`}
+                        title={preset.value || '使用模型默认语调'}
+                      >
+                        <span className="style-preset-emoji">{preset.emoji}</span>
+                        <span className="style-preset-label">{preset.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="voice-clone-style-custom">
+                    <label className="voice-clone-field-label">自定义语调描述（可选）</label>
+                    <textarea
+                      value={speechStyle}
+                      onChange={(e) => setSpeechStyle(e.target.value)}
+                      disabled={isLoading || appState === AppState.COMPLETED}
+                      className="voice-clone-style-input"
+                      placeholder="例如：用轻松愉快的语气，像朋友推荐好物一样…"
+                      rows={2}
+                    />
+                  </div>
+                </div>
+
                 {appState === AppState.REVIEW_SCRIPT && (
                   <button onClick={startSynthesis} className="voice-clone-synthesize-btn">
                     生成{activeLang?.name}配音
@@ -460,7 +508,7 @@ function VoiceClone({ token }) {
                     <span className="lang-label">{activeLang?.name}版</span>
                   </div>
                 </div>
-                
+
                 <div className="voice-clone-script-content">
                   {isLoading && (
                     <div className="voice-clone-loading-overlay">
@@ -468,7 +516,7 @@ function VoiceClone({ token }) {
                       <h3>{appState === AppState.PROCESSING_VIDEO ? `AI 正在创作${activeLang?.name}脚本...` : "语音合成中..."}</h3>
                     </div>
                   )}
-                  
+
                   <div className="voice-clone-segments">
                     {segments.map((segment) => (
                       <div key={segment.id} className="voice-clone-segment">
@@ -510,14 +558,14 @@ function VoiceClone({ token }) {
                   <span className="section-indicator indicator-green"></span>
                   4. 最终配音预览
                 </h2>
-                <AudioPlayerComponent 
-                  buffer={audioBuffer} 
+                <AudioPlayerComponent
+                  buffer={audioBuffer}
                   subtitleTimings={subtitleTimings}
                   audioBase64={audioBase64}
                 />
                 <div className="voice-clone-player-footer">
-                  <button 
-                    onClick={() => { setAppState(AppState.REVIEW_SCRIPT); setAudioBuffer(null); setAudioBase64(null); }} 
+                  <button
+                    onClick={() => { setAppState(AppState.REVIEW_SCRIPT); setAudioBuffer(null); setAudioBase64(null); }}
                     className="voice-clone-back-btn"
                   >
                     返回修改脚本
@@ -536,7 +584,7 @@ function AudioPlayerComponent({ buffer, subtitleTimings, audioBase64 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [currentSubtitle, setCurrentSubtitle] = useState(null);
-  
+
   const audioContextRef = useRef(null);
   const sourceRef = useRef(null);
   const startTimeRef = useRef(0);
@@ -572,7 +620,7 @@ function AudioPlayerComponent({ buffer, subtitleTimings, audioBase64 }) {
 
   const stopPlayback = () => {
     if (sourceRef.current) {
-      try { sourceRef.current.stop(); } catch(e) {}
+      try { sourceRef.current.stop(); } catch (e) { }
       sourceRef.current = null;
     }
     if (rafRef.current) {

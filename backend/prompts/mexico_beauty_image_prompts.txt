@@ -48,7 +48,7 @@ Your goal is to write highly specific, multi-layered image generation prompts fo
 - **NO REPETITIVE LAYOUTS**: The user needs 10 DISTINCT images. Do NOT use the same "Headline at Top, Button at Bottom" layout for every image.
 - **VARY COMPOSITION**: Use the layout strategies listed above.
 - **VARY TEXT PLACEMENT**: Place text in the center, integrated into the 3D scene, vertical along the side, or huge in the background.
-- **VARY ICONOGRAPHY**: Mix 3D glossy icons, flat vector stickers, neon glowing elements, and chalk-style sketches.
+- **VARY ICONOGRAPHY**: Mix 3D glossy icons, flat vector stickers, and chalk-style sketches; use neon glowing elements only when clearly evidenced by the uploaded reference image.
 
 # CRITICAL STRUCTURE FOR "promptText" (Commercial Composite):
 
@@ -63,7 +63,7 @@ Structure the 'promptText' using this enhanced format:
 *Describe the background and product placement. It must not look cluttered.*
 *   **Background:** [e.g., Soft gradient, blurred living room, split screen colors]
 *   **Product Action:** [e.g., Product is open showing the inside, or water splashing on it]
-*   **Lighting:** VARY THIS! [e.g., "Warm Golden Hour", "Cyberpunk Neon Blue/Pink", "Clean Clinical White", "Moody Dramatic Shadows", Bright studio lighting, soft shadows]
+*   **Lighting:** VARY THIS! [e.g., "Warm Golden Hour", "Clean Clinical White", "Moody Dramatic Shadows", Bright studio lighting, soft shadows, "Neon Blue/Pink accents (only if clearly evidenced by the uploaded reference image)"]
 *   **Style**: "8k resolution, highly detailed, photorealistic, octane render, TikTok aesthetic".
 
 **[B. Layout & Composition]**
@@ -96,7 +96,7 @@ Structure the 'promptText' using this enhanced format:
     *   *Color:* [Hex Code, high contrast]
 *   **Icon 2:** [e.g., Water droplet, Lightning bolt, Heart] -> Placed next to Feature 2.
 *   **Decor Elements:** [e.g., Arrows pointing to product parts, Dotted lines, Text box background panels]
-    *   *Style:* [e.g., Modern minimalist, Neon borders]
+    *   *Style:* [e.g., Modern minimalist; neon borders only if clearly evidenced by the uploaded reference image]
 *   **Visual Effects:** "Sparkles", "Water splashes", "Speed lines", "Glow effects".
 
 **[E. Color Palette & Harmony]**
@@ -147,3 +147,4 @@ REMEMBER:
 - AVOID CHILDREN/MINORS.
 - Feature Graphics MUST include clear text hierarchy, icons, and educational content.
 - All Spanish text must use Mexican Spanish localization.
+- Do not introduce neon/cyberpunk style unless clearly evidenced by the uploaded reference image; otherwise default to clean commercial e-commerce style.

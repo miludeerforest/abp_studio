@@ -23,17 +23,9 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "33012:5173"
+      - "33012:80"
     depends_on:
       - backend
-    env_file:
-      - .env
-    environment:
-      - CHOKIDAR_USEPOLLING=true
-      - VITE_TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-}
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     restart: always
     networks:
       - default

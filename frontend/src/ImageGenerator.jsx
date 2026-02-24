@@ -624,138 +624,139 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
             {step === 'input' && (
                 <div className="step-input-container">
                     <div className="upload-grid">
-                        {/* Product Upload */}
-                        <div className="upload-zone" onClick={() => document.getElementById('prod-upload').click()}>
+                        <div className={`upload-zone ${productImg ? 'has-image' : ''}`} onClick={() => document.getElementById('prod-upload').click()}>
                             {productImg ? (
                                 <img src={URL.createObjectURL(productImg)} alt="Product" />
                             ) : (
                                 <>
                                     <div className="icon">📦</div>
-                                    <div className="title">上传产品主图</div>
-                                    <div className="hint">支持 PNG/JPG (白底最佳)</div>
+                                    <div className="title">产品主图</div>
+                                    <div className="hint">PNG/JPG 白底最佳</div>
                                 </>
                             )}
                             <input id="prod-upload" type="file" hidden onChange={(e) => handleFileChange(e, setProductImg)} accept="image/*" />
                         </div>
 
-                        {/* Reference Upload */}
-                        <div className="upload-zone" onClick={() => document.getElementById('ref-upload').click()}>
+                        <div className={`upload-zone ${refImg ? 'has-image' : ''}`} onClick={() => document.getElementById('ref-upload').click()}>
                             {refImg ? (
                                 <img src={URL.createObjectURL(refImg)} alt="Ref" />
                             ) : (
                                 <>
                                     <div className="icon">🖼️</div>
-                                    <div className="title">上传风格参考图</div>
-                                    <div className="hint">提取光影与环境结构</div>
+                                    <div className="title">风格参考图</div>
+                                    <div className="hint">提取光影与环境</div>
                                 </>
                             )}
                             <input id="ref-upload" type="file" hidden onChange={(e) => handleFileChange(e, setRefImg)} accept="image/*" />
                         </div>
                     </div>
 
-                    {/* Category Selection */}
-                    <div>
-                        <div className="section-title category-section-title">选择产品类目</div>
-                        <div className="category-button-grid">
-                            {CATEGORIES.map(cat => (
-                                <button
-                                    key={cat.id}
-                                    onClick={() => setCategory(cat.id)}
-                                    className={`category-button ${category === cat.id ? 'active' : ''}`}
-                                >
-                                    <span className="icon">{cat.icon}</span>
-                                    <span>{cat.label}</span>
-                                </button>
-                            ))}
+                    <div className="ig-config-card">
+                        <div className="ig-config-row">
+                            <div className="ig-config-group flex-1">
+                                <div className="section-title">📂 产品类目</div>
+                                <div className="category-button-grid">
+                                    {CATEGORIES.map(cat => (
+                                        <button
+                                            key={cat.id}
+                                            onClick={() => setCategory(cat.id)}
+                                            className={`category-button ${category === cat.id ? 'active' : ''}`}
+                                        >
+                                            <span className="icon">{cat.icon}</span>
+                                            <span>{cat.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                {category === 'other' && (
+                                    <div className="custom-product-wrapper">
+                                        <input
+                                            type="text"
+                                            className="custom-product-input"
+                                            placeholder="输入产品名称，如：运动鞋、陶瓷花瓶..."
+                                            value={customProductName}
+                                            onChange={(e) => setCustomProductName(e.target.value)}
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </div>
+                    </div>
 
-                        {/* Custom Product Name Input */}
-                        {category === 'other' && (
-                            <div className="custom-product-wrapper">
+                    <div className="ig-config-card">
+                        <div className="ig-config-row">
+                            <div className="ig-config-group">
+                                <div className="section-title">📐 画面比例</div>
+                                <div className="ratio-button-grid">
+                                    {ASPECT_RATIOS.map(ratio => (
+                                        <button
+                                            key={ratio.id}
+                                            onClick={() => setAspectRatio(ratio.id)}
+                                            className={`ratio-button ${aspectRatio === ratio.id ? 'active' : ''}`}
+                                        >
+                                            <span className="icon">{ratio.icon}</span>
+                                            <span>{ratio.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="ig-config-group" style={{ minWidth: '120px' }}>
+                                <div className="slider-section-title">
+                                    <span>🔢 数量</span>
+                                    <span className="slider-count-value">{genCount}</span>
+                                </div>
                                 <input
-                                    type="text"
-                                    className="custom-product-input"
-                                    placeholder="请输入产品名称 (如: 运动鞋, 陶瓷花瓶...)"
-                                    value={customProductName}
-                                    onChange={(e) => setCustomProductName(e.target.value)}
+                                    type="range"
+                                    className="gen-count-slider"
+                                    min="1"
+                                    max="9"
+                                    value={genCount}
+                                    onChange={(e) => setGenCount(parseInt(e.target.value))}
                                 />
                             </div>
-                        )}
+                        </div>
                     </div>
 
-                    {/* Aspect Ratio Selection */}
-                    <div>
-                        <div className="section-title category-section-title">画面比例</div>
-                        <div className="ratio-button-grid">
-                            {ASPECT_RATIOS.map(ratio => (
-                                <button
-                                    key={ratio.id}
-                                    onClick={() => setAspectRatio(ratio.id)}
-                                    className={`ratio-button ${aspectRatio === ratio.id ? 'active' : ''}`}
+                    <div className="ig-config-card">
+                        <div className="ig-style-row">
+                            <div className="ig-config-group">
+                                <div className="section-title">🎨 场景风格</div>
+                                <select
+                                    className="scene-style-selector"
+                                    value={sceneStyle}
+                                    onChange={(e) => setSceneStyle(e.target.value)}
                                 >
-                                    <span className="icon">{ratio.icon}</span>
-                                    <span>{ratio.label}</span>
-                                </button>
-                            ))}
+                                    {SCENE_STYLES.map(style => (
+                                        <option key={style.id} value={style.id}>{style.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div 
+                                className={`auto-mode-bar ${isAutoMode ? 'active' : ''}`}
+                                onClick={() => setIsAutoMode(!isAutoMode)}
+                            >
+                                <input
+                                    type="checkbox"
+                                    className="auto-mode-checkbox"
+                                    id="autoMode"
+                                    checked={isAutoMode}
+                                    onChange={(e) => setIsAutoMode(e.target.checked)}
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                                <label htmlFor="autoMode" className={`auto-mode-label ${isAutoMode ? 'active' : ''}`}>
+                                    ⚡ 全自动模式
+                                </label>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Count Slider */}
-                    <div>
-                        <div className="section-title slider-section-title">
-                            <span><span className="icon">🔢</span> 生成数量</span>
-                            <span className="slider-count-value">{genCount} 张</span>
-                        </div>
-                        <input
-                            type="range"
-                            className="gen-count-slider"
-                            min="1"
-                            max="9"
-                            value={genCount}
-                            onChange={(e) => setGenCount(parseInt(e.target.value))}
-                        />
-                    </div>
-
-                    {/* Scene Style Selector */}
-                    <div>
-                        <div className="section-title category-section-title"><span className="icon">🎨</span> 场景风格 (批量统一)</div>
-                        <select
-                            className="scene-style-selector"
-                            value={sceneStyle}
-                            onChange={(e) => setSceneStyle(e.target.value)}
-                        >
-                            {SCENE_STYLES.map(style => (
-                                <option key={style.id} value={style.id}>{style.label}</option>
-                            ))}
-                        </select>
-                        {sceneStyle && (
-                            <p className="scene-style-hint">
-                                {SCENE_STYLES.find(s => s.id === sceneStyle)?.prompt.substring(0, 80)}...
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Auto Mode Checkbox */}
-                    <div className="auto-mode-bar">
-                        <input
-                            type="checkbox"
-                            className="auto-mode-checkbox"
-                            id="autoMode"
-                            checked={isAutoMode}
-                            onChange={(e) => setIsAutoMode(e.target.checked)}
-                        />
-                        <label htmlFor="autoMode" className={`auto-mode-label ${isAutoMode ? 'active' : ''}`}>
-                            全自动模式 (一键生成+转视频)
-                        </label>
-                    </div>
-
-                    {/* Action */}
                     <button
                         className="btn-primary step-input-action"
                         onClick={handleAnalyze}
                         disabled={loading}
                     >
-                        {loading ? <><span className="icon">🧠</span> 正在进行视觉分析...</> : <><span className="icon">✨</span> 第一步：智能视觉分析 (Gemini 3 Pro)</>}
+                        {loading ? '🧠 正在分析中...' : '✨ 开始智能视觉分析'}
                     </button>
                 </div>
             )}

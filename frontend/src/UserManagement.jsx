@@ -199,7 +199,8 @@ function UserManagement({ token }) {
 
             {statsLoading ? (
                 <div className="user-management-stats-loading">
-                    📊 正在校准统计数据...
+                    <div className="spinner" />
+                    <span>正在校准统计数据...</span>
                 </div>
             ) : statsError ? (
                 <div className="user-management-stats-error">
@@ -207,114 +208,141 @@ function UserManagement({ token }) {
                     <button onClick={fetchStats} className="btn-secondary">重试</button>
                 </div>
             ) : stats && stats.user_stats && (
-                <div className="user-management-stats-grid">
+                <div className="um-metrics-grid">
                     {statCards.map((card, index) => (
                         <div 
                             key={index}
-                            className={`glass-card user-management-stat-card ${card.highlight ? 'highlight' : ''}`}
-                            style={{ '--stat-color': card.color }}
+                            className={`um-metric-card ${card.highlight ? 'highlight' : ''}`}
+                            style={{ '--accent-color': card.color }}
                         >
-                            <h4 className="user-management-stat-label">
-                                {card.icon} {card.label}
-                            </h4>
-                            <div className="user-management-stat-value">
-                                {card.value.toLocaleString()}
+                            <div className="um-metric-icon">{card.icon}</div>
+                            <div className="um-metric-content">
+                                <div className="um-metric-value" style={{ color: card.color }}>
+                                    {card.value.toLocaleString()}
+                                </div>
+                                <div className="um-metric-label">{card.label}</div>
                             </div>
                         </div>
                     ))}
                 </div>
             )}
 
-            <div className="glass-card user-management-table-wrapper">
-                <div className="user-management-table-container">
-                    <table className="user-management-table">
-                        <thead className="user-management-table-head">
+            <div className="um-panel">
+                <div className="um-panel-header">
+                    <h3 className="um-panel-title">用户列表</h3>
+                    <p className="um-panel-subtitle">管理所有注册用户的权限与账户</p>
+                </div>
+                <div className="um-table-container">
+                    {loading && (
+                        <div className="um-loading-overlay">
+                            <div className="spinner" />
+                            <span>加载中...</span>
+                        </div>
+                    )}
+                    <table className="um-table">
+                        <thead>
                             <tr>
-                                <th className="user-management-th user-management-th-id">ID</th>
-                                <th className="user-management-th user-management-th-username">用户名</th>
-                                <th className="user-management-th user-management-th-role">角色</th>
-                                <th className="user-management-th user-management-th-level">等级</th>
-                                <th className="user-management-th user-management-th-exp">经验值</th>
-                                <th className="user-management-th user-management-th-images">生成图片</th>
-                                <th className="user-management-th user-management-th-videos">生成视频</th>
-                                <th className="user-management-th user-management-th-actions">操作</th>
+                                <th className="text-center">ID</th>
+                                <th>用户</th>
+                                <th className="text-center">角色</th>
+                                <th className="text-center">等级</th>
+                                <th className="text-center">生成图片</th>
+                                <th className="text-center">生成视频</th>
+                                <th className="text-right">操作</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {users.map((u, index) => {
+                            {users.map((u) => {
                                 const uStats = getUserStats(u.id);
                                 const isHovered = hoveredRow === u.id;
-                                const isEvenRow = index % 2 === 0;
+                                const isEditing = editUserId === u.id;
                                 const isAdmin = u.role === 'admin';
                                 const exp = u.experience || 0;
+                                const avatarColors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6'];
+                                const avatarColor = avatarColors[u.id % avatarColors.length];
                                 
                                 return (
                                     <tr 
                                         key={u.id} 
-                                        className={`user-management-row ${isHovered ? 'hover' : ''} ${isEvenRow ? 'even' : ''}`}
+                                        className={`${isHovered ? 'row-hover' : ''} ${isEditing ? 'row-editing' : ''}`}
                                         onMouseEnter={() => setHoveredRow(u.id)}
                                         onMouseLeave={() => setHoveredRow(null)}
                                     >
-                                        <td className="user-management-td user-management-td-id">
-                                            {u.id}
+                                        <td className="text-center">
+                                            <span className="cell-id">{u.id}</span>
                                         </td>
-                                        <td className="user-management-td user-management-td-username">
-                                            {u.username}
+                                        <td>
+                                            <div className="user-profile-cell">
+                                                <div 
+                                                    className="user-avatar-placeholder"
+                                                    style={{ backgroundColor: avatarColor }}
+                                                >
+                                                    {u.username.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <div className="username">{u.username}</div>
+                                                    <div className="exp-text">{exp.toLocaleString()} 经验</div>
+                                                </div>
+                                            </div>
                                         </td>
-                                        <td className="user-management-td user-management-td-center">
-                                            <span className={`user-management-role-badge ${isAdmin ? 'admin' : 'user'}`}>
+                                        <td className="text-center">
+                                            <span className={`role-badge ${isAdmin ? 'role-admin' : 'role-user'}`}>
                                                 {isAdmin ? '管理员' : '用户'}
                                             </span>
                                         </td>
-                                        <td className="user-management-td user-management-td-center">
-                                            <span className={`user-management-level-badge ${exp < 0 ? 'negative' : 'positive'}`}>
-                                                {exp < 0 ? '🔻' : '⭐'}
-                                                {u.level_name || '凡人'}
-                                            </span>
+                                        <td className="text-center">
+                                            <div className="level-info">
+                                                <span className={`level-badge ${exp < 0 ? 'level-neg' : 'level-pos'}`}>
+                                                    {exp < 0 ? '🔻' : '⭐'} {u.level_name || '凡人'}
+                                                </span>
+                                            </div>
                                         </td>
-                                        <td className={`user-management-td user-management-td-center user-management-exp-text ${exp < 0 ? 'negative' : 'positive'}`}>
-                                            {exp.toLocaleString()}
+                                        <td className="text-center">
+                                            <div className="stats-mini-grid">
+                                                <span className="stat-pill">🖼️ {uStats ? uStats.image_count.toLocaleString() : '--'}</span>
+                                            </div>
                                         </td>
-                                        <td className="user-management-td user-management-td-images">
-                                            {uStats ? uStats.image_count.toLocaleString() : '--'}
+                                        <td className="text-center">
+                                            <div className="stats-mini-grid">
+                                                <span className="stat-pill">🎬 {uStats ? uStats.video_count.toLocaleString() : '--'}</span>
+                                            </div>
                                         </td>
-                                        <td className="user-management-td user-management-td-videos">
-                                            {uStats ? uStats.video_count.toLocaleString() : '--'}
-                                        </td>
-                                        <td className="user-management-td user-management-td-center">
-                                            {editUserId === u.id ? (
-                                                <div className="user-management-action-edit-row">
+                                        <td>
+                                            {isEditing ? (
+                                                <div className="action-group-edit">
                                                     <input
                                                         type="password"
                                                         placeholder="新密码"
                                                         value={newPass}
                                                         onChange={e => setNewPass(e.target.value)}
-                                                        className="user-management-password-input"
+                                                        className="input-mini"
                                                     />
                                                     <button 
-                                                        className="btn-primary user-management-action-button" 
+                                                        className="btn-icon-save" 
                                                         onClick={() => handleUpdatePassword(u.id)}
+                                                        title="保存"
                                                     >
-                                                        确认
+                                                        ✓
                                                     </button>
                                                     <button 
-                                                        className="btn-secondary user-management-action-button" 
+                                                        className="btn-icon-cancel" 
                                                         onClick={() => setEditUserId(null)}
+                                                        title="取消"
                                                     >
-                                                        取消
+                                                        ✕
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div className="user-management-action-row">
+                                                <div className="action-group">
                                                     <button
-                                                        className="btn-secondary user-management-action-button"
+                                                        className="btn-text"
                                                         onClick={() => { setEditUserId(u.id); setNewPass(''); }}
                                                     >
                                                         修改密码
                                                     </button>
                                                     {!isAdmin && (
                                                         <button
-                                                            className="user-management-delete-button"
+                                                            className="btn-text-danger"
                                                             onClick={() => handleDeleteUser(u.id, u.username)}
                                                         >
                                                             删除
@@ -330,58 +358,53 @@ function UserManagement({ token }) {
                     </table>
                     
                     {users.length === 0 && !loading && (
-                        <div className="user-management-empty-state">
-                            <div className="user-management-empty-icon">👥</div>
+                        <div className="um-empty-state">
+                            <div className="um-empty-icon">👥</div>
                             <div>暂无用户数据</div>
-                        </div>
-                    )}
-
-                    {loading && (
-                        <div className="user-management-loading-state">
-                            <div className="user-management-loading-text">加载中...</div>
                         </div>
                     )}
                 </div>
             </div>
 
             {showAddModal && (
-                <div className="user-management-modal-overlay">
-                    <div className="glass-card user-management-modal-content">
-                        <h3 className="user-management-modal-title">✨ 添加新用户</h3>
-                        <form onSubmit={handleAddUser}>
-                            <div className="user-management-form-group">
-                                <label className="user-management-form-label">用户名</label>
+                <div className="um-modal-backdrop" onClick={() => setShowAddModal(false)}>
+                    <div className="um-modal" onClick={e => e.stopPropagation()}>
+                        <div className="um-modal-header">
+                            <h3>✨ 添加新用户</h3>
+                            <button className="close-btn" onClick={() => setShowAddModal(false)}>✕</button>
+                        </div>
+                        <form onSubmit={handleAddUser} className="um-form">
+                            <div className="form-field">
+                                <label>用户名</label>
                                 <input
                                     type="text"
                                     value={newUserUser}
                                     onChange={e => setNewUserUser(e.target.value)}
-                                    className="user-management-form-input"
                                     placeholder="请输入用户名"
                                     required
                                 />
                             </div>
-                            <div className="user-management-form-group">
-                                <label className="user-management-form-label">密码</label>
+                            <div className="form-field">
+                                <label>密码</label>
                                 <input
                                     type="password"
                                     value={newUserPass}
                                     onChange={e => setNewUserPass(e.target.value)}
-                                    className="user-management-form-input"
                                     placeholder="请输入密码"
                                     required
                                 />
                             </div>
-                            <div className="user-management-modal-actions">
+                            <div className="um-modal-footer">
                                 <button 
                                     type="button" 
-                                    className="btn-secondary user-management-modal-button-cancel" 
+                                    className="btn-secondary um-btn-ghost" 
                                     onClick={() => setShowAddModal(false)}
                                 >
                                     取消
                                 </button>
                                 <button 
                                     type="submit" 
-                                    className="btn-primary user-management-modal-button-submit"
+                                    className="btn-primary"
                                 >
                                     创建用户
                                 </button>
