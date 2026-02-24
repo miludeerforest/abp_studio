@@ -700,7 +700,7 @@ function ImageGenerator({ token, config, onConfigChange, results = [], onResults
                                 </div>
                             </div>
 
-                            <div className="ig-config-group" style={{ minWidth: '120px' }}>
+                            <div className="ig-config-group ig-config-group-min120">
                                 <div className="slider-section-title">
                                     <span>🔢 数量</span>
                                     <span className="slider-count-value">{genCount}</span>

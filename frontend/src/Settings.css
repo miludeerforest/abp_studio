@@ -203,7 +203,7 @@
     background: rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     position: relative;
-    transition: background 0.3s ease;
+    transition: background 0.3s ease, box-shadow 0.2s ease;
 }
 
 .toggle-slider::after {
@@ -224,6 +224,26 @@
 
 .toggle-switch input:checked+.toggle-slider::after {
     transform: translateX(20px);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
+}
+
+.toggle-status-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-left: 8px;
+    transition: color 0.2s ease;
+}
+
+.toggle-status-label.enabled {
+    color: var(--primary-color);
+}
+
+.toggle-status-label.disabled {
+    color: var(--text-muted);
 }
 
 .toggle-label {

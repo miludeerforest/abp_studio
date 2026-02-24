@@ -233,6 +233,10 @@
   min-width: 140px;
 }
 
+.ig-config-group-min120 {
+  min-width: 120px;
+}
+
 /* Section Labels */
 .section-title {
   font-size: 0.8rem;

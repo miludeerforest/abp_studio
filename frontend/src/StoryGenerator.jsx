@@ -739,7 +739,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                         <div
                                                             className="progress-bar-fill"
                                                             style={{
-                                                                width: `${((fissionStatus.completed_branches || 0) / (fissionStatus.total_branches || shotCount)) * 100}%`
+                                                                '--progress-width': `${((fissionStatus.completed_branches || 0) / (fissionStatus.total_branches || shotCount)) * 100}%`
                                                             }}
                                                         ></div>
                                                     </div>
@@ -885,7 +885,7 @@ const StoryGenerator = ({ token, config, onSelectForVideo }) => {
                                                         <div
                                                             className="progress-bar-fill linear-mode-fill"
                                                             style={{
-                                                                width: `${(chainStatus.current_shot / chainStatus.total_shots) * 100}%`
+                                                                '--progress-width': `${(chainStatus.current_shot / chainStatus.total_shots) * 100}%`
                                                             }}
                                                         ></div>
                                                     </div>

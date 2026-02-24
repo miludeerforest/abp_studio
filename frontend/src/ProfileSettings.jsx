@@ -146,7 +146,7 @@ function ProfileSettings({ token, onProfileUpdate }) {
                         <div className="level-exp-bar">
                             <div className="level-exp-fill" style={{ width: `${profile.level_progress || 0}%` }} />
                         </div>
-                        <div className="level-exp-text">{profile.experience || 0} / {profile.next_level_exp || 100} EXP</div>
+                        <div className="level-exp-text">{profile.experience || 0} / {Math.max(profile.next_level_exp || 100, profile.experience || 0)} EXP</div>
                     </div>
                 </div>
             </div>
