@@ -386,7 +386,7 @@ const Gallery = ({ onSelectForVideo }) => {
             {/* Header - Two Row Layout */}
             <div className="gallery-header">
                 {/* Row 1: Title + Tabs */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', width: '100%' }}>
+                <div className="gallery-header-row">
                     <div className="gallery-title">
                         <h1><span className="gallery-title-gradient">创意画廊</span></h1>
                     </div>
@@ -408,10 +408,10 @@ const Gallery = ({ onSelectForVideo }) => {
                     </div>
 
                     {/* Spacer */}
-                    <div style={{ flex: 1 }} />
+                    <div className="gallery-spacer" />
 
                     {/* Filters Group */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <div className="gallery-filters-group">
                         {/* Category Filter */}
                         <select
                             value={categoryFilter}
@@ -457,16 +457,14 @@ const Gallery = ({ onSelectForVideo }) => {
                                     type="date"
                                     value={customStartDate}
                                     onChange={(e) => setCustomStartDate(e.target.value)}
-                                    className="gallery-filter-select"
-                                    style={{ width: 'auto', minWidth: '120px' }}
+                                    className="gallery-filter-select gallery-date-input"
                                 />
-                                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>~</span>
+                                <span className="gallery-date-separator">~</span>
                                 <input
                                     type="date"
                                     value={customEndDate}
                                     onChange={(e) => setCustomEndDate(e.target.value)}
-                                    className="gallery-filter-select"
-                                    style={{ width: 'auto', minWidth: '120px' }}
+                                    className="gallery-filter-select gallery-date-input"
                                 />
                             </>
                         )}
@@ -733,30 +731,18 @@ const Gallery = ({ onSelectForVideo }) => {
                                                 />
                                                 <div className="video-play-icon">
                                                     <div className="play-button">
-                                                        <svg style={{ width: '32px', height: '32px', color: 'white', marginLeft: '4px', filter: 'drop-shadow(0 4px 3px rgb(0 0 0 / 0.07))' }} fill="currentColor" viewBox="0 0 24 24">
+                                                        <svg className="gallery-play-svg" fill="currentColor" viewBox="0 0 24 24">
                                                             <path d="M8 5v14l11-7z" />
                                                         </svg>
                                                     </div>
                                                 </div>
                                                 {/* Merged/Composite Video Badge */}
                                                 {(vid.is_merged || vid.prompt?.includes('Story Chain') || vid.prompt?.includes('Story Fission') || vid.filename?.includes('story_chain') || vid.filename?.includes('story_fission')) && (
-                                                    <div style={{
-                                                        position: 'absolute',
-                                                        top: '12px',
-                                                        left: '12px',
-                                                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                                        padding: '4px 10px',
-                                                        borderRadius: '6px',
-                                                        fontSize: '11px',
-                                                        fontWeight: 'bold',
-                                                        color: '#fff',
-                                                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)',
-                                                        border: '1px solid rgba(255,255,255,0.2)'
-                                                    }}>
+                                                    <div className="gallery-badge-composite">
                                                         ✨ 合成
                                                     </div>
                                                 )}
-                                                <div style={{ position: 'absolute', top: '12px', right: '12px', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', padding: '2px 8px', borderRadius: '9999px', fontSize: '10px', color: '#d1d5db', fontFamily: 'monospace', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                                <div className="gallery-badge-id">
                                                     ID: {vid.id.slice(0, 4)}
                                                 </div>
                                             </div>

@@ -263,7 +263,7 @@ const CharacterVideo = ({ token, config }) => {
             </div>
 
             {/* 主操作区 */}
-            <div className="character-card" style={{ marginBottom: 24 }}>
+            <div className="character-card character-card-margin">
                 <div className="character-main-flow">
                     {/* 左：视频上传/预览 */}
                     <div className="flow-video-section">
@@ -284,7 +284,7 @@ const CharacterVideo = ({ token, config }) => {
                                     type="file"
                                     accept="video/*"
                                     onChange={(e) => e.target.files?.[0] && processVideoFile(e.target.files[0])}
-                                    style={{ display: 'none' }}
+                                    className="character-hidden-input"
                                 />
                             </div>
                         ) : (
@@ -344,7 +344,7 @@ const CharacterVideo = ({ token, config }) => {
 
             {/* 生成结果 */}
             {resultVideoUrl && (
-                <div className="character-card result-section" style={{ marginBottom: 24 }}>
+                <div className="character-card result-section character-card-margin">
                     <h3>🎥 生成结果</h3>
                     <div className="result-video-container">
                         <video src={resultVideoUrl} controls autoPlay />
@@ -378,15 +378,14 @@ const CharacterVideo = ({ token, config }) => {
                             >
                                 <div className="character-avatar">
                                     {char.avatarUrl ? (
-                                        <video src={char.avatarUrl} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        <video src={char.avatarUrl} muted className="character-avatar-video-fit" />
                                     ) : '🎭'}
                                 </div>
                                 <div className="character-name">{char.name}</div>
                                 <div className="character-date">{new Date(char.createdAt).toLocaleDateString()}</div>
                                 <button
-                                    className="character-btn-secondary"
+                                    className="character-btn-secondary character-delete-compact-btn"
                                     onClick={(e) => { e.stopPropagation(); handleDeleteCharacter(char.id); }}
-                                    style={{ marginTop: 8, padding: '4px 8px', fontSize: '0.75rem', width: 'auto' }}
                                 >
                                     🗑️
                                 </button>
