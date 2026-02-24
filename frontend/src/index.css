@@ -1077,21 +1077,66 @@ body {
   backdrop-filter: blur(5px) !important;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05) !important;
   border-radius: 12px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 [data-theme="light"] .btn-secondary:hover,
-[data-theme="light"] .logout-btn:hover {
+[data-theme="light"] .logout-btn:hover,
+[data-theme="light"] .sidebar-toggle:hover,
+[data-theme="light"] .theme-toggle:hover {
   background: white !important;
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .btn-secondary:active,
+[data-theme="light"] .logout-btn:active,
+[data-theme="light"] .sidebar-toggle:active,
+[data-theme="light"] .theme-toggle:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  background: rgba(245, 245, 245, 0.8) !important;
 }
 
 [data-theme="light"] .btn-primary {
   background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
-  /* Vibrant purple-indigo */
   color: white !important;
   border: none !important;
   box-shadow: 0 4px 15px rgba(124, 58, 237, 0.35) !important;
   border-radius: 12px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+[data-theme="light"] .btn-primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45) !important;
+}
+
+[data-theme="light"] .btn-primary:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3) !important;
+}
+
+[data-theme="light"] .btn-primary:focus-visible,
+[data-theme="light"] .btn-secondary:focus-visible,
+[data-theme="light"] .logout-btn:focus-visible,
+[data-theme="light"] .sidebar-toggle:focus-visible,
+[data-theme="light"] .theme-toggle:focus-visible {
+  outline: 2px solid var(--primary-color) !important;
+  outline-offset: 2px !important;
+}
+
+[data-theme="light"] .btn-primary:disabled,
+[data-theme="light"] .btn-secondary:disabled,
+[data-theme="light"] .logout-btn:disabled,
+[data-theme="light"] .sidebar-toggle:disabled,
+[data-theme="light"] .theme-toggle:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+  filter: grayscale(20%) !important;
 }
 
 /* 5. Specific Component Fixes */
