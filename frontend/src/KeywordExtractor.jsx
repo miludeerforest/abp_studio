@@ -450,12 +450,12 @@ function KeywordExtractor({ token }) {
                         <table className="ke-table">
                             <thead>
                                 <tr>
-                                    <th style={{ width: '40px', minWidth: '40px' }}>#</th>
-                                    <th style={{ width: '50px', minWidth: '50px' }}>状态</th>
-                                    <th style={{ width: '28%', minWidth: '200px' }}>原标题</th>
-                                    <th style={{ width: '28%', minWidth: '200px' }}>中文翻译</th>
-                                    <th style={{ width: '28%', minWidth: '200px' }}>核心大词</th>
-                                    <th style={{ width: '60px', minWidth: '60px' }}>操作</th>
+                                    <th className="ke-th-index">#</th>
+                                    <th className="ke-th-status">状态</th>
+                                    <th className="ke-th-original">原标题</th>
+                                    <th className="ke-th-translation">中文翻译</th>
+                                    <th className="ke-th-keywords">核心大词</th>
+                                    <th className="ke-th-actions">操作</th>
                                 </tr>
                             </thead>
                             <tbody>

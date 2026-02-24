@@ -713,31 +713,31 @@ function MexicoBeautyStation({ token }) {
                                 <table className="mb-table">
                                     <thead>
                                         <tr>
-                                            <th style={{ width: '50px' }}>#</th>
-                                            <th style={{ width: '50px' }}>状态</th>
+                                            <th className="mb-th-w-50">#</th>
+                                            <th className="mb-th-w-50">状态</th>
                                             {activeModule === MODULES.CORE_KEYWORD && (
                                                 <>
-                                                    <th style={{ width: '30%' }}>标题</th>
-                                                    <th style={{ width: '30%' }}>中文翻译</th>
-                                                    <th style={{ width: '30%' }}>核心词</th>
+                                                    <th className="mb-th-w-30pct">标题</th>
+                                                    <th className="mb-th-w-30pct">中文翻译</th>
+                                                    <th className="mb-th-w-30pct">核心词</th>
                                                 </>
                                             )}
                                             {activeModule === MODULES.KEYWORD && (
                                                 <>
-                                                    <th style={{ width: '25%' }}>输入标题</th>
-                                                    <th style={{ width: '65%' }}>分析报告</th>
+                                                    <th className="mb-th-w-25pct">输入标题</th>
+                                                    <th className="mb-th-w-65pct">分析报告</th>
                                                 </>
                                             )}
                                             {activeModule === MODULES.TITLE && (
                                                 <>
-                                                    <th style={{ width: '30%' }}>原标题</th>
-                                                    <th style={{ width: '60%' }}>优化标题</th>
+                                                    <th className="mb-th-w-30pct">原标题</th>
+                                                    <th className="mb-th-w-60pct">优化标题</th>
                                                 </>
                                             )}
                                             {activeModule === MODULES.IMAGE && (
                                                 <>
-                                                    <th style={{ width: '20%' }}>图片</th>
-                                                    <th style={{ width: '70%' }}>生成结果</th>
+                                                    <th className="mb-th-w-20pct">图片</th>
+                                                    <th className="mb-th-w-70pct">生成结果</th>
                                                 </>
                                             )}
                                         </tr>

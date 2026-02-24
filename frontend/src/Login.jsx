@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import './Login.css'
 
 function Login({ onLogin, onBack }) {
     const [username, setUsername] = useState('')
@@ -118,29 +119,14 @@ function Login({ onLogin, onBack }) {
                 {onBack && (
                     <button
                         onClick={onBack}
-                        style={{
-                            position: 'absolute',
-                            top: '1rem',
-                            left: '1rem',
-                            background: 'var(--btn-bg, rgba(255,255,255,0.1))',
-                            border: '1px solid var(--card-border)',
-                            borderRadius: '50%',
-                            width: '2.5rem',
-                            height: '2.5rem',
-                            color: 'var(--text-main)',
-                            cursor: 'pointer',
-                            fontSize: '1.25rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
+                        className="login-back-btn"
                     >
                         ←
                     </button>
                 )}
-                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🍌</div>
+                <div className="login-emoji">🍌</div>
                 <h2>系统登录</h2>
-                <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Banana Product Studio</p>
+                <p className="login-subtitle">Banana Product Studio</p>
                 <form onSubmit={handleSubmit}>
                     <div className="input-group">
                         <label>账号</label>
@@ -166,8 +152,8 @@ function Login({ onLogin, onBack }) {
                         <label>人机验证</label>
                         <div ref={turnstileRef} className="turnstile-container"></div>
                     </div>
-                    {error && <div className="error-msg" style={{ color: 'var(--error-color)', fontSize: '0.9rem' }}>{error}</div>}
-                    <button type="submit" className="btn-primary" disabled={loading || !turnstileToken} style={{ marginTop: '1rem' }}>
+                    {error && <div className="error-msg login-error-text">{error}</div>}
+                    <button type="submit" className="btn-primary login-submit-btn" disabled={loading || !turnstileToken}>
                         {loading ? '登录中...' : '立即登录'}
                     </button>
                 </form>

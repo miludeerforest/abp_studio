@@ -190,3 +190,45 @@
         border-radius: 12px;
     }
 }
+
+.login-back-btn {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    background: var(--btn-bg, rgba(255, 255, 255, 0.1));
+    border: 1px solid var(--card-border);
+    border-radius: 50%;
+    width: 2.5rem;
+    height: 2.5rem;
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.login-back-btn:hover {
+    background: var(--btn-bg-hover, rgba(255, 255, 255, 0.2));
+    transform: scale(1.05);
+}
+
+.login-emoji {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.login-subtitle {
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+}
+
+.login-error-text {
+    color: var(--error-color);
+    font-size: 0.9rem;
+}
+
+.login-submit-btn {
+    margin-top: 1rem;
+}

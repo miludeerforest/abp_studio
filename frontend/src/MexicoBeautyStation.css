@@ -336,10 +336,14 @@
     width: 28%;
 }
 
-.mb-table th:nth-child(5),
-.mb-table td:nth-child(5) {
-    width: 28%;
-}
+/* Table Header Width Utilities */
+.mb-th-w-50 { width: 50px; }
+.mb-th-w-20pct { width: 20%; }
+.mb-th-w-25pct { width: 25%; }
+.mb-th-w-30pct { width: 30%; }
+.mb-th-w-60pct { width: 60%; }
+.mb-th-w-65pct { width: 65%; }
+.mb-th-w-70pct { width: 70%; }
 
 .mb-table thead {
     position: sticky;

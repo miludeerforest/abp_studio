@@ -177,7 +177,7 @@ function ProfileSettings({ token, onProfileUpdate }) {
                         <p className="field-hint">昵称将显示在您的作品中</p>
                     </div>
 
-                    <h3 style={{ marginTop: '2rem' }}>隐私设置</h3>
+                    <h3 className="section-heading-spaced">隐私设置</h3>
                     <div className="form-group">
                         <label className="toggle-label">
                             <span>默认分享创作</span>
@@ -195,7 +195,7 @@ function ProfileSettings({ token, onProfileUpdate }) {
                         </p>
                     </div>
 
-                    <h3 style={{ marginTop: '2rem' }}>修改密码</h3>
+                    <h3 className="section-heading-spaced">修改密码</h3>
                     <div className="form-group">
                         <label>新密码</label>
                         <input

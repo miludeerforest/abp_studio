@@ -330,3 +330,7 @@
     height: 200px;
     color: var(--text-muted);
 }
+
+.section-heading-spaced {
+    margin-top: 2rem !important;
+}
