@@ -359,6 +359,7 @@ body {
   flex-direction: column;
   gap: 6px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidebar-item {
@@ -594,18 +595,6 @@ body {
   /* Sidebar Items */
   [data-theme="light"] .sidebar-item {
     color: var(--text-main);
-    border-radius: 6px;
-    /* macOS 侧边栏项目圆角较小 */
-    margin: 2px 10px;
-    padding: 8px 12px;
-    font-weight: 500;
-    font-size: 13px;
-    /* macOS 侧边栏字号偏小 */
-  }
-
-  [data-theme="light"] .sidebar-item .icon {
-    font-size: 1.1em;
-    opacity: 0.85;
   }
 
   [data-theme="light"] .sidebar-item:hover {
@@ -627,11 +616,7 @@ body {
 
   /* Header & Footer */
   [data-theme="light"] .sidebar-header {
-    height: 52px;
-    /* 类似 macOS 窗口标题栏高度 */
     border-bottom: 1px solid var(--sidebar-border);
-    -webkit-app-region: drag;
-    /* 模拟窗口拖拽区 */
   }
 
   [data-theme="light"] .sidebar-footer {
@@ -1031,15 +1016,8 @@ body {
   border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
 }
 
-[data-theme="light"] .sidebar-menu {
-  padding: 12px 0 !important;
-}
-
 [data-theme="light"] .sidebar-item {
   color: var(--text-main) !important;
-  margin: 2px 16px !important;
-  /* Explicit symmetric margins */
-  border-radius: 12px !important;
 }
 
 [data-theme="light"] .sidebar-item:hover {
@@ -1047,7 +1025,6 @@ body {
 }
 
 /* Enforce Skeuomorphic (Color) Emojis with Enhanced 3D Depth */
-[data-theme="light"] .sidebar-item .icon,
 [data-theme="light"] .story-generator-root .icon,
 [data-theme="light"] .image-workspace .icon,
 [data-theme="light"] .gallery-filter-select {
@@ -1063,7 +1040,6 @@ body {
 }
 
 /* Hover effect for "Physical" feel */
-[data-theme="light"] .sidebar-item:hover .icon,
 [data-theme="light"] .story-generator-root .upload-placeholder .icon,
 [data-theme="light"] .image-workspace button:hover .icon,
 [data-theme="light"] .image-workspace .upload-zone:hover .icon {
