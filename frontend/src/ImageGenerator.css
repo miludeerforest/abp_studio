@@ -128,7 +128,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 /* Upload Section - Side by Side */
@@ -218,8 +218,7 @@
 .ig-config-row {
   display: flex;
   gap: 24px;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  align-items: stretch;
 }
 
 .ig-config-group {
@@ -388,9 +387,8 @@
 
 /* Custom Product Input */
 .custom-product-wrapper {
-  margin-top: 10px;
+  margin-top: 8px;
 }
-
 .custom-product-input {
   width: 100%;
   padding: 12px 14px;
@@ -593,8 +591,7 @@
   margin: 0 auto;
   width: 100%;
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 24px;
+  gap: 20px;
   height: 100%;
   overflow: hidden;
 }

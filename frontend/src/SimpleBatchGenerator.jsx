@@ -210,8 +210,10 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
     return (
         <div className="simple-batch-generator">
             <div className="page-header">
-                <h2>📦 单图批量</h2>
-                <p>上传1张产品图，AI生成多张不同场景的效果图</p>
+                <div className="header-content">
+                    <h2>📦 单图批量</h2>
+                    <p>上传1张产品图，AI自动分析并生成多张不同风格场景的高清效果图，直接用于社交媒体或商品详情页</p>
+                </div>
             </div>
 
             {error && (
@@ -223,122 +225,126 @@ function SimpleBatchGenerator({ token, config, onTabChange }) {
 
             {step === 'upload' && (
                 <div className="upload-section">
-                    <div className="sbg-form-grid">
-                        <div className="sbg-left-col">
-                            <div className="section-title">📸 产品图</div>
-                            <div className="upload-slot-wrapper">
-                                <div className="upload-slot">
-                                    {uploadedImages[0] ? (
-                                        <div className="image-preview">
-                                            <img src={URL.createObjectURL(uploadedImages[0])} alt="产品图" />
-                                            <button className="remove-btn" onClick={() => removeImage(0)}>✕</button>
-                                        </div>
-                                    ) : (
-                                        <label className="upload-zone">
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={(e) => handleImageUpload(e, 0)}
-                                                className="sbg-hidden-file-input"
-                                            />
-                                            <div className="upload-placeholder">
-                                                <span className="upload-icon">+</span>
-                                                <span>上传</span>
+                    <div className="sbg-main-panel">
+                        <div className="sbg-form-grid">
+                            <div className="sbg-left-col">
+                                <div className="section-title">📸 产品图</div>
+                                <div className="upload-slot-wrapper">
+                                    <div className="upload-slot">
+                                        {uploadedImages[0] ? (
+                                            <div className="image-preview">
+                                                <img src={URL.createObjectURL(uploadedImages[0])} alt="产品图" />
+                                                <button className="remove-btn" onClick={() => removeImage(0)}>✕</button>
                                             </div>
-                                        </label>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div className="sbg-right-col">
-                            <div className="section-title">✨ 场景描述</div>
-                            <textarea
-                                className="prompt-input"
-                                value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
-                                placeholder="描述你想要的场景，例如：现代简约的客厅，柔和自然光，产品放在白色大理石桌面..."
-                                rows={3}
-                            />
-                            
-                            <div className="sbg-config-inline">
-                                <div className="sbg-config-item">
-                                    <label>类目</label>
-                                    <div className="category-grid">
-                                        {CATEGORIES.map(cat => (
-                                            <button
-                                                key={cat.id}
-                                                className={`category-btn ${category === cat.id ? 'active' : ''}`}
-                                                onClick={() => setCategory(cat.id)}
-                                            >
-                                                {cat.icon} {cat.label}
-                                            </button>
-                                        ))}
+                                        ) : (
+                                            <label className="upload-zone">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => handleImageUpload(e, 0)}
+                                                    className="sbg-hidden-file-input"
+                                                />
+                                                <div className="upload-placeholder">
+                                                    <span className="upload-icon">+</span>
+                                                    <span>上传</span>
+                                                </div>
+                                            </label>
+                                        )}
                                     </div>
                                 </div>
+                            </div>
+                            
+                            <div className="sbg-divider"></div>
+                            
+                            <div className="sbg-right-col">
+                                <div className="section-title">✨ 场景描述</div>
+                                <textarea
+                                    className="prompt-input"
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    placeholder="描述你想要的场景，例如：现代简约的客厅，柔和自然光，产品放在白色大理石桌面..."
+                                    rows={3}
+                                />
                                 
-                                <div className="sbg-config-row">
-                                    <div className="sbg-config-item sbg-config-sm">
-                                        <label>比例</label>
-                                        <div className="ratio-grid">
-                                            {ASPECT_RATIOS.map(ar => (
+                                <div className="sbg-config-inline">
+                                    <div className="sbg-config-item">
+                                        <label>类目</label>
+                                        <div className="category-grid">
+                                            {CATEGORIES.map(cat => (
                                                 <button
-                                                    key={ar.id}
-                                                    className={`ratio-btn ${aspectRatio === ar.id ? 'active' : ''}`}
-                                                    onClick={() => setAspectRatio(ar.id)}
+                                                    key={cat.id}
+                                                    className={`category-btn ${category === cat.id ? 'active' : ''}`}
+                                                    onClick={() => setCategory(cat.id)}
                                                 >
-                                                    {ar.label}
+                                                    {cat.icon} {cat.label}
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
                                     
-                                    <div className="sbg-config-item sbg-config-sm">
-                                        <label>风格</label>
-                                        <select
-                                            value={sceneStyle}
-                                            onChange={(e) => setSceneStyle(e.target.value)}
-                                            className="style-select"
-                                        >
-                                            {SCENE_STYLES.map(style => (
-                                                <option key={style.id} value={style.id}>{style.label}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    
-                                    <div className="sbg-config-item sbg-config-sm">
-                                        <label>数量: {genCountPerImage}</label>
-                                        <input
-                                            type="range"
-                                            min="1"
-                                            max="9"
-                                            value={genCountPerImage}
-                                            onChange={(e) => setGenCountPerImage(parseInt(e.target.value))}
-                                            className="count-slider"
-                                        />
+                                    <div className="sbg-config-row">
+                                        <div className="sbg-config-item sbg-config-sm">
+                                            <label>比例</label>
+                                            <div className="ratio-grid">
+                                                {ASPECT_RATIOS.map(ar => (
+                                                    <button
+                                                        key={ar.id}
+                                                        className={`ratio-btn ${aspectRatio === ar.id ? 'active' : ''}`}
+                                                        onClick={() => setAspectRatio(ar.id)}
+                                                    >
+                                                        {ar.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="sbg-config-item sbg-config-sm">
+                                            <label>风格</label>
+                                            <select
+                                                value={sceneStyle}
+                                                onChange={(e) => setSceneStyle(e.target.value)}
+                                                className="style-select"
+                                            >
+                                                {SCENE_STYLES.map(style => (
+                                                    <option key={style.id} value={style.id}>{style.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        
+                                        <div className="sbg-config-item sbg-config-sm">
+                                            <label>数量: {genCountPerImage}</label>
+                                            <input
+                                                type="range"
+                                                min="1"
+                                                max="9"
+                                                value={genCountPerImage}
+                                                onChange={(e) => setGenCountPerImage(parseInt(e.target.value))}
+                                                className="count-slider"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
+                                
+                                <div className="section-title sbg-section-sm">🎬 视频提示词 (可选)</div>
+                                <textarea
+                                    className="prompt-input"
+                                    value={videoPrompt}
+                                    onChange={(e) => setVideoPrompt(e.target.value)}
+                                    placeholder="视频动作效果，如：缓慢推进镜头，产品轻微旋转..."
+                                    rows={2}
+                                />
                             </div>
-                            
-                            <div className="section-title sbg-section-sm">🎬 视频提示词 (可选)</div>
-                            <textarea
-                                className="prompt-input"
-                                value={videoPrompt}
-                                onChange={(e) => setVideoPrompt(e.target.value)}
-                                placeholder="视频动作效果，如：缓慢推进镜头，产品轻微旋转..."
-                                rows={2}
-                            />
                         </div>
-                    </div>
-                    
-                    <div className="action-bar sbg-action-compact">
-                        <button
-                            className="generate-btn"
-                            onClick={handleGenerate}
-                            disabled={uploadedImages.length === 0 || !prompt.trim() || loading}
-                        >
-                            🚀 开始生成 ({genCountPerImage} 张)
-                        </button>
+                        
+                        <div className="action-bar sbg-action-compact">
+                            <button
+                                className="generate-btn"
+                                onClick={handleGenerate}
+                                disabled={uploadedImages.length === 0 || !prompt.trim() || loading}
+                            >
+                                🚀 开始生成 ({genCountPerImage} 张)
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

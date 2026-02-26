@@ -14,8 +14,8 @@
     --sbg-accent-hover: #818cf8;
     --sbg-danger: #ef4444;
     
-    padding: 16px 20px;
-    max-width: 1200px;
+    padding: 24px 32px;
+    max-width: 1400px;
     margin: 0 auto;
 }
 
@@ -50,31 +50,47 @@
     font-size: 0.8rem;
 }
 
+.sbg-main-panel {
+    background: var(--sbg-card-bg);
+    border: 1px solid var(--sbg-border-color);
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+}
+
 .sbg-form-grid {
     display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: 20px;
-    align-items: start;
+    grid-template-columns: 240px 1px 1fr;
+    gap: 0;
+    align-items: stretch;
 }
 
 .sbg-left-col {
     display: flex;
     flex-direction: column;
+    padding: 24px;
+}
+
+.sbg-divider {
+    width: 1px;
+    background: var(--sbg-border-light);
+    margin: 24px 0;
 }
 
 .sbg-right-col {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 16px;
+    padding: 24px;
 }
-
 .upload-slot-wrapper {
     display: flex;
 }
 
 .upload-slot-wrapper .upload-slot {
-    width: 120px;
-    height: 120px;
+    width: 100%;
+    aspect-ratio: 1;
+    max-height: 200px;
 }
 
 .sbg-config-inline {
@@ -134,28 +150,44 @@
 }
 
 .sbg-action-compact {
-    margin-top: 14px;
-    justify-content: flex-start;
+    justify-content: flex-end;
+    padding: 20px 24px;
+    background: var(--sbg-bg-secondary);
+    border-top: 1px solid var(--sbg-border-light);
+    margin-top: 0;
 }
 
 .sbg-action-compact .generate-btn {
     padding: 10px 24px;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
 }
 
 @media (max-width: 768px) {
     .sbg-form-grid {
         grid-template-columns: 1fr;
-        gap: 14px;
+    }
+    
+    .sbg-divider {
+        width: auto;
+        height: 1px;
+        margin: 0 24px;
+    }
+    
+    .sbg-left-col, .sbg-right-col {
+        padding: 20px;
     }
     
     .sbg-left-col {
         align-items: center;
     }
     
+    .upload-slot-wrapper {
+        width: 100%;
+        max-width: 250px;
+    }
+    
     .upload-slot-wrapper .upload-slot {
-        width: 100px;
-        height: 100px;
+        max-height: none;
     }
     
     .sbg-config-row {
@@ -169,6 +201,7 @@
     
     .sbg-action-compact {
         justify-content: center;
+        padding: 16px 20px;
     }
     
     .sbg-action-compact .generate-btn {
