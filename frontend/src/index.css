@@ -1318,11 +1318,9 @@ html[data-theme="dark"] .gallery-trigger-btn {
   }
   
   .image-workspace {
-    grid-template-columns: 1fr !important;
     height: auto !important;
     gap: 12px;
   }
-  
   .workspace-main {
     padding: 12px;
     width: 100% !important;
@@ -1408,8 +1406,8 @@ html[data-theme="dark"] .gallery-trigger-btn {
   .upload-slot,
   .upload-zone {
     width: 100% !important;
-    max-width: 200px;
-    margin: 0 auto;
+    max-width: none;
+    margin: 0;
   }
   
   .prompt-input,
