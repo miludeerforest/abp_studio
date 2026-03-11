@@ -459,8 +459,8 @@ html[data-theme="dark"] .fg-content {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(4px);
+    background: rgba(255, 255, 255, 0.85);
+    /* backdrop-filter: blur(4px); removed for perf */
     z-index: 10;
 }
 
@@ -541,6 +541,7 @@ html[data-theme="dark"] .fg-card {
     height: 100%;
     object-fit: cover;
     transition: transform 0.4s ease;
+    will-change: transform;
 }
 
 .fg-card:hover .fg-card-img {
@@ -880,9 +881,10 @@ html[data-theme="dark"] .fg-page-jump {
 .fg-lightbox {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(0, 0, 0, 0.85);
+    /* backdrop-filter removed: GPU-heavy blur competes with video decoding */
+    /* backdrop-filter: blur(20px) saturate(180%); */
+    /* -webkit-backdrop-filter: blur(20px) saturate(180%); */
     z-index: 1100;
     display: flex;
     align-items: center;
@@ -897,9 +899,10 @@ html[data-theme="dark"] .fg-page-jump {
     flex-direction: column;
     max-width: 85vw;
     max-height: 85vh;
-    background: rgba(30, 41, 59, 0.9);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: rgba(30, 41, 59, 0.95);
+    /* backdrop-filter removed: causes GPU contention during video playback */
+    /* backdrop-filter: blur(16px); */
+    /* -webkit-backdrop-filter: blur(16px); */
     border-radius: 16px;
     overflow: hidden;
     animation: scaleIn 0.2s ease-out;
@@ -941,6 +944,11 @@ html[data-theme="light"] .fg-lightbox-content {
     background: #000;
 }
 
+/* Performance: promote video to its own compositing layer */
+.fg-lightbox-video {
+    will-change: transform;
+}
+
 .fg-video-expired {
     display: flex;
     flex-direction: column;
@@ -979,8 +987,8 @@ html[data-theme="light"] .fg-lightbox-content {
 
 .fg-lightbox-info {
     padding: 1rem 1.25rem;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(10px);
+    background: rgba(15, 23, 42, 0.98);
+    /* backdrop-filter: blur(10px); removed for perf */
     max-height: 35vh;
     overflow-y: auto;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -1380,4 +1388,80 @@ html[data-theme="light"] .fg-lb-btn:hover {
     .fg-select {
         font-size: 0.85rem;
     }
+}
+
+/* ─── Right-click Context Menu ─── */
+.fg-ctx-menu {
+    position: fixed;
+    z-index: 1200;
+    min-width: 180px;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 6px 0;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    animation: ctxFadeIn 0.12s ease-out;
+}
+
+html[data-theme="light"] .fg-ctx-menu {
+    background: rgba(255, 255, 255, 0.97);
+    border-color: rgba(0, 0, 0, 0.1);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+@keyframes ctxFadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.fg-ctx-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 16px;
+    border: none;
+    background: transparent;
+    color: #e2e8f0;
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+}
+
+html[data-theme="light"] .fg-ctx-item {
+    color: #1f2937;
+}
+
+.fg-ctx-item:hover {
+    background: rgba(99, 102, 241, 0.15);
+}
+
+html[data-theme="light"] .fg-ctx-item:hover {
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.fg-ctx-item.danger {
+    color: #f87171;
+}
+
+.fg-ctx-item.danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.fg-ctx-icon {
+    font-size: 0.9rem;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.fg-ctx-divider {
+    height: 1px;
+    margin: 4px 12px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="light"] .fg-ctx-divider {
+    background: rgba(0, 0, 0, 0.08);
 }

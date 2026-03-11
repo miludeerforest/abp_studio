@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
+import { createPortal } from 'react-dom';
 import './FloatingGallery.css';
 
 // Product categories
@@ -20,6 +21,460 @@ const formatBeijingTime = (timestamp) => {
     }
     return new Date(dateStr).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
 };
+
+
+// ─── Memoized Sub-Components (prevent re-renders during video playback) ───
+
+/** Shared context menu hook for cards */
+function useCardContextMenu() {
+    const [ctxMenu, setCtxMenu] = useState(null);
+    useEffect(() => {
+        if (!ctxMenu) return;
+        const dismiss = () => setCtxMenu(null);
+        const onKey = (e) => { if (e.key === 'Escape') dismiss(); };
+        document.addEventListener('click', dismiss);
+        document.addEventListener('contextmenu', dismiss);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('click', dismiss);
+            document.removeEventListener('contextmenu', dismiss);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [ctxMenu]);
+    const open = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const x = Math.min(e.clientX, window.innerWidth - 200);
+        const y = Math.min(e.clientY, window.innerHeight - 260);
+        setCtxMenu({ x, y });
+    };
+    return [ctxMenu, open, () => setCtxMenu(null)];
+}
+
+/** Memoized Image Card — only re-renders when its own props change */
+const ImageCard = memo(({ img, selectMode, isSelected, onSelect, onView, onSelectForVideo, onToggleShare, onDelete, userRole, currentUserId, categories, handleSelectForVideoAndClose }) => {
+    const [ctxMenu, openCtx, closeCtx] = useCardContextMenu();
+    return (
+        <div
+            className={`fg-card ${selectMode ? 'selectable' : ''} ${isSelected ? 'selected' : ''}`}
+            onClick={() => selectMode ? onSelect(img.id) : onView(img)}
+            onContextMenu={openCtx}
+        >
+            {selectMode && (
+                <div className={`fg-checkbox ${isSelected ? 'checked' : ''}`}>
+                    {isSelected && '✓'}
+                </div>
+            )}
+            <a
+                href={img.url}
+                download
+                target="_blank"
+                rel="noreferrer"
+                className="fg-quick-download"
+                onClick={(e) => e.stopPropagation()}
+                title="下载"
+            >
+                ⬇️
+            </a>
+            <img src={img.url} alt="" className="fg-card-img" loading="lazy" />
+            <div className="fg-card-info">
+                <span className="fg-card-category">
+                    {categories.find(c => c.value === img.category)?.icon || '📦'}
+                </span>
+                <span className="fg-card-time">
+                    {img.created_at ? new Date(img.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}
+                </span>
+                {img.is_shared && <span className="fg-card-shared">🌐</span>}
+            </div>
+            <div className="fg-card-overlay">
+                <div className="fg-card-actions">
+                    {handleSelectForVideoAndClose && (
+                        <button
+                            className="fg-action-btn primary"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectForVideoAndClose(img.url, img.prompt, img.category);
+                            }}
+                            title="转视频"
+                        >
+                            🎬
+                        </button>
+                    )}
+                    {userRole === 'admin' && (
+                        <button
+                            className={`fg-action-btn ${img.is_shared ? 'active' : ''}`}
+                            onClick={(e) => onToggleShare(e, img, 'image')}
+                            title={img.is_shared ? "取消分享" : "分享"}
+                        >
+                            {img.is_shared ? '🔗' : '🔒'}
+                        </button>
+                    )}
+                    {(userRole === 'admin' || img.user_id === currentUserId) && (
+                        <button
+                            className="fg-action-btn delete"
+                            onClick={(e) => onDelete(e, img, 'image')}
+                            title="删除"
+                        >
+                            🗑️
+                        </button>
+                    )}
+                </div>
+                <p className="fg-card-prompt">{img.prompt}</p>
+            </div>
+
+            {/* Right-click Context Menu */}
+            {ctxMenu && createPortal(
+                <div className="fg-ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }} onClick={(e) => e.stopPropagation()}>
+                    <button className="fg-ctx-item" onClick={() => { closeCtx(); onView(img); }}>
+                        <span className="fg-ctx-icon">🔍</span> 预览图片
+                    </button>
+                    <button className="fg-ctx-item" onClick={() => { closeCtx(); const a = document.createElement('a'); a.href = img.url; a.download = ''; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}>
+                        <span className="fg-ctx-icon">⬇️</span> 下载图片
+                    </button>
+                    {handleSelectForVideoAndClose && (
+                        <button className="fg-ctx-item" onClick={() => { closeCtx(); handleSelectForVideoAndClose(img.url, img.prompt, img.category); }}>
+                            <span className="fg-ctx-icon">🎬</span> 转为视频
+                        </button>
+                    )}
+                    {userRole === 'admin' && (
+                        <button className="fg-ctx-item" onClick={() => { closeCtx(); onToggleShare({ stopPropagation: () => {} }, img, 'image'); }}>
+                            <span className="fg-ctx-icon">{img.is_shared ? '🔒' : '🌐'}</span> {img.is_shared ? '取消公开' : '设为公开'}
+                        </button>
+                    )}
+                    {(userRole === 'admin' || img.user_id === currentUserId) && (
+                        <>
+                            <div className="fg-ctx-divider" />
+                            <button className="fg-ctx-item danger" onClick={() => { closeCtx(); onDelete({ stopPropagation: () => {} }, img, 'image'); }}>
+                                <span className="fg-ctx-icon">🗑️</span> 删除图片
+                            </button>
+                        </>
+                    )}
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+});
+ImageCard.displayName = 'ImageCard';
+
+/** Memoized Video Card — only re-renders when its own props change */
+const VideoCard = memo(({ vid, selectMode, isSelected, onSelect, onView, onToggleShare, onDelete, userRole, currentUserId, categories }) => {
+    const [ctxMenu, openCtx, closeCtx] = useCardContextMenu();
+    return (
+        <div
+            className={`fg-card video ${selectMode ? 'selectable' : ''} ${isSelected ? 'selected' : ''}`}
+            onClick={() => selectMode ? onSelect(vid.id) : onView(vid)}
+            onContextMenu={openCtx}
+        >
+            {selectMode && (
+                <div className={`fg-checkbox ${isSelected ? 'checked' : ''}`}>
+                    {isSelected && '✓'}
+                </div>
+            )}
+            {vid.review_status === 'pending' && (
+                <div className="fg-review-badge pending" title="审查中...">⏳</div>
+            )}
+            {vid.review_status === 'done' && vid.review_score != null && (
+                <div
+                    className={`fg-review-badge ${vid.review_score >= 8 ? 'good' : vid.review_score >= 5 ? 'warning' : 'bad'}`}
+                    title={`综合评分: ${vid.review_score}/10 (越高越好)`}
+                >
+                    {vid.review_score >= 8 ? '✓' : vid.review_score >= 5 ? '!' : '✗'} {vid.review_score}
+                </div>
+            )}
+            {vid.review_status === 'error' && (
+                <div className="fg-review-badge error" title="审查失败">⚠</div>
+            )}
+            <img
+                src={vid.preview_url || "/placeholder-video.png"}
+                alt=""
+                className="fg-card-img"
+                loading="lazy"
+            />
+            {(vid.is_merged || vid.prompt?.includes('Story Chain') || vid.prompt?.includes('Story Fission') || vid.filename?.includes('story_chain') || vid.filename?.includes('story_fission')) && (
+                <div style={{
+                    position: 'absolute', top: '8px', left: '8px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    padding: '2px 6px', borderRadius: '4px', fontSize: '10px',
+                    fontWeight: 'bold', color: '#fff',
+                    boxShadow: '0 2px 4px rgba(16, 185, 129, 0.4)',
+                    border: '1px solid rgba(255,255,255,0.2)', zIndex: 10
+                }}>
+                    ✨ 合成
+                </div>
+            )}
+            <a
+                href={vid.result_url}
+                download
+                target="_blank"
+                rel="noreferrer"
+                className="fg-quick-download"
+                onClick={(e) => e.stopPropagation()}
+                title="下载"
+            >
+                ⬇️
+            </a>
+            <div className="fg-play-icon">▶</div>
+            <div className="fg-card-info">
+                <span className="fg-card-category">
+                    {categories.find(c => c.value === vid.category)?.icon || '📦'}
+                </span>
+                <span className="fg-card-time">
+                    {vid.created_at ? new Date(vid.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}
+                </span>
+                {vid.is_shared && <span className="fg-card-shared">🌐</span>}
+            </div>
+            <div className="fg-card-overlay">
+                <div className="fg-card-actions">
+                    {userRole === 'admin' && (
+                        <button
+                            className={`fg-action-btn ${vid.is_shared ? 'active' : ''}`}
+                            onClick={(e) => onToggleShare(e, vid, 'video')}
+                            title={vid.is_shared ? "取消分享" : "分享"}
+                        >
+                            {vid.is_shared ? '🔗' : '🔒'}
+                        </button>
+                    )}
+                    {(userRole === 'admin' || vid.user_id === currentUserId) && (
+                        <button
+                            className="fg-action-btn delete"
+                            onClick={(e) => onDelete(e, vid, 'video')}
+                            title="删除"
+                        >
+                            🗑️
+                        </button>
+                    )}
+                </div>
+                <p className="fg-card-prompt">{vid.prompt}</p>
+            </div>
+
+            {/* Right-click Context Menu */}
+            {ctxMenu && createPortal(
+                <div className="fg-ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }} onClick={(e) => e.stopPropagation()}>
+                    <button className="fg-ctx-item" onClick={() => { closeCtx(); onView(vid); }}>
+                        <span className="fg-ctx-icon">▶️</span> 播放视频
+                    </button>
+                    <button className="fg-ctx-item" onClick={() => { closeCtx(); const a = document.createElement('a'); a.href = vid.result_url; a.download = ''; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}>
+                        <span className="fg-ctx-icon">⬇️</span> 下载视频
+                    </button>
+                    <button className="fg-ctx-item" onClick={() => { closeCtx(); navigator.clipboard.writeText(vid.result_url).catch(() => {}); }}>
+                        <span className="fg-ctx-icon">📋</span> 复制链接
+                    </button>
+                    {userRole === 'admin' && (
+                        <button className="fg-ctx-item" onClick={() => { closeCtx(); onToggleShare({ stopPropagation: () => {} }, vid, 'video'); }}>
+                            <span className="fg-ctx-icon">{vid.is_shared ? '🔒' : '🌐'}</span> {vid.is_shared ? '取消公开' : '设为公开'}
+                        </button>
+                    )}
+                    {(userRole === 'admin' || vid.user_id === currentUserId) && (
+                        <>
+                            <div className="fg-ctx-divider" />
+                            <button className="fg-ctx-item danger" onClick={() => { closeCtx(); onDelete({ stopPropagation: () => {} }, vid, 'video'); }}>
+                                <span className="fg-ctx-icon">🗑️</span> 删除视频
+                            </button>
+                        </>
+                    )}
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+});
+VideoCard.displayName = 'VideoCard';
+
+/** Memoized Video Lightbox — fully isolated from gallery state changes */
+const VideoLightbox = memo(({ video, onClose, reviewDetails, loadingReview, videoError, onVideoError, onDelete, onToggleShare, userRole, currentUserId }) => {
+    const [ctxMenu, setCtxMenu] = useState(null);
+    const ctxRef = useRef(null);
+
+    // Close context menu on outside click or Escape
+    useEffect(() => {
+        if (!ctxMenu) return;
+        const handleClick = () => setCtxMenu(null);
+        const handleKey = (e) => { if (e.key === 'Escape') setCtxMenu(null); };
+        document.addEventListener('click', handleClick);
+        document.addEventListener('keydown', handleKey);
+        return () => {
+            document.removeEventListener('click', handleClick);
+            document.removeEventListener('keydown', handleKey);
+        };
+    }, [ctxMenu]);
+
+    if (!video) return null;
+
+    const handleContextMenu = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Position menu, clamped to viewport
+        const x = Math.min(e.clientX, window.innerWidth - 200);
+        const y = Math.min(e.clientY, window.innerHeight - 220);
+        setCtxMenu({ x, y });
+    };
+
+    const handleDownload = () => {
+        const a = document.createElement('a');
+        a.href = video.result_url;
+        a.download = '';
+        a.target = '_blank';
+        a.rel = 'noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setCtxMenu(null);
+    };
+
+    const handleDeleteClick = () => {
+        setCtxMenu(null);
+        if (window.confirm('确定要删除这个视频吗？')) {
+            // Create a synthetic event for stopPropagation compatibility
+            const syntheticEvent = { stopPropagation: () => {} };
+            onDelete(syntheticEvent, video, 'video');
+            onClose();
+        }
+    };
+
+    const handleShareClick = () => {
+        setCtxMenu(null);
+        const syntheticEvent = { stopPropagation: () => {} };
+        onToggleShare(syntheticEvent, video, 'video');
+    };
+
+    const handleCopyUrl = () => {
+        navigator.clipboard.writeText(video.result_url).catch(() => {});
+        setCtxMenu(null);
+    };
+
+    return (
+        <div className="fg-lightbox" onClick={onClose}>
+            <div className="fg-lightbox-content video" onClick={e => e.stopPropagation()} onContextMenu={handleContextMenu}>
+                {videoError ? (
+                    <div className="fg-video-expired">
+                        <div className="fg-expired-icon">⏰</div>
+                        <div className="fg-expired-title">视频链接已过期</div>
+                        <div className="fg-expired-desc">
+                            外部视频资源已失效，请重新生成视频
+                        </div>
+                    </div>
+                ) : (
+                    <video
+                        src={video.result_url}
+                        controls
+                        autoPlay
+                        playsInline
+                        preload="auto"
+                        className="fg-lightbox-video"
+                        onError={onVideoError}
+                    />
+                )}
+                <div className="fg-lightbox-info">
+                    <p className="fg-lightbox-prompt">{video.prompt || '无提示词'}</p>
+                    <div className="fg-lightbox-meta">
+                        <span>👤 {video.username || '未知'}</span>
+                        <span>🕐 {formatBeijingTime(video.created_at)}</span>
+                    </div>
+
+                    {/* Review Details Section */}
+                    {video.review_status === 'done' && (
+                        <div className="fg-review-section">
+                            <div className="fg-review-header">
+                                <span className="fg-review-title">🔍 AI质量审查报告</span>
+                                <span className={`fg-review-score-badge ${video.review_score >= 8 ? 'good' : video.review_score >= 5 ? 'warning' : 'bad'}`}>
+                                    综合评分: {video.review_score}/10
+                                </span>
+                            </div>
+                            {loadingReview ? (
+                                <p className="fg-review-loading">加载详情...</p>
+                            ) : reviewDetails ? (
+                                <div className="fg-review-details">
+                                    <div className="fg-review-scores">
+                                        <div className="fg-score-item">
+                                            <span className="score-label">自然度</span>
+                                            <span className={`score-value ${reviewDetails.ai_score >= 8 ? 'good' : reviewDetails.ai_score >= 5 ? 'warning' : 'bad'}`}>{reviewDetails.ai_score}</span>
+                                        </div>
+                                        <div className="fg-score-item">
+                                            <span className="score-label">一致性</span>
+                                            <span className={`score-value ${reviewDetails.consistency_score >= 8 ? 'good' : reviewDetails.consistency_score >= 5 ? 'warning' : 'bad'}`}>{reviewDetails.consistency_score}</span>
+                                        </div>
+                                        <div className="fg-score-item">
+                                            <span className="score-label">真实性</span>
+                                            <span className={`score-value ${reviewDetails.physics_score >= 8 ? 'good' : reviewDetails.physics_score >= 5 ? 'warning' : 'bad'}`}>{reviewDetails.physics_score}</span>
+                                        </div>
+                                        <div className="fg-score-item">
+                                            <span className="score-label">卖点</span>
+                                            <span className={`score-value ${reviewDetails.ecommerce_score >= 8 ? 'good' : reviewDetails.ecommerce_score >= 5 ? 'warning' : 'bad'}`}>{reviewDetails.ecommerce_score}</span>
+                                        </div>
+                                        <div className="fg-score-item">
+                                            <span className="score-label">安全</span>
+                                            <span className={`score-value ${reviewDetails.platform_risk >= 8 ? 'good' : reviewDetails.platform_risk >= 5 ? 'warning' : 'bad'}`}>{reviewDetails.platform_risk}</span>
+                                        </div>
+                                    </div>
+                                    {reviewDetails.summary && (
+                                        <p className="fg-review-summary">
+                                            <strong>总结：</strong>{reviewDetails.summary}
+                                        </p>
+                                    )}
+                                    <div className={`fg-review-recommendation ${reviewDetails.recommendation}`}>
+                                        {reviewDetails.recommendation === 'pass' && '✅ 可直接使用'}
+                                        {reviewDetails.recommendation === 'warning' && '⚠️ 谨慎使用'}
+                                        {reviewDetails.recommendation === 'reject' && '❌ 不建议使用'}
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                    )}
+                    {video.review_status === 'pending' && (
+                        <div className="fg-review-section pending">
+                            <span>⏳ 审查中...</span>
+                        </div>
+                    )}
+                    {video.review_status === 'error' && (
+                        <div className="fg-review-section error">
+                            <span>⚠️ 审查失败</span>
+                        </div>
+                    )}
+
+                    <div className="fg-lightbox-actions">
+                        <a href={video.result_url} download target="_blank" rel="noreferrer" className="fg-lb-btn primary">
+                            ⬇️ 下载视频
+                        </a>
+                        <button className="fg-lb-btn close" onClick={onClose}>
+                            ✕ 关闭
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Right-click Context Menu */}
+            {ctxMenu && createPortal(
+                <div
+                    ref={ctxRef}
+                    className="fg-ctx-menu"
+                    style={{ left: ctxMenu.x, top: ctxMenu.y }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button className="fg-ctx-item" onClick={handleDownload}>
+                        <span className="fg-ctx-icon">⬇️</span> 下载视频
+                    </button>
+                    <button className="fg-ctx-item" onClick={handleCopyUrl}>
+                        <span className="fg-ctx-icon">📋</span> 复制链接
+                    </button>
+                    {userRole === 'admin' && (
+                        <button className="fg-ctx-item" onClick={handleShareClick}>
+                            <span className="fg-ctx-icon">{video.is_shared ? '🔒' : '🌐'}</span> {video.is_shared ? '取消公开' : '设为公开'}
+                        </button>
+                    )}
+                    <div className="fg-ctx-divider" />
+                    {(userRole === 'admin' || video.user_id === currentUserId) && (
+                        <button className="fg-ctx-item danger" onClick={handleDeleteClick}>
+                            <span className="fg-ctx-icon">🗑️</span> 删除视频
+                        </button>
+                    )}
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+});
+VideoLightbox.displayName = 'VideoLightbox';
 
 const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
     const [activeTab, setActiveTab] = useState('images');
@@ -252,12 +707,14 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
         else await fetchVideos();
     };
 
-    const toggleSelect = (id) => {
-        const newSet = new Set(selectedIds);
-        if (newSet.has(id)) newSet.delete(id);
-        else newSet.add(id);
-        setSelectedIds(newSet);
-    };
+    const toggleSelect = useCallback((id) => {
+        setSelectedIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) newSet.delete(id);
+            else newSet.add(id);
+            return newSet;
+        });
+    }, []);
 
     const toggleSelectAll = () => {
         if (activeTab === 'images') {
@@ -432,10 +889,10 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
         }
     };
 
-    const handleSelectForVideoAndClose = (imgUrl, prompt, category) => {
+    const handleSelectForVideoAndClose = useCallback((imgUrl, prompt, category) => {
         onSelectForVideo(imgUrl, prompt, category);
         onClose();
-    };
+    }, [onSelectForVideo, onClose]);
 
     const totalPagesImg = Math.ceil(totalImages / LIMIT);
     const totalPagesVid = Math.ceil(totalVideos / LIMIT);
@@ -677,76 +1134,21 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                             ) : (
                                 <div className="fg-grid">
                                     {images.map((img) => (
-                                        <div
+                                        <ImageCard
                                             key={img.id}
-                                            className={`fg-card ${selectMode ? 'selectable' : ''} ${selectedIds.has(img.id) ? 'selected' : ''}`}
-                                            onClick={() => selectMode ? toggleSelect(img.id) : setSelectedImage(img)}
-                                        >
-                                            {selectMode && (
-                                                <div className={`fg-checkbox ${selectedIds.has(img.id) ? 'checked' : ''}`}>
-                                                    {selectedIds.has(img.id) && '✓'}
-                                                </div>
-                                            )}
-                                            {/* 常驻下载按钮 */}
-                                            <a
-                                                href={img.url}
-                                                download
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="fg-quick-download"
-                                                onClick={(e) => e.stopPropagation()}
-                                                title="下载"
-                                            >
-                                                ⬇️
-                                            </a>
-                                            <img src={img.url} alt="" className="fg-card-img" loading="lazy" />
-                                            {/* 常驻底部信息栏 */}
-                                            <div className="fg-card-info">
-                                                <span className="fg-card-category">
-                                                    {CATEGORIES.find(c => c.value === img.category)?.icon || '📦'}
-                                                </span>
-                                                <span className="fg-card-time">
-                                                    {img.created_at ? new Date(img.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}
-                                                </span>
-                                                {img.is_shared && <span className="fg-card-shared">🌐</span>}
-                                            </div>
-                                            <div className="fg-card-overlay">
-                                                <div className="fg-card-actions">
-                                                    {onSelectForVideo && (
-                                                        <button
-                                                            className="fg-action-btn primary"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleSelectForVideoAndClose(img.url, img.prompt, img.category);
-                                                            }}
-                                                            title="转视频"
-                                                        >
-                                                            🎬
-                                                        </button>
-                                                    )}
-                                                    {userRole === 'admin' && (
-                                                        <button
-                                                            className={`fg-action-btn ${img.is_shared ? 'active' : ''}`}
-                                                            onClick={(e) => handleToggleShare(e, img, 'image')}
-                                                            title={img.is_shared ? "取消分享" : "分享"}
-                                                        >
-                                                            {img.is_shared ? '🔗' : '🔒'}
-                                                        </button>
-                                                    )}
-                                                    {(userRole === 'admin' || img.user_id === currentUserId) && (
-                                                        <button
-                                                            className="fg-action-btn delete"
-                                                            onClick={(e) => handleDelete(e, img, 'image')}
-                                                            title="删除"
-                                                        >
-                                                            🗑️
-                                                        </button>
-                                                    )}
-                                                </div>
-
-                                                <p className="fg-card-prompt">{img.prompt}</p>
-                                            </div>
-                                        </div>
+                                            img={img}
+                                            selectMode={selectMode}
+                                            isSelected={selectedIds.has(img.id)}
+                                            onSelect={toggleSelect}
+                                            onView={setSelectedImage}
+                                            onSelectForVideo={onSelectForVideo}
+                                            onToggleShare={handleToggleShare}
+                                            onDelete={handleDelete}
+                                            userRole={userRole}
+                                            currentUserId={currentUserId}
+                                            categories={CATEGORIES}
+                                            handleSelectForVideoAndClose={onSelectForVideo ? handleSelectForVideoAndClose : null}
+                                        />
                                     ))}
 
                                 </div>
@@ -765,110 +1167,19 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                             ) : (
                                 <div className="fg-grid">
                                     {videos.map((vid) => (
-                                        <div
+                                        <VideoCard
                                             key={vid.id}
-                                            className={`fg-card video ${selectMode ? 'selectable' : ''} ${selectedIds.has(vid.id) ? 'selected' : ''}`}
-                                            onClick={() => selectMode ? toggleSelect(vid.id) : setSelectedVideo(vid)}
-                                        >
-                                            {selectMode && (
-                                                <div className={`fg-checkbox ${selectedIds.has(vid.id) ? 'checked' : ''}`}>
-                                                    {selectedIds.has(vid.id) && '✓'}
-                                                </div>
-                                            )}
-                                            {/* Review Score Badge */}
-                                            {vid.review_status === 'pending' && (
-                                                <div className="fg-review-badge pending" title="审查中...">⏳</div>
-                                            )}
-                                            {vid.review_status === 'done' && vid.review_score != null && (
-                                                <div
-                                                    className={`fg-review-badge ${vid.review_score >= 8 ? 'good' : vid.review_score >= 5 ? 'warning' : 'bad'}`}
-                                                    title={`综合评分: ${vid.review_score}/10 (越高越好)`}
-                                                >
-                                                    {vid.review_score >= 8 ? '✓' : vid.review_score >= 5 ? '!' : '✗'} {vid.review_score}
-                                                </div>
-                                            )}
-                                            {vid.review_status === 'error' && (
-                                                <div className="fg-review-badge error" title="审查失败">⚠</div>
-                                            )}
-                                            <img
-                                                src={vid.preview_url || "/placeholder-video.png"}
-                                                alt=""
-                                                className="fg-card-img"
-                                                loading="lazy"
-                                                onLoad={(e) => {
-                                                    // Detect portrait orientation
-                                                    if (e.target.naturalHeight > e.target.naturalWidth) {
-                                                        // logic to handle portrait if needed, or just let css handle it
-                                                    }
-                                                }}
-                                            />
-                                            {/* Merged/Composite Video Badge */}
-                                            {(vid.is_merged || vid.prompt?.includes('Story Chain') || vid.prompt?.includes('Story Fission') || vid.filename?.includes('story_chain') || vid.filename?.includes('story_fission')) && (
-                                                <div style={{
-                                                    position: 'absolute',
-                                                    top: '8px',
-                                                    left: '8px',
-                                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '4px',
-                                                    fontSize: '10px',
-                                                    fontWeight: 'bold',
-                                                    color: '#fff',
-                                                    boxShadow: '0 2px 4px rgba(16, 185, 129, 0.4)',
-                                                    border: '1px solid rgba(255,255,255,0.2)',
-                                                    zIndex: 10
-                                                }}>
-                                                    ✨ 合成
-                                                </div>
-                                            )}
-                                            {/* 常驻下载按钮 */}
-                                            <a
-                                                href={vid.result_url}
-                                                download
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="fg-quick-download"
-                                                onClick={(e) => e.stopPropagation()}
-                                                title="下载"
-                                            >
-                                                ⬇️
-                                            </a>
-                                            <div className="fg-play-icon">▶</div>
-                                            {/* 常驻底部信息栏 */}
-                                            <div className="fg-card-info">
-                                                <span className="fg-card-category">
-                                                    {CATEGORIES.find(c => c.value === vid.category)?.icon || '📦'}
-                                                </span>
-                                                <span className="fg-card-time">
-                                                    {vid.created_at ? new Date(vid.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}
-                                                </span>
-                                                {vid.is_shared && <span className="fg-card-shared">🌐</span>}
-                                            </div>
-                                            <div className="fg-card-overlay">
-                                                <div className="fg-card-actions">
-                                                    {userRole === 'admin' && (
-                                                        <button
-                                                            className={`fg-action-btn ${vid.is_shared ? 'active' : ''}`}
-                                                            onClick={(e) => handleToggleShare(e, vid, 'video')}
-                                                            title={vid.is_shared ? "取消分享" : "分享"}
-                                                        >
-                                                            {vid.is_shared ? '🔗' : '🔒'}
-                                                        </button>
-                                                    )}
-                                                    {(userRole === 'admin' || vid.user_id === currentUserId) && (
-                                                        <button
-                                                            className="fg-action-btn delete"
-                                                            onClick={(e) => handleDelete(e, vid, 'video')}
-                                                            title="删除"
-                                                        >
-                                                            🗑️
-                                                        </button>
-                                                    )}
-                                                </div>
-
-                                                <p className="fg-card-prompt">{vid.prompt}</p>
-                                            </div>
-                                        </div>
+                                            vid={vid}
+                                            selectMode={selectMode}
+                                            isSelected={selectedIds.has(vid.id)}
+                                            onSelect={toggleSelect}
+                                            onView={setSelectedVideo}
+                                            onToggleShare={handleToggleShare}
+                                            onDelete={handleDelete}
+                                            userRole={userRole}
+                                            currentUserId={currentUserId}
+                                            categories={CATEGORIES}
+                                        />
                                     ))}
 
                                 </div>
@@ -997,106 +1308,20 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
                 </div>
             )}
 
-            {/* Video Lightbox */}
-            {selectedVideo && (
-                <div className="fg-lightbox" onClick={() => setSelectedVideo(null)}>
-                    <div className="fg-lightbox-content video" onClick={e => e.stopPropagation()}>
-                        {videoError ? (
-                            <div className="fg-video-expired">
-                                <div className="fg-expired-icon">⏰</div>
-                                <div className="fg-expired-title">视频链接已过期</div>
-                                <div className="fg-expired-desc">
-                                    外部视频资源已失效，请重新生成视频
-                                </div>
-                            </div>
-                        ) : (
-                            <video 
-                                src={selectedVideo.result_url} 
-                                controls 
-                                autoPlay 
-                                className="fg-lightbox-video"
-                                onError={() => setVideoError(true)}
-                            />
-                        )}
-                        <div className="fg-lightbox-info">
-                            <p className="fg-lightbox-prompt">{selectedVideo.prompt || '无提示词'}</p>
-                            <div className="fg-lightbox-meta">
-                                <span>👤 {selectedVideo.username || '未知'}</span>
-                                <span>🕐 {formatBeijingTime(selectedVideo.created_at)}</span>
-                            </div>
 
-                            {/* Review Details Section */}
-                            {selectedVideo.review_status === 'done' && (
-                                <div className="fg-review-section">
-                                    <div className="fg-review-header">
-                                        <span className="fg-review-title">🔍 AI质量审查报告</span>
-                                        <span className={`fg-review-score-badge ${selectedVideo.review_score >= 8 ? 'good' : selectedVideo.review_score >= 5 ? 'warning' : 'bad'}`}>
-                                            综合评分: {selectedVideo.review_score}/10
-                                        </span>
-                                    </div>
-                                    {loadingReview ? (
-                                        <p className="fg-review-loading">加载详情...</p>
-                                    ) : reviewDetails ? (
-                                        <div className="fg-review-details">
-                                            <div className="fg-review-scores">
-                                                <div className="fg-score-item">
-                                                    <span className="score-label">自然度</span>
-                                                    <span className={`score-value ${reviewDetails.ai_score >= 8 ? 'good' : reviewDetails.ai_score >= 5 ? 'warning' : 'bad'}`}>{reviewDetails.ai_score}</span>
-                                                </div>
-                                                <div className="fg-score-item">
-                                                    <span className="score-label">一致性</span>
-                                                    <span className={`score-value ${reviewDetails.consistency_score >= 8 ? 'good' : reviewDetails.consistency_score >= 5 ? 'warning' : 'bad'}`}>{reviewDetails.consistency_score}</span>
-                                                </div>
-                                                <div className="fg-score-item">
-                                                    <span className="score-label">真实性</span>
-                                                    <span className={`score-value ${reviewDetails.physics_score >= 8 ? 'good' : reviewDetails.physics_score >= 5 ? 'warning' : 'bad'}`}>{reviewDetails.physics_score}</span>
-                                                </div>
-                                                <div className="fg-score-item">
-                                                    <span className="score-label">卖点</span>
-                                                    <span className={`score-value ${reviewDetails.ecommerce_score >= 8 ? 'good' : reviewDetails.ecommerce_score >= 5 ? 'warning' : 'bad'}`}>{reviewDetails.ecommerce_score}</span>
-                                                </div>
-                                                <div className="fg-score-item">
-                                                    <span className="score-label">安全</span>
-                                                    <span className={`score-value ${reviewDetails.platform_risk >= 8 ? 'good' : reviewDetails.platform_risk >= 5 ? 'warning' : 'bad'}`}>{reviewDetails.platform_risk}</span>
-                                                </div>
-                                            </div>
-                                            {reviewDetails.summary && (
-                                                <p className="fg-review-summary">
-                                                    <strong>总结：</strong>{reviewDetails.summary}
-                                                </p>
-                                            )}
-                                            <div className={`fg-review-recommendation ${reviewDetails.recommendation}`}>
-                                                {reviewDetails.recommendation === 'pass' && '✅ 可直接使用'}
-                                                {reviewDetails.recommendation === 'warning' && '⚠️ 谨慎使用'}
-                                                {reviewDetails.recommendation === 'reject' && '❌ 不建议使用'}
-                                            </div>
-                                        </div>
-                                    ) : null}
-                                </div>
-                            )}
-                            {selectedVideo.review_status === 'pending' && (
-                                <div className="fg-review-section pending">
-                                    <span>⏳ 审查中...</span>
-                                </div>
-                            )}
-                            {selectedVideo.review_status === 'error' && (
-                                <div className="fg-review-section error">
-                                    <span>⚠️ 审查失败</span>
-                                </div>
-                            )}
-
-                            <div className="fg-lightbox-actions">
-                                <a href={selectedVideo.result_url} download target="_blank" rel="noreferrer" className="fg-lb-btn primary">
-                                    ⬇️ 下载视频
-                                </a>
-                                <button className="fg-lb-btn close" onClick={() => setSelectedVideo(null)}>
-                                    ✕ 关闭
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Video Lightbox — Memoized, isolated from gallery state */}
+            <VideoLightbox
+                video={selectedVideo}
+                onClose={() => setSelectedVideo(null)}
+                reviewDetails={reviewDetails}
+                loadingReview={loadingReview}
+                videoError={videoError}
+                onVideoError={() => setVideoError(true)}
+                onDelete={handleDelete}
+                onToggleShare={handleToggleShare}
+                userRole={userRole}
+                currentUserId={currentUserId}
+            />
 
             {/* Download Progress Toast */}
             {downloadToast && (
@@ -1130,4 +1355,4 @@ const FloatingGallery = ({ isOpen, onClose, onSelectForVideo }) => {
     );
 };
 
-export default FloatingGallery;
+export default memo(FloatingGallery);
