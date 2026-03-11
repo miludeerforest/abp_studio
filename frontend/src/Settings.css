@@ -185,6 +185,11 @@
 }
 
 /* Toggle 开关 */
+/* Toggle 开关 - 修复双点问题 */
+.settings-container .toggle-switch::after {
+    content: none !important;
+}
+
 .toggle-switch {
     display: flex;
     align-items: center;

@@ -421,7 +421,6 @@ function Settings({ token, config, onConfigChange }) {
                                     aria-label="质量审查启用开关"
                                 />
                                 <span className="toggle-slider"></span>
-                                <span className={`toggle-status-label ${localConfig.review_enabled ? 'enabled' : 'disabled'}`}>{localConfig.review_enabled ? '启用' : '禁用'}</span>
                             </label>
                         </div>
                         <div className="card-content">
@@ -480,7 +479,6 @@ function Settings({ token, config, onConfigChange }) {
                                     aria-label="内容审核启用开关"
                                 />
                                 <span className="toggle-slider"></span>
-                                <span className={`toggle-status-label ${localConfig.content_review_enabled ? 'enabled' : 'disabled'}`}>{localConfig.content_review_enabled ? '启用' : '禁用'}</span>
                             </label>
                         </div>
                         <div className="card-content">
