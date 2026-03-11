@@ -176,13 +176,13 @@ class VideoQueueItem(Base):
     filename = Column(String)
     file_path = Column(String)
     prompt = Column(String)
-    status = Column(String, default="pending") # pending, processing, done, error
+    status = Column(String, default="pending", index=True) # pending, processing, done, error
     result_url = Column(String, nullable=True)
     error_msg = Column(String, nullable=True)
-    user_id = Column(Integer, nullable=True) # Linked to User
+    user_id = Column(Integer, nullable=True, index=True) # Linked to User
     category = Column(String, nullable=True, default="other")  # Product category
     is_merged = Column(Boolean, nullable=True, default=False)  # Flag for merged/composite videos
-    is_shared = Column(Boolean, nullable=False, default=True)  # 默认分享到公开画廊，用户可取消
+    is_shared = Column(Boolean, nullable=False, default=True, index=True)  # 默认分享到公开画廊，用户可取消
     created_at = Column(DateTime, default=get_china_now)  # Use China timezone
     _preview_url = Column("preview_url", String, nullable=True)  # Custom preview URL
     retry_count = Column(Integer, default=0)  # 累计重试次数
@@ -220,7 +220,7 @@ class SavedImage(Base):
     width = Column(Integer, nullable=True)  # Image width in pixels
     height = Column(Integer, nullable=True)  # Image height in pixels
     category = Column(String, nullable=True, default="other")  # Product category
-    is_shared = Column(Boolean, nullable=False, default=True)  # 默认分享到公开画廊，用户可取消
+    is_shared = Column(Boolean, nullable=False, default=True, index=True)  # 默认分享到公开画廊，用户可取消
     created_at = Column(DateTime, default=get_china_now)
 
 # Create tables
@@ -552,9 +552,13 @@ def get_public_videos(
     total = query.count()
     videos = query.order_by(VideoQueueItem.created_at.desc()).limit(limit).offset(offset).all()
     
+    # Pre-fetch all creators in a single query to avoid N+1
+    user_ids = list(set(vid.user_id for vid in videos if vid.user_id))
+    creators = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    
     result_items = []
     for vid in videos:
-        creator = db.query(User).filter(User.id == vid.user_id).first()
+        creator = creators.get(vid.user_id)
         result_items.append({
             "id": vid.id,
             "prompt": vid.prompt,
@@ -566,7 +570,6 @@ def get_public_videos(
             "is_merged": vid.is_merged or False,
             "created_at": vid.created_at
         })
-    
     return {"total": total, "items": result_items}
 
 @app.get("/api/v1/public/config")
@@ -881,42 +884,44 @@ from sqlalchemy import func
 
 @app.get("/api/v1/stats")
 def get_stats(db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
-    # 1. User Summary Stats (Total Counts)
-    users = db.query(User).all()
-    user_stats = []
-    
-    # Today boundary: China-local day-start (naive datetime matching stored timestamps)
+    # 1. User Summary Stats - Use aggregated queries instead of N loops
     now = get_china_now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
+    # Aggregate image counts per user in 2 queries (total + today)
+    img_counts = dict(db.query(
+        SavedImage.user_id, func.count(SavedImage.id)
+    ).group_by(SavedImage.user_id).all())
+    
+    today_img_counts = dict(db.query(
+        SavedImage.user_id, func.count(SavedImage.id)
+    ).filter(SavedImage.created_at >= today_start).group_by(SavedImage.user_id).all())
+    
+    # Aggregate video counts per user in 2 queries (total + today)
+    vid_counts = dict(db.query(
+        VideoQueueItem.user_id, func.count(VideoQueueItem.id)
+    ).filter(
+        VideoQueueItem.status.in_(["done", "archived"])
+    ).group_by(VideoQueueItem.user_id).all())
+    
+    today_vid_counts = dict(db.query(
+        VideoQueueItem.user_id, func.count(VideoQueueItem.id)
+    ).filter(
+        VideoQueueItem.status.in_(["done", "archived"]),
+        VideoQueueItem.created_at >= today_start
+    ).group_by(VideoQueueItem.user_id).all())
+    
+    users = db.query(User).all()
+    user_stats = []
     for u in users:
-        # Count actual saved images in gallery (not just generation attempts) - Total
-        img_count = db.query(SavedImage).filter(SavedImage.user_id == u.id).count()
-        # Count only completed videos - Total
-        vid_count = db.query(VideoQueueItem).filter(
-            VideoQueueItem.user_id == u.id,
-            VideoQueueItem.status.in_(["done", "archived"])
-        ).count()
-        
-        # Today's counts - use China-local day-start for consistency with naive timestamps
-        today_img = db.query(SavedImage).filter(
-            SavedImage.user_id == u.id,
-            SavedImage.created_at >= today_start
-        ).count()
-        today_vid = db.query(VideoQueueItem).filter(
-            VideoQueueItem.user_id == u.id,
-            VideoQueueItem.status.in_(["done", "archived"]),
-            VideoQueueItem.created_at >= today_start
-        ).count()
-        
         user_stats.append({
             "id": u.id,
             "username": u.username,
             "role": u.role,
-            "image_count": img_count,
-            "video_count": vid_count,
-            "today_images": today_img,
-            "today_videos": today_vid
+            "image_count": img_counts.get(u.id, 0),
+            "video_count": vid_counts.get(u.id, 0),
+            "today_images": today_img_counts.get(u.id, 0),
+            "today_videos": today_vid_counts.get(u.id, 0)
         })
 
     # 2. Daily Activity (Last 30 Days)
@@ -1566,6 +1571,295 @@ async def analyze_endpoint(
             client, api_url, gemini_api_key, product_b64, ref_b64, category, model_name, custom_product_name, gen_count
         )
 
+BATCH_GENERATE_ASYNC_STATUS = {}
+
+
+def get_batch_prompts_map(scripts: str) -> Dict[str, str]:
+    prompts_map = ANGLES_PROMPTS
+    if scripts:
+        try:
+            script_list = json.loads(scripts)
+            prompts_map = {item["angle_name"]: item["script"] for item in script_list}
+        except Exception as e:
+            logger.error(f"Failed to parse scripts: {e}")
+    return prompts_map
+
+
+def serialize_batch_results(results: List[Optional[ImageResult]]) -> List[Dict[str, Any]]:
+    serialized_results = []
+    for result in results:
+        if not result:
+            continue
+        result_dict = result.dict()
+        if result.video_prompt and not result_dict.get("video_prompt"):
+            result_dict["video_prompt"] = result.video_prompt
+        serialized_results.append(result_dict)
+    return serialized_results
+
+
+async def log_batch_generation_start(db: Session, user: User, count: int, category: str, aspect_ratio: str):
+    try:
+        log = ImageGenerationLog(user_id=user.id, count=count)
+        db.add(log)
+
+        activity = UserActivity(
+            user_id=user.id,
+            action="image_gen_start",
+            details=f"开始生成 {count} 张图片 | 类目: {category} | 比例: {aspect_ratio}"
+        )
+        db.add(activity)
+        db.commit()
+
+        try:
+            await connection_manager.update_user_activity(user.id, f"正在生成 {count} 张图片")
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(f"Failed to log usage: {e}")
+
+
+def resolve_batch_generation_config(db: Session, api_url: Optional[str], gemini_api_key: Optional[str], model_name: Optional[str]):
+    if not api_url or not gemini_api_key or not model_name:
+        db_config_list = db.query(SystemConfig).all()
+        config_dict = {item.key: item.value for item in db_config_list}
+        if not api_url:
+            api_url = config_dict.get("api_url")
+        if not gemini_api_key:
+            gemini_api_key = config_dict.get("api_key")
+        if not model_name:
+            model_name = config_dict.get("model_name")
+    return api_url, gemini_api_key, model_name
+
+
+async def save_batch_results_to_gallery(db: Session, user: User, results: List[ImageResult], category: str) -> int:
+    gallery_dir = "/app/uploads/gallery"
+    os.makedirs(gallery_dir, exist_ok=True)
+
+    saved_count = 0
+    async with httpx.AsyncClient() as download_client:
+        for idx, result in enumerate(results):
+            logger.info(
+                f"Gallery save check [{idx}]: has_base64={bool(result.image_base64)}, "
+                f"error={result.error}, base64_len={len(result.image_base64) if result.image_base64 else 0}"
+            )
+            if not result.image_base64 or result.error:
+                continue
+
+            try:
+                img_data = None
+                b64_data = result.image_base64
+
+                if b64_data.startswith("http://") or b64_data.startswith("https://"):
+                    logger.info(f"Downloading image from URL: {b64_data[:100]}...")
+                    try:
+                        resp = await download_client.get(b64_data, timeout=60.0)
+                        if resp.status_code == 200:
+                            img_data = resp.content
+                            logger.info(f"Downloaded image: {len(img_data)} bytes")
+                        else:
+                            logger.error(f"Failed to download image: HTTP {resp.status_code}")
+                            continue
+                    except Exception as dl_err:
+                        logger.error(f"Image download error: {dl_err}")
+                        continue
+                else:
+                    if "," in b64_data:
+                        b64_data = b64_data.split(",")[1]
+                    img_data = base64.b64decode(b64_data)
+
+                if not img_data:
+                    logger.error("No image data to save")
+                    continue
+
+                if not (img_data[:2] == b'\xff\xd8' or img_data[:8] == b'\x89PNG\r\n\x1a\n'):
+                    logger.error(f"Invalid image data (first bytes: {img_data[:10]})")
+                    continue
+
+                ext = ".jpg" if img_data[:2] == b'\xff\xd8' else ".png"
+                filename = f"gen_{user.id}_{uuid.uuid4().hex}{ext}"
+                file_path = os.path.join(gallery_dir, filename)
+
+                with open(file_path, "wb") as f:
+                    f.write(img_data)
+
+                logger.info(f"Saved gallery image: {filename} ({len(img_data)} bytes)")
+
+                img_width, img_height = None, None
+                try:
+                    from io import BytesIO
+                    img_pil = Image.open(BytesIO(img_data))
+                    img_width, img_height = img_pil.size
+                except Exception as dim_err:
+                    logger.warning(f"Could not get image dimensions: {dim_err}")
+
+                new_image = SavedImage(
+                    user_id=user.id,
+                    filename=filename,
+                    file_path=file_path,
+                    url=f"/uploads/gallery/{filename}",
+                    prompt=result.video_prompt or result.angle_name,
+                    width=img_width,
+                    height=img_height,
+                    category=category,
+                    is_shared=user.default_share if user.default_share is not None else True
+                )
+                db.add(new_image)
+                saved_count += 1
+            except Exception as e:
+                logger.error(f"Failed to save gallery image: {e}")
+
+    if saved_count > 0:
+        db.commit()
+
+    return saved_count
+
+
+async def run_batch_generation_core(
+    db: Session,
+    user: User,
+    product_bytes: bytes,
+    ref_bytes: bytes,
+    scripts: str,
+    api_url: Optional[str],
+    gemini_api_key: Optional[str],
+    model_name: Optional[str],
+    aspect_ratio: str,
+    category: str,
+    progress_callback=None,
+) -> Dict[str, Any]:
+    print(f"DEBUG: Received batch-generate request. Scripts length: {len(scripts)}", flush=True)
+
+    api_url, gemini_api_key, model_name = resolve_batch_generation_config(db, api_url, gemini_api_key, model_name)
+    if not api_url or not gemini_api_key:
+        raise HTTPException(status_code=400, detail="Missing API Configuration")
+    if not model_name:
+        model_name = "gemini-3-pro-image-preview"
+
+    product_b64 = base64.b64encode(product_bytes).decode('utf-8')
+    ref_b64 = base64.b64encode(ref_bytes).decode('utf-8')
+
+    prompts_map = get_batch_prompts_map(scripts)
+    print(f"DEBUG: Prompts Map size: {len(prompts_map)} Keys: {list(prompts_map.keys())}", flush=True)
+
+    sem = asyncio.Semaphore(3)
+
+    async def safe_call(name, prompt):
+        print(f"DEBUG: Starting safe_call for {name}", flush=True)
+        async with sem:
+            async with httpx.AsyncClient() as client:
+                final_prompt = f"{prompt} --ar {aspect_ratio}" if aspect_ratio else prompt
+                result = await call_openai_compatible_api(
+                    client, api_url, gemini_api_key, product_b64, ref_b64, name, final_prompt, model_name
+                )
+                result.video_prompt = prompt
+                logger.info(f"SafeCall Result for {name}: video_prompt len={len(prompt) if prompt else 0}")
+                return result
+
+    async def indexed_safe_call(index, name, prompt):
+        result = await safe_call(name, prompt)
+        return index, result
+
+    ordered_results: List[Optional[ImageResult]] = [None] * len(prompts_map)
+    task_specs = list(prompts_map.items())
+    tasks = [
+        asyncio.create_task(indexed_safe_call(index, name, prompt))
+        for index, (name, prompt) in enumerate(task_specs)
+    ]
+
+    for completed_task in asyncio.as_completed(tasks):
+        index, result = await completed_task
+        ordered_results[index] = result
+
+        if progress_callback:
+            partial_results = serialize_batch_results(ordered_results)
+            callback_result = progress_callback(partial_results, len(partial_results), len(task_specs))
+            if asyncio.iscoroutine(callback_result):
+                await callback_result
+
+    final_results = [result for result in ordered_results if result is not None]
+    await save_batch_results_to_gallery(db, user, final_results, category)
+
+    valid_results = serialize_batch_results(ordered_results)
+    if valid_results:
+        logger.info(f"Final Batch Results Sample: {valid_results[0].keys()} has_prompt={'video_prompt' in valid_results[0]}")
+    else:
+        logger.info("Final Batch Results Sample: no results returned")
+
+    try:
+        activity = UserActivity(
+            user_id=user.id,
+            action="image_gen_complete",
+            details=f"图片生成完成 | 生成 {len(valid_results)} 张 | 类目: {category}"
+        )
+        db.add(activity)
+        db.commit()
+        await connection_manager.update_user_activity(user.id, "空闲")
+    except Exception as act_err:
+        logger.warning(f"Failed to log image completion: {act_err}")
+
+    return {
+        "status": "completed",
+        "total_generated": len(valid_results),
+        "results": valid_results
+    }
+
+
+async def process_batch_generate_async_task(task_id: str, payload: Dict[str, Any], user_id: int):
+    task_status = BATCH_GENERATE_ASYNC_STATUS.get(task_id)
+    if not task_status:
+        return
+
+    db = SessionLocal()
+    try:
+        task_status["status"] = "processing"
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        async def update_progress(results, completed_count, total_requested):
+            task_status["status"] = "processing"
+            task_status["total_requested"] = total_requested
+            task_status["completed_count"] = completed_count
+            task_status["results"] = results
+            task_status["error"] = None
+
+        response = await run_batch_generation_core(
+            db=db,
+            user=user,
+            product_bytes=payload["product_bytes"],
+            ref_bytes=payload["ref_bytes"],
+            scripts=payload["scripts"],
+            api_url=payload.get("api_url"),
+            gemini_api_key=payload.get("gemini_api_key"),
+            model_name=payload.get("model_name"),
+            aspect_ratio=payload.get("aspect_ratio", "1:1"),
+            category=payload.get("category", "other"),
+            progress_callback=update_progress,
+        )
+        response_results = response.get("results", [])
+        has_item_errors = any(
+            isinstance(result, dict) and result.get("error")
+            for result in response_results
+        )
+
+        task_status["status"] = "completed_with_errors" if has_item_errors else "completed"
+        task_status["completed_count"] = len(response_results)
+        task_status["results"] = response_results
+        task_status["error"] = None
+    except Exception as e:
+        error_message = str(getattr(e, "detail", e))
+        logger.exception(f"Async batch generation failed for task {task_id}: {error_message}")
+        task_status["status"] = "failed"
+        task_status["completed_count"] = len(task_status.get("results", []))
+        task_status["error"] = error_message
+        try:
+            await connection_manager.update_user_activity(user_id, "空闲")
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
 # --- Main Endpoint ---
 @app.post("/api/v1/batch-generate", status_code=202)
 async def batch_generate_workflow(
@@ -1581,259 +1875,95 @@ async def batch_generate_workflow(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
-    # Log Usage
-    try:
-        # Scripts is JSON string list of objects.
-        # Estimate count?
-        import json
-        scripts_list = json.loads(scripts)
-        count = len(scripts_list)
-        
-        log = ImageGenerationLog(user_id=user.id, count=count)
-        db.add(log)
-        
-        # Log activity for monitoring
-        activity = UserActivity(
-            user_id=user.id,
-            action="image_gen_start",
-            details=f"开始生成 {count} 张图片 | 类目: {category} | 比例: {aspect_ratio}"
-        )
-        db.add(activity)
-        db.commit()
-        
-        # Update user's real-time status and broadcast to admins
-        try:
-            await connection_manager.update_user_activity(user.id, f"正在生成 {count} 张图片")
-        except Exception:
-            pass  # WebSocket not required
-    except Exception as e:
-        logger.error(f"Failed to log usage: {e}")
+    count = len(get_batch_prompts_map(scripts))
+    await log_batch_generation_start(db, user, count, category, aspect_ratio)
 
-    print(f"DEBUG: Received batch-generate request. Scripts length: {len(scripts)}", flush=True)
-    # Resolve Config
-    db_config = None
-    if not api_url or not gemini_api_key or not model_name:
-        # Fetch from DB if not provided in form (e.g. from frontend state bugs)
-        db_config_list = db.query(SystemConfig).all()
-        config_dict = {item.key: item.value for item in db_config_list}
-        if not api_url: api_url = config_dict.get("api_url")
-        if not gemini_api_key: gemini_api_key = config_dict.get("api_key")
-        if not model_name: model_name = config_dict.get("model_name")
-    
-    # Analysis Model
-    db_config_list = db.query(SystemConfig).all()
-    config_dict = {item.key: item.value for item in db_config_list}
-    analysis_model_name = config_dict.get("analysis_model_name", "gemini-3-pro-preview")
-
-    # 1. Read Images
     product_bytes = await product_img.read()
     ref_bytes = await ref_img.read()
-    product_b64 = base64.b64encode(product_bytes).decode('utf-8')
-    ref_b64 = base64.b64encode(ref_bytes).decode('utf-8')
 
-    # 3. Determine Prompts
-    prompts_map = ANGLES_PROMPTS
-    if scripts:
-        try:
-            import json
-            script_list = json.loads(scripts)
-            # script_list should be [{'angle_name': '...', 'script': '...'}, ...]
-            prompts_map = { item['angle_name']: item['script'] for item in script_list }
-        except Exception as e:
-            logger.error(f"Failed to parse scripts: {e}")
-            pass
-    print(f"DEBUG: Prompts Map size: {len(prompts_map)} Keys: {list(prompts_map.keys())}", flush=True)
+    return await run_batch_generation_core(
+        db=db,
+        user=user,
+        product_bytes=product_bytes,
+        ref_bytes=ref_bytes,
+        scripts=scripts,
+        api_url=api_url,
+        gemini_api_key=gemini_api_key,
+        model_name=model_name,
+        aspect_ratio=aspect_ratio,
+        category=category,
+    )
 
-    # 4. Concurrency
-    sem = asyncio.Semaphore(3) 
 
-    async def clean_prompt_for_video(client, api_url, api_key, original_prompt, model_name):
-        system_instruction = (
-            "You are an expert prompt engineer. Your task is to rewrite the given image generation prompt "
-            "into a fluent, descriptive, natural language paragraph suitable for a text-to-video model (like Sora or Veo). "
-            "Remove any 'Generate a...' commands or system/technical instructions. "
-            "Focus on describing the visual subject, lighting, and composition as a continuous scene. "
-            "Keep it under 60 words."
-        )
-        
-        payload = {
-            "model": model_name,
-            "messages": [
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": f"Original Prompt: {original_prompt}"}
-            ],
-            "max_tokens": 100
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-        
-        logger.info(f"Cleaning prompt using model: {model_name}")
+@app.post("/api/v1/batch-generate-async", status_code=202)
+async def batch_generate_workflow_async(
+    background_tasks: BackgroundTasks,
+    product_img: UploadFile = File(...),
+    ref_img: UploadFile = File(...),
+    scripts: str = Form(...),
+    api_url: str = Form(None),
+    gemini_api_key: str = Form(None),
+    model_name: str = Form(None),
+    aspect_ratio: str = Form("1:1"),
+    category: str = Form("other"),
+    scene_style_prompt: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    total_requested = len(get_batch_prompts_map(scripts))
+    await log_batch_generation_start(db, user, total_requested, category, aspect_ratio)
 
-        try:
-            target_url = api_url
-            if not target_url.endswith("/chat/completions"):
-                 target_url = f"{target_url.rstrip('/')}/chat/completions"
-            
-            resp = await client.post(target_url, json=payload, headers=headers, timeout=60.0)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("choices", [])[0].get("message", {}).get("content", "").strip()
-            else:
-                 logger.error(f"Prompt cleaning API error: {resp.text}")
-        except Exception as e:
-            logger.error(f"Prompt cleaning failed: {e}")
-        return original_prompt # Fallback
+    product_bytes = await product_img.read()
+    ref_bytes = await ref_img.read()
+    task_id = str(uuid.uuid4())
 
-    async def safe_call(name, prompt):
-        print(f"DEBUG: Starting safe_call for {name}", flush=True)
-        async with sem:
-            async with httpx.AsyncClient() as client:
-                # Add Aspect Ratio to prompt if needed
-                final_prompt = prompt
-                if aspect_ratio:
-                     final_prompt = f"{prompt} --ar {aspect_ratio}"
+    BATCH_GENERATE_ASYNC_STATUS[task_id] = {
+        "user_id": user.id,
+        "status": "started",
+        "total_requested": total_requested,
+        "completed_count": 0,
+        "results": [],
+        "error": None,
+    }
 
-                result = await call_openai_compatible_api(
-                    client, api_url, gemini_api_key, product_b64, ref_b64, name, final_prompt, model_name
-                )
-                
-                # Use original Step 2 Prompt directly (User Request)
-                # cleaned_prompt = await clean_prompt_for_video(client, api_url, gemini_api_key, prompt, analysis_model_name)
-                # logger.info(f"Video Prompt generated for {name}: {cleaned_prompt[:50]}...")
-                
-                result.video_prompt = prompt
-                
-                # Verify persistence
-                logger.info(f"SafeCall Result for {name}: video_prompt len={len(prompt) if prompt else 0}")
-                
-                return result
+    background_tasks.add_task(
+        process_batch_generate_async_task,
+        task_id,
+        {
+            "product_bytes": product_bytes,
+            "ref_bytes": ref_bytes,
+            "scripts": scripts,
+            "api_url": api_url,
+            "gemini_api_key": gemini_api_key,
+            "model_name": model_name,
+            "aspect_ratio": aspect_ratio,
+            "category": category,
+            "scene_style_prompt": scene_style_prompt,
+        },
+        user.id,
+    )
 
-    tasks = []
-    for name, prompt in prompts_map.items():
-        tasks.append(safe_call(name, prompt))
-    
-    results = await asyncio.gather(*tasks)
-    
-    # --- Persistence Logic for Gallery ---
-    gallery_dir = "/app/uploads/gallery"
-    os.makedirs(gallery_dir, exist_ok=True)
-    
-    saved_count = 0
-    async with httpx.AsyncClient() as download_client:
-        for idx, r in enumerate(results):
-            logger.info(f"Gallery save check [{idx}]: has_base64={bool(r.image_base64)}, error={r.error}, base64_len={len(r.image_base64) if r.image_base64 else 0}")
-            if r.image_base64 and not r.error:
-                try:
-                    img_data = None
-                    b64_data = r.image_base64
-                    
-                    # Check if it's a URL (API sometimes returns image URL instead of base64)
-                    if b64_data.startswith("http://") or b64_data.startswith("https://"):
-                        logger.info(f"Downloading image from URL: {b64_data[:100]}...")
-                        try:
-                            resp = await download_client.get(b64_data, timeout=60.0)
-                            if resp.status_code == 200:
-                                img_data = resp.content
-                                logger.info(f"Downloaded image: {len(img_data)} bytes")
-                            else:
-                                logger.error(f"Failed to download image: HTTP {resp.status_code}")
-                                continue
-                        except Exception as dl_err:
-                            logger.error(f"Image download error: {dl_err}")
-                            continue
-                    else:
-                        # Handle base64 data
-                        if "," in b64_data:
-                            b64_data = b64_data.split(",")[1]
-                        
-                        img_data = base64.b64decode(b64_data)
-                    
-                    if not img_data:
-                        logger.error("No image data to save")
-                        continue
-                    
-                    # Validate that we have valid image data (JPEG or PNG magic bytes)
-                    if not (img_data[:2] == b'\xff\xd8' or img_data[:8] == b'\x89PNG\r\n\x1a\n'):
-                        logger.error(f"Invalid image data (first bytes: {img_data[:10]})")
-                        continue
-                    
-                    # Determine extension based on magic bytes
-                    ext = ".jpg" if img_data[:2] == b'\xff\xd8' else ".png"
-                    
-                    # 2. Save to Disk
-                    filename = f"gen_{user.id}_{uuid.uuid4().hex}{ext}"
-                    file_path = os.path.join(gallery_dir, filename)
-                    
-                    with open(file_path, "wb") as f:
-                        f.write(img_data)
-                    
-                    logger.info(f"Saved gallery image: {filename} ({len(img_data)} bytes)")
-                    
-                    # Get image dimensions
-                    img_width, img_height = None, None
-                    try:
-                        from PIL import Image
-                        from io import BytesIO
-                        img_pil = Image.open(BytesIO(img_data))
-                        img_width, img_height = img_pil.size
-                    except Exception as dim_err:
-                        logger.warning(f"Could not get image dimensions: {dim_err}")
-                        
-                    # 3. Save to DB with category and dimensions
-                    # Note: r.video_prompt holds the prompt used for this image
-                    new_image = SavedImage(
-                        user_id=user.id,
-                        filename=filename,
-                        file_path=file_path,
-                        url=f"/uploads/gallery/{filename}",
-                        prompt=r.video_prompt or r.angle_name,  # Fallback
-                        width=img_width,
-                        height=img_height,
-                        category=category,  # Use category from request
-                        is_shared=user.default_share if user.default_share is not None else True
-                    )
-                    db.add(new_image)
-                    saved_count += 1
-                except Exception as e:
-                    logger.error(f"Failed to save gallery image: {e}")
-    
-    if saved_count > 0:
-        db.commit()
-    # -------------------------------------
-
-    # Debug results
-    valid_results = []
-    for r in results:
-        r_dict = r.dict()
-        # Explicitly ensure video_prompt is copied if missing (though .dict() should work)
-        if r.video_prompt and not r_dict.get("video_prompt"):
-             r_dict["video_prompt"] = r.video_prompt
-        valid_results.append(r_dict)
-        
-    logger.info(f"Final Batch Results Sample: {valid_results[0].keys()} has_prompt={'video_prompt' in valid_results[0]}")
-    
-    # Log completion activity and reset user status
-    try:
-        activity = UserActivity(
-            user_id=user.id,
-            action="image_gen_complete",
-            details=f"图片生成完成 | 生成 {len(valid_results)} 张 | 类目: {category}"
-        )
-        db.add(activity)
-        db.commit()
-        
-        # Reset user status to idle
-        await connection_manager.update_user_activity(user.id, "空闲")
-    except Exception as act_err:
-        logger.warning(f"Failed to log image completion: {act_err}")
-    
     return {
-        "status": "completed",
-        "total_generated": len(valid_results),
-        "results": valid_results
+        "task_id": task_id,
+        "status": "started",
+        "total_requested": total_requested,
+    }
+
+
+@app.get("/api/v1/batch-generate-async/{task_id}")
+async def get_batch_generate_async_status(task_id: str, user: User = Depends(get_current_user)):
+    task_status = BATCH_GENERATE_ASYNC_STATUS.get(task_id)
+    if not task_status:
+        raise HTTPException(status_code=404, detail="Batch task not found")
+    if task_status.get("user_id") != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    return {
+        "status": task_status.get("status", "processing"),
+        "total_requested": task_status.get("total_requested", 0),
+        "completed_count": task_status.get("completed_count", 0),
+        "results": task_status.get("results", []),
+        "error": task_status.get("error"),
     }
 
 
@@ -2145,7 +2275,12 @@ async def simple_batch_generate(
         image_b64_list.append(b64)
     
     all_results = []
-    sem = asyncio.Semaphore(1)
+    try:
+        max_concurrent = int(config_dict.get("max_concurrent_image", 1))
+    except (TypeError, ValueError):
+        max_concurrent = 1
+    max_concurrent = max(1, min(max_concurrent, gen_count))
+    sem = asyncio.Semaphore(max_concurrent)
     
     async def generate_one_result(var_index: int):
         async with sem:
@@ -2801,10 +2936,14 @@ def get_gallery_images(
     total = query.count()
     images = query.order_by(SavedImage.created_at.desc()).limit(limit).offset(offset).all()
     
+    # Pre-fetch all creators in a single query to avoid N+1
+    user_ids = list(set(img.user_id for img in images if img.user_id))
+    creators = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    
     # Add username and metadata to each image
     result_items = []
     for img in images:
-        creator = db.query(User).filter(User.id == img.user_id).first()
+        creator = creators.get(img.user_id)
         result_items.append({
             "id": img.id,
             "user_id": img.user_id,
@@ -2819,7 +2958,6 @@ def get_gallery_images(
             "is_shared": img.is_shared,
             "created_at": img.created_at
         })
-    
     return {"total": total, "items": result_items}
 
 @app.delete("/api/v1/gallery/images/{image_id}")
@@ -2975,10 +3113,14 @@ def get_gallery_videos(
     total = query.count()
     videos = query.order_by(VideoQueueItem.created_at.desc()).limit(limit).offset(offset).all()
     
+    # Pre-fetch all creators in a single query to avoid N+1
+    user_ids = list(set(vid.user_id for vid in videos if vid.user_id))
+    creators = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    
     # Build response with username and preview_url
     result_items = []
     for vid in videos:
-        creator = db.query(User).filter(User.id == vid.user_id).first()
+        creator = creators.get(vid.user_id)
         result_items.append({
             "id": vid.id,
             "filename": vid.filename,
@@ -2999,7 +3141,6 @@ def get_gallery_videos(
             "review_status": vid.review_status,
             "reviewed_at": vid.reviewed_at
         })
-    
     return {"total": total, "items": result_items}
 
 # --- Video Review Endpoints ---

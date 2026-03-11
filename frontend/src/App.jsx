@@ -1,19 +1,21 @@
-import { useState, useEffect } from 'react'
-import ImageGenerator from './ImageGenerator'
-import VideoGenerator from './VideoGenerator'
-import SimpleBatchGenerator from './SimpleBatchGenerator'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import Login from './Login'
-import Settings from './Settings';
-import StoryGenerator from './StoryGenerator';
-import UserManagement from './UserManagement';
-import FloatingGallery from './FloatingGallery';
-import AdminDashboard from './AdminDashboard';
-import PublicGallery from './PublicGallery';
-import ProfileSettings from './ProfileSettings';
-import MexicoBeautyStation from './MexicoBeautyStation';
-import VoiceClone from './VoiceClone';
+import PublicGallery from './PublicGallery'
 import { useWebSocket } from './hooks/useWebSocket';
 import './App.css';
+
+// Lazy load heavy feature modules - only downloaded when user navigates to them
+const ImageGenerator = lazy(() => import('./ImageGenerator'));
+const VideoGenerator = lazy(() => import('./VideoGenerator'));
+const SimpleBatchGenerator = lazy(() => import('./SimpleBatchGenerator'));
+const Settings = lazy(() => import('./Settings'));
+const StoryGenerator = lazy(() => import('./StoryGenerator'));
+const UserManagement = lazy(() => import('./UserManagement'));
+const FloatingGallery = lazy(() => import('./FloatingGallery'));
+const AdminDashboard = lazy(() => import('./AdminDashboard'));
+const ProfileSettings = lazy(() => import('./ProfileSettings'));
+const MexicoBeautyStation = lazy(() => import('./MexicoBeautyStation'));
+const VoiceClone = lazy(() => import('./VoiceClone'));
 
 const BACKEND_URL = ''
 
@@ -192,13 +194,15 @@ function App() {
     setGeneratedImages(results)
   }
 
-  const handleSelectForVideo = (imgUrl, prompt, category) => {
+  const handleSelectForVideo = useCallback((imgUrl, prompt, category) => {
     setSelectedImage(imgUrl)
     setSelectedVideoPrompt(prompt || '')
-    setSelectedCategory(category || 'daily')  // Pass category
+    setSelectedCategory(category || 'daily')
     setSelectionTimestamp(Date.now())
     setActiveTab('video')
-  }
+  }, [])
+
+  const closeGallery = useCallback(() => setIsGalleryOpen(false), [])
 
   if (!isLoggedIn) {
     if (showLoginPage) {
@@ -395,6 +399,7 @@ function App() {
       </aside>
 
       <main className="main-content" id="main-content" tabIndex={-1}>
+        <Suspense fallback={<div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'60vh',fontSize:'1.2rem',color:'var(--text-secondary, #888)'}}>加载中...</div>}>
         <div className={`tab-panel with-height ${activeTab === 'batch' ? 'active' : ''}`}>
           <ImageGenerator
             token={token}
@@ -403,6 +408,7 @@ function App() {
             onResultsChange={setGeneratedImages}
             onSelectForVideo={handleSelectForVideo}
             onTabChange={setActiveTab}
+            onOpenGallery={() => setIsGalleryOpen(true)}
           />
         </div>
 
@@ -473,6 +479,7 @@ function App() {
             </div>
           </>
         )}
+        </Suspense>
       </main>
 
       {/* Floating Gallery Trigger Button - Right Side */}
@@ -488,7 +495,7 @@ function App() {
       {/* Floating Gallery Drawer */}
       <FloatingGallery
         isOpen={isGalleryOpen}
-        onClose={() => setIsGalleryOpen(false)}
+        onClose={closeGallery}
         onSelectForVideo={handleSelectForVideo}
       />
     </div>
