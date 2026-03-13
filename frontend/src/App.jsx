@@ -16,6 +16,7 @@ const AdminDashboard = lazy(() => import('./AdminDashboard'));
 const ProfileSettings = lazy(() => import('./ProfileSettings'));
 const MexicoBeautyStation = lazy(() => import('./MexicoBeautyStation'));
 const VoiceClone = lazy(() => import('./VoiceClone'));
+const ApiWorkbench = lazy(() => import('./ApiWorkbench'));
 
 const BACKEND_URL = ''
 
@@ -363,6 +364,16 @@ function App() {
                 <span className="icon">👥</span>
                 {!sidebarCollapsed && <span className="label">用户管理</span>}
               </button>
+              <button
+                className={`sidebar-item ${activeTab === 'api-workbench' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('api-workbench'); setMobileMenuOpen(false); }}
+                title="API 工作台"
+                aria-label="API 工作台"
+                aria-current={activeTab === 'api-workbench' ? 'page' : undefined}
+              >
+                <span className="icon">🧪</span>
+                {!sidebarCollapsed && <span className="label">API 工作台</span>}
+              </button>
             </>
           )}
         </div>
@@ -477,6 +488,9 @@ function App() {
             <div className={`tab-panel ${activeTab === 'users' ? 'active' : ''}`}>
               <UserManagement token={token} />
             </div>
+            <div className={`tab-panel with-height with-overflow ${activeTab === 'api-workbench' ? 'active' : ''}`}>
+              <ApiWorkbench token={token} />
+            </div>
           </>
         )}
         </Suspense>
@@ -503,4 +517,3 @@ function App() {
 }
 
 export default App
-
