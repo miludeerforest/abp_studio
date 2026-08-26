@@ -57,3 +57,9 @@ frontend/yarn-error.log*
 .agent/
 .gemini/
 .sisyphus/
+
+# Rust and local build artifacts
+**/target/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/

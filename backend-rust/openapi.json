@@ -1,0 +1,1242 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ABP Studio Rust API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/public/videos": {
+      "get": {
+        "operationId": "get_public_videos",
+        "summary": "Migrated from Python get_public_videos",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/public/config": {
+      "get": {
+        "operationId": "get_public_config",
+        "summary": "Migrated from Python get_public_config",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Migrated from Python login",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "turnstile_token": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/profile": {
+      "get": {
+        "operationId": "get_user_profile",
+        "summary": "Migrated from Python get_user_profile",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "put": {
+        "operationId": "update_user_profile",
+        "summary": "Migrated from Python update_user_profile",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/user/avatar": {
+      "post": {
+        "operationId": "upload_avatar",
+        "summary": "Migrated from Python upload_avatar",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/user/experience/history": {
+      "get": {
+        "operationId": "get_experience_history",
+        "summary": "Migrated from Python get_experience_history",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "operationId": "get_users",
+        "summary": "Migrated from Python get_users",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "operationId": "create_user",
+        "summary": "Migrated from Python create_user",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}": {
+      "put": {
+        "operationId": "update_user",
+        "summary": "Migrated from Python update_user",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete_user",
+        "summary": "Migrated from Python delete_user",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/stats": {
+      "get": {
+        "operationId": "get_stats",
+        "summary": "Migrated from Python get_stats",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/config": {
+      "get": {
+        "operationId": "get_config",
+        "summary": "Migrated from Python get_config",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "operationId": "update_config",
+        "summary": "Migrated from Python update_config",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/models": {
+      "post": {
+        "operationId": "get_models",
+        "summary": "Migrated from Python get_models",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/analyze": {
+      "post": {
+        "operationId": "analyze_endpoint",
+        "summary": "Migrated from Python analyze_endpoint",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/batch-generate": {
+      "post": {
+        "operationId": "batch_generate_workflow",
+        "summary": "Migrated from Python batch_generate_workflow",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/batch-generate-async": {
+      "post": {
+        "operationId": "batch_generate_workflow_async",
+        "summary": "Migrated from Python batch_generate_workflow_async",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/batch-generate-async/{task_id}": {
+      "get": {
+        "operationId": "get_batch_generate_async_status",
+        "summary": "Migrated from Python get_batch_generate_async_status",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/simple-batch-generate": {
+      "post": {
+        "operationId": "simple_batch_generate",
+        "summary": "Migrated from Python simple_batch_generate",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/story-analyze": {
+      "post": {
+        "operationId": "analyze_storyboard_endpoint",
+        "summary": "Migrated from Python analyze_storyboard_endpoint",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/generate-video-prompt": {
+      "post": {
+        "operationId": "generate_video_prompt_endpoint",
+        "summary": "Migrated from Python generate_video_prompt_endpoint",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/story-generate": {
+      "post": {
+        "operationId": "generate_story_endpoint",
+        "summary": "Migrated from Python generate_story_endpoint",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/images": {
+      "get": {
+        "operationId": "get_gallery_images",
+        "summary": "Migrated from Python get_gallery_images",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/images/{image_id}": {
+      "delete": {
+        "operationId": "delete_gallery_image",
+        "summary": "Migrated from Python delete_gallery_image",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/images/batch-delete": {
+      "post": {
+        "operationId": "batch_delete_images",
+        "summary": "Migrated from Python batch_delete_images",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/videos/batch-delete": {
+      "post": {
+        "operationId": "batch_delete_videos",
+        "summary": "Migrated from Python batch_delete_videos",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/videos": {
+      "get": {
+        "operationId": "get_gallery_videos",
+        "summary": "Migrated from Python get_gallery_videos",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/videos/{video_id}/review": {
+      "get": {
+        "operationId": "get_video_review",
+        "summary": "Migrated from Python get_video_review",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "operationId": "trigger_video_review_api",
+        "summary": "Migrated from Python trigger_video_review_api",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/images/{image_id}/share": {
+      "post": {
+        "operationId": "toggle_share_image",
+        "summary": "Migrated from Python toggle_share_image",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/videos/{video_id}/share": {
+      "post": {
+        "operationId": "toggle_share_video",
+        "summary": "Migrated from Python toggle_share_video",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/images/batch-share": {
+      "post": {
+        "operationId": "batch_share_images",
+        "summary": "Migrated from Python batch_share_images",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/videos/batch-share": {
+      "post": {
+        "operationId": "batch_share_videos",
+        "summary": "Migrated from Python batch_share_videos",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/images/share-all": {
+      "post": {
+        "operationId": "share_all_images",
+        "summary": "Migrated from Python share_all_images",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/videos/share-all": {
+      "post": {
+        "operationId": "share_all_videos",
+        "summary": "Migrated from Python share_all_videos",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/images/batch-download": {
+      "post": {
+        "operationId": "batch_download_images",
+        "summary": "Migrated from Python batch_download_images",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery/videos/batch-download": {
+      "post": {
+        "operationId": "batch_download_videos",
+        "summary": "Migrated from Python batch_download_videos",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/queue": {
+      "get": {
+        "operationId": "get_queue",
+        "summary": "Migrated from Python get_queue",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "operationId": "add_to_queue",
+        "summary": "Migrated from Python add_to_queue",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "clear_queue",
+        "summary": "Migrated from Python clear_queue",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/queue/{item_id}": {
+      "put": {
+        "operationId": "update_queue_item",
+        "summary": "Migrated from Python update_queue_item",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete_queue_item",
+        "summary": "Migrated from Python delete_queue_item",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/merge-videos": {
+      "post": {
+        "operationId": "merge_videos_endpoint",
+        "summary": "Migrated from Python merge_videos_endpoint",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/queue/{item_id}/retry": {
+      "post": {
+        "operationId": "retry_queue_item",
+        "summary": "Migrated from Python retry_queue_item",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/queue/{item_id}/generate": {
+      "post": {
+        "operationId": "generate_queue_item_endpoint",
+        "summary": "Migrated from Python generate_queue_item_endpoint",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/story-chain": {
+      "post": {
+        "operationId": "create_story_chain",
+        "summary": "Migrated from Python create_story_chain",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/story-chain/{chain_id}": {
+      "get": {
+        "operationId": "get_story_chain_status",
+        "summary": "Migrated from Python get_story_chain_status",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/story-fission": {
+      "post": {
+        "operationId": "create_story_fission",
+        "summary": "Migrated from Python create_story_fission",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/story-fission/{fission_id}": {
+      "get": {
+        "operationId": "get_story_fission_status",
+        "summary": "Migrated from Python get_story_fission_status",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/story-fission/{fission_id}/branch/{branch_id}/retry": {
+      "post": {
+        "operationId": "retry_fission_branch",
+        "summary": "Migrated from Python retry_fission_branch",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/story-fission/{fission_id}/remerge": {
+      "post": {
+        "operationId": "remerge_fission_story",
+        "summary": "Migrated from Python remerge_fission_story",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/live-status": {
+      "get": {
+        "operationId": "get_admin_live_status",
+        "summary": "Migrated from Python get_admin_live_status",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/activities": {
+      "delete": {
+        "operationId": "clear_activities",
+        "summary": "Migrated from Python clear_activities",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "operationId": "get_all_activities",
+        "summary": "Migrated from Python get_all_activities",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/user/{user_id}/tasks": {
+      "get": {
+        "operationId": "get_user_tasks_admin",
+        "summary": "Migrated from Python get_user_tasks_admin",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/character/generate": {
+      "post": {
+        "operationId": "generate_character_video",
+        "summary": "Migrated from Python generate_character_video",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/keywords/analyze-single": {
+      "post": {
+        "operationId": "analyze_single_keyword",
+        "summary": "Migrated from Python analyze_single_keyword",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/keywords/history": {
+      "post": {
+        "operationId": "save_keyword_history",
+        "summary": "Migrated from Python save_keyword_history",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "operationId": "get_keyword_history",
+        "summary": "Migrated from Python get_keyword_history",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "clear_keyword_history",
+        "summary": "Migrated from Python clear_keyword_history",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/keywords/history/{index}": {
+      "delete": {
+        "operationId": "delete_keyword_history",
+        "summary": "Migrated from Python delete_keyword_history",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/keywords/export-excel": {
+      "post": {
+        "operationId": "export_keywords_excel",
+        "summary": "Migrated from Python export_keywords_excel",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/keywords/sync-feishu": {
+      "post": {
+        "operationId": "sync_keywords_to_feishu",
+        "summary": "Migrated from Python sync_keywords_to_feishu",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/mexico-beauty/keyword-analysis-single": {
+      "post": {
+        "operationId": "mexico_keyword_analysis_single",
+        "summary": "Migrated from Python mexico_keyword_analysis_single",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mexico-beauty/title-optimization-single": {
+      "post": {
+        "operationId": "mexico_title_optimization_single",
+        "summary": "Migrated from Python mexico_title_optimization_single",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mexico-beauty/image-prompt-single": {
+      "post": {
+        "operationId": "mexico_image_prompt_single",
+        "summary": "Migrated from Python mexico_image_prompt_single",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mexico-beauty/description-single": {
+      "post": {
+        "operationId": "mexico_description_single",
+        "summary": "Migrated from Python mexico_description_single",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mexico-beauty/image-prompts-batch": {
+      "post": {
+        "operationId": "mexico_image_prompts_batch",
+        "summary": "Migrated from Python mexico_image_prompts_batch",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mexico-beauty/refine-prompt": {
+      "post": {
+        "operationId": "mexico_refine_prompt",
+        "summary": "Migrated from Python mexico_refine_prompt",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mexico-beauty/generate-image": {
+      "post": {
+        "operationId": "mexico_generate_image",
+        "summary": "Migrated from Python mexico_generate_image",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mexico-beauty/sync-feishu": {
+      "post": {
+        "operationId": "mexico_beauty_sync_feishu",
+        "summary": "Migrated from Python mexico_beauty_sync_feishu",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mexico-beauty/sync-description-feishu": {
+      "post": {
+        "operationId": "sync_description_to_feishu",
+        "summary": "Migrated from Python sync_description_to_feishu",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/voice-clone/analyze-video": {
+      "post": {
+        "operationId": "voice_clone_analyze_video",
+        "summary": "Migrated from Python voice_clone_analyze_video",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/voice-clone/synthesize-speech": {
+      "post": {
+        "operationId": "voice_clone_synthesize_speech",
+        "summary": "Migrated from Python voice_clone_synthesize_speech",
+        "responses": {
+          "200": {
+            "description": "Compatible JSON response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

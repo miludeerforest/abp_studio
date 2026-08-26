@@ -3639,7 +3639,7 @@ async def merge_videos_endpoint(
     for v in videos:
         # result_url likely ends with filename
         filename = v.result_url.split('/')[-1]
-        local_path = os.path.join(QUEUE_DIR, filename)
+        local_path = os.path.join("/app/uploads/queue", filename)
         if os.path.exists(local_path):
             local_paths.append(local_path)
         else:
@@ -3651,9 +3651,9 @@ async def merge_videos_endpoint(
     # 3. Create ffmpeg list file
     import tempfile
     timestamp = int(datetime.now().timestamp())
-    concat_list_path = os.path.join(QUEUE_DIR, f"concat_list_{timestamp}.txt")
+    concat_list_path = os.path.join("/app/uploads/queue", f"concat_list_{timestamp}.txt")
     output_filename = f"merged_{timestamp}.mp4"
-    output_path = os.path.join(QUEUE_DIR, output_filename)
+    output_path = os.path.join("/app/uploads/queue", output_filename)
 
     try:
         with open(concat_list_path, 'w') as f:

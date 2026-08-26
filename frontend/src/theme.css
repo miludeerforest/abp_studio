@@ -1,0 +1,140 @@
+/* ============================================================
+   theme.css — 设计令牌精修层（在 index.css 之后加载，负责全局打磨）
+   覆盖范围：暗色调色板升级 / 焦点可达性 / 滚动条 / 选区 /
+   主题切换过渡 / 动效降级 / 基础控件一致性
+   ============================================================ */
+
+/* ---------- 暗色主题：更深背景 + 分层表面 ---------- */
+:root {
+  --bg-color: #090a12;
+  --sidebar-bg: #101120;
+  --card-bg: #161726;
+  --card-border: #262840;
+
+  /* 语义色补充 */
+  --warning-color: #f59e0b;
+  --info-color: #38bdf8;
+
+  /* 阴影体系 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
+
+  /* 焦点环（键盘可达性） */
+  --focus-ring: 0 0 0 2px rgba(99, 102, 241, 0.65);
+
+  /* 缓动曲线统一 */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------- 全局基础 ---------- */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  transition:
+    background-color 0.35s var(--ease-out),
+    color 0.35s var(--ease-out);
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.4);
+  color: #fff;
+}
+
+[data-theme="light"] ::selection {
+  background: rgba(0, 122, 255, 0.22);
+  color: #000;
+}
+
+/* ---------- 键盘焦点可见性（不影响鼠标点击） ---------- */
+:focus { outline: none; }
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 6px;
+}
+
+.sidebar-item:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---------- 自定义滚动条 ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.55);
+  background-clip: content-box;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.22);
+  background-clip: content-box;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.4);
+  background-clip: content-box;
+}
+
+/* ---------- 图片/媒体：避免布局抖动，圆角与卡片一致 ---------- */
+img,
+video {
+  max-width: 100%;
+}
+
+img[loading="lazy"] {
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: inherit;
+}
+
+/* ---------- 动效降级：尊重系统减少动态设置 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- 打印：隐藏交互壳层 ---------- */
+@media print {
+  .sidebar-nav,
+  .hamburger-btn,
+  .mobile-overlay,
+  .floating-gallery-drawer {
+    display: none !important;
+  }
+}

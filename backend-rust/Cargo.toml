@@ -1,0 +1,50 @@
+[workspace]
+resolver = "2"
+members = ["crates/abp-core", "crates/abp-infra", "crates/abp-ai", "crates/abp-api", "crates/abp-worker"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+regex = "1"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+jsonwebtoken = "9"
+bcrypt = "0.17"
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "postgres",
+    "chrono",
+    "json",
+    "migrate",
+] }
+redis = { version = "0.32", features = ["tokio-comp", "connection-manager"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+axum = { version = "0.8", features = ["ws", "multipart"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+tokio = { version = "1", features = ["full"] }
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+    "multipart",
+    "stream",
+] }
+dotenvy = "0.15"
+
+[profile.release]
+opt-level = 2
+lto = "thin"
+strip = true

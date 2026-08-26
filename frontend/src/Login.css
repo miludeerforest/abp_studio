@@ -232,3 +232,46 @@
 .login-submit-btn {
     margin-top: 1rem;
 }
+/* ============================================
+   登录页视觉精修（theme.css 配套）
+   ============================================ */
+
+/* 背景缓慢流动的光晕 */
+@keyframes login-glow-drift {
+    0%, 100% {
+        background-position: 0% 50%, 100% 50%;
+    }
+    50% {
+        background-position: 100% 50%, 0% 50%;
+    }
+}
+
+.login-container {
+    animation: login-glow-drift 18s ease-in-out infinite;
+}
+
+/* 卡片入场：上浮 + 淡入 */
+@keyframes login-card-enter {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.login-box {
+    animation: login-card-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 品牌图标轻微呼吸感 */
+@keyframes login-emoji-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+.login-emoji {
+    animation: login-emoji-float 3.2s ease-in-out infinite;
+}

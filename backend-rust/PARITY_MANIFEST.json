@@ -1,0 +1,2249 @@
+{
+  "generated_by": "backend-rust/tools/generate_parity_manifest.py",
+  "source_commit_scope": "working tree",
+  "python_route_count": 76,
+  "rust_registered_route_count": 77,
+  "routes": [
+    {
+      "id": "R-001",
+      "method": "GET",
+      "path": "/api/v1/public/videos",
+      "python_function": "get_public_videos",
+      "python_line": 541,
+      "async": false,
+      "auth": "public",
+      "request_parameters": [
+        "limit: int",
+        "offset: int"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "public",
+      "frontend_files": [
+        "frontend/src/PublicGallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL read-only"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-002",
+      "method": "GET",
+      "path": "/api/v1/public/config",
+      "python_function": "get_public_config",
+      "python_line": 576,
+      "async": false,
+      "auth": "public",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "public",
+      "frontend_files": [
+        "frontend/src/App.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL read-only"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-003",
+      "method": "POST",
+      "path": "/api/v1/login",
+      "python_function": "login",
+      "python_line": 619,
+      "async": true,
+      "auth": "public",
+      "request_parameters": [
+        "username: str",
+        "password: str",
+        "turnstile_token: Optional[str]"
+      ],
+      "response_model": "Token",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/Login.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-004",
+      "method": "GET",
+      "path": "/api/v1/user/profile",
+      "python_function": "get_user_profile",
+      "python_line": 686,
+      "async": false,
+      "auth": "bearer-user",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/App.jsx",
+        "frontend/src/ProfileSettings.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-005",
+      "method": "PUT",
+      "path": "/api/v1/user/profile",
+      "python_function": "update_user_profile",
+      "python_line": 707,
+      "async": false,
+      "auth": "bearer-user",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/App.jsx",
+        "frontend/src/ProfileSettings.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-006",
+      "method": "POST",
+      "path": "/api/v1/user/avatar",
+      "python_function": "upload_avatar",
+      "python_line": 723,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "file: UploadFile"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/ProfileSettings.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-007",
+      "method": "GET",
+      "path": "/api/v1/user/experience/history",
+      "python_function": "get_experience_history",
+      "python_line": 756,
+      "async": false,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "limit: int"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-008",
+      "method": "GET",
+      "path": "/api/v1/users",
+      "python_function": "get_users",
+      "python_line": 808,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/UserManagement.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-009",
+      "method": "POST",
+      "path": "/api/v1/users",
+      "python_function": "create_user",
+      "python_line": 836,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": "UserOut",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/UserManagement.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-010",
+      "method": "PUT",
+      "path": "/api/v1/users/{user_id}",
+      "python_function": "update_user",
+      "python_line": 848,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [
+        "user_id: int"
+      ],
+      "response_model": "UserOut",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/UserManagement.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-011",
+      "method": "DELETE",
+      "path": "/api/v1/users/{user_id}",
+      "python_function": "delete_user",
+      "python_line": 866,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [
+        "user_id: int"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/UserManagement.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-012",
+      "method": "GET",
+      "path": "/api/v1/stats",
+      "python_function": "get_stats",
+      "python_line": 886,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/UserManagement.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-013",
+      "method": "GET",
+      "path": "/api/v1/config",
+      "python_function": "get_config",
+      "python_line": 964,
+      "async": false,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": "ConfigItem",
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/App.jsx",
+        "frontend/src/apiWorkbenchCatalog.js",
+        "frontend/src/components/ProductDescriptionModule.jsx"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-014",
+      "method": "POST",
+      "path": "/api/v1/config",
+      "python_function": "update_config",
+      "python_line": 1027,
+      "async": false,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "config: ConfigItem"
+      ],
+      "response_model": "ConfigItem",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/App.jsx",
+        "frontend/src/apiWorkbenchCatalog.js",
+        "frontend/src/components/ProductDescriptionModule.jsx"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-015",
+      "method": "POST",
+      "path": "/api/v1/models",
+      "python_function": "get_models",
+      "python_line": 1048,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/Settings.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-016",
+      "method": "POST",
+      "path": "/api/v1/analyze",
+      "python_function": "analyze_endpoint",
+      "python_line": 1543,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "product_img: UploadFile",
+        "ref_img: UploadFile",
+        "category: str",
+        "custom_product_name: Optional[str]",
+        "api_url: str",
+        "gemini_api_key: str",
+        "model_name: str",
+        "gen_count: int"
+      ],
+      "response_model": "AnalyzeResponse",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "generation",
+      "frontend_files": [
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image provider",
+        "PostgreSQL image_logs/saved_images",
+        "uploads/gallery",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-017",
+      "method": "POST",
+      "path": "/api/v1/batch-generate",
+      "python_function": "batch_generate_workflow",
+      "python_line": 1865,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "product_img: UploadFile",
+        "ref_img: UploadFile",
+        "scripts: str",
+        "api_url: str",
+        "gemini_api_key: str",
+        "model_name: str",
+        "aspect_ratio: str",
+        "category: str",
+        "scene_style_prompt: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "generation",
+      "frontend_files": [
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image provider",
+        "PostgreSQL image_logs/saved_images",
+        "uploads/gallery",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-018",
+      "method": "POST",
+      "path": "/api/v1/batch-generate-async",
+      "python_function": "batch_generate_workflow_async",
+      "python_line": 1899,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "product_img: UploadFile",
+        "ref_img: UploadFile",
+        "scripts: str",
+        "api_url: str",
+        "gemini_api_key: str",
+        "model_name: str",
+        "aspect_ratio: str",
+        "category: str",
+        "scene_style_prompt: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "generation",
+      "frontend_files": [
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image provider",
+        "PostgreSQL image_logs/saved_images",
+        "uploads/gallery",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-019",
+      "method": "GET",
+      "path": "/api/v1/batch-generate-async/{task_id}",
+      "python_function": "get_batch_generate_async_status",
+      "python_line": 1954,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "task_id: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "generation",
+      "frontend_files": [
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image provider",
+        "PostgreSQL image_logs/saved_images",
+        "uploads/gallery",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-020",
+      "method": "POST",
+      "path": "/api/v1/simple-batch-generate",
+      "python_function": "simple_batch_generate",
+      "python_line": 2222,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "product_imgs: List[UploadFile]",
+        "prompt: str",
+        "category: str",
+        "aspect_ratio: str",
+        "scene_style_prompt: str",
+        "gen_count: int"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "generation",
+      "frontend_files": [
+        "frontend/src/SimpleBatchGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image provider",
+        "PostgreSQL image_logs/saved_images",
+        "uploads/gallery",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-021",
+      "method": "POST",
+      "path": "/api/v1/story-analyze",
+      "python_function": "analyze_storyboard_endpoint",
+      "python_line": 2412,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "image: UploadFile",
+        "topic: str",
+        "shot_count: int",
+        "category: str",
+        "api_url: str",
+        "gemini_api_key: str",
+        "model_name: str"
+      ],
+      "response_model": "StoryAnalysisResponse",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "story",
+      "frontend_files": [
+        "frontend/src/StoryGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image/video provider",
+        "uploads/story artifacts",
+        "persistent task status",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-022",
+      "method": "POST",
+      "path": "/api/v1/generate-video-prompt",
+      "python_function": "generate_video_prompt_endpoint",
+      "python_line": 2660,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "image: UploadFile",
+        "api_url: str",
+        "gemini_api_key: str",
+        "model_name: str"
+      ],
+      "response_model": "VideoPromptResponse",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "generation",
+      "frontend_files": [
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image provider",
+        "PostgreSQL image_logs/saved_images",
+        "uploads/gallery",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-023",
+      "method": "POST",
+      "path": "/api/v1/story-generate",
+      "python_function": "generate_story_endpoint",
+      "python_line": 2760,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "image: UploadFile",
+        "shots_json: str",
+        "api_url: str",
+        "gemini_api_key: str",
+        "model_name: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "story",
+      "frontend_files": [
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image/video provider",
+        "uploads/story artifacts",
+        "persistent task status",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-024",
+      "method": "GET",
+      "path": "/api/v1/gallery/images",
+      "python_function": "get_gallery_images",
+      "python_line": 2881,
+      "async": false,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "limit: int",
+        "offset: int",
+        "category: str",
+        "view_mode: str",
+        "user_id: int",
+        "start_date: str",
+        "end_date: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-025",
+      "method": "DELETE",
+      "path": "/api/v1/gallery/images/{image_id}",
+      "python_function": "delete_gallery_image",
+      "python_line": 2964,
+      "async": false,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "image_id: int"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-026",
+      "method": "POST",
+      "path": "/api/v1/gallery/images/batch-delete",
+      "python_function": "batch_delete_images",
+      "python_line": 2993,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-027",
+      "method": "POST",
+      "path": "/api/v1/gallery/videos/batch-delete",
+      "python_function": "batch_delete_videos",
+      "python_line": 3017,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-028",
+      "method": "GET",
+      "path": "/api/v1/gallery/videos",
+      "python_function": "get_gallery_videos",
+      "python_line": 3048,
+      "async": false,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "limit: int",
+        "offset: int",
+        "category: str",
+        "view_mode: str",
+        "user_id: int",
+        "start_date: str",
+        "end_date: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-029",
+      "method": "GET",
+      "path": "/api/v1/gallery/videos/{video_id}/review",
+      "python_function": "get_video_review",
+      "python_line": 3149,
+      "async": false,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "video_id: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-030",
+      "method": "POST",
+      "path": "/api/v1/gallery/videos/{video_id}/review",
+      "python_function": "trigger_video_review_api",
+      "python_line": 3179,
+      "async": true,
+      "auth": "admin",
+      "request_parameters": [
+        "video_id: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-031",
+      "method": "POST",
+      "path": "/api/v1/gallery/images/{image_id}/share",
+      "python_function": "toggle_share_image",
+      "python_line": 3217,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [
+        "image_id: int"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-032",
+      "method": "POST",
+      "path": "/api/v1/gallery/videos/{video_id}/share",
+      "python_function": "toggle_share_video",
+      "python_line": 3234,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [
+        "video_id: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-033",
+      "method": "POST",
+      "path": "/api/v1/gallery/images/batch-share",
+      "python_function": "batch_share_images",
+      "python_line": 3259,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-034",
+      "method": "POST",
+      "path": "/api/v1/gallery/videos/batch-share",
+      "python_function": "batch_share_videos",
+      "python_line": 3275,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-035",
+      "method": "POST",
+      "path": "/api/v1/gallery/images/share-all",
+      "python_function": "share_all_images",
+      "python_line": 3296,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-036",
+      "method": "POST",
+      "path": "/api/v1/gallery/videos/share-all",
+      "python_function": "share_all_videos",
+      "python_line": 3312,
+      "async": false,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-037",
+      "method": "POST",
+      "path": "/api/v1/gallery/images/batch-download",
+      "python_function": "batch_download_images",
+      "python_line": 3337,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-038",
+      "method": "POST",
+      "path": "/api/v1/gallery/videos/batch-download",
+      "python_function": "batch_download_videos",
+      "python_line": 3381,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "gallery",
+      "frontend_files": [
+        "frontend/src/Gallery.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL saved_images/video_queue",
+        "filesystem deletion or ZIP generation"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-039",
+      "method": "GET",
+      "path": "/api/v1/queue",
+      "python_function": "get_queue",
+      "python_line": 3463,
+      "async": false,
+      "auth": "bearer-user",
+      "request_parameters": [],
+      "response_model": "List[QueueItemResponse]",
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "queue-media",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/SimpleBatchGenerator.jsx",
+        "frontend/src/VideoGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL video_queue",
+        "uploads/queue and generated media",
+        "Redis queue/events"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-040",
+      "method": "POST",
+      "path": "/api/v1/queue",
+      "python_function": "add_to_queue",
+      "python_line": 3506,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "file: UploadFile",
+        "image_url: str",
+        "prompt: str",
+        "category: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "queue-media",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/SimpleBatchGenerator.jsx",
+        "frontend/src/VideoGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL video_queue",
+        "uploads/queue and generated media",
+        "Redis queue/events"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-041",
+      "method": "PUT",
+      "path": "/api/v1/queue/{item_id}",
+      "python_function": "update_queue_item",
+      "python_line": 3585,
+      "async": false,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "item_id: str",
+        "update: QueueItemUpdate"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "queue-media",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/SimpleBatchGenerator.jsx",
+        "frontend/src/VideoGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL video_queue",
+        "uploads/queue and generated media",
+        "Redis queue/events"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-042",
+      "method": "POST",
+      "path": "/api/v1/merge-videos",
+      "python_function": "merge_videos_endpoint",
+      "python_line": 3611,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "req: MergeRequest"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "queue-media",
+      "frontend_files": [
+        "frontend/src/VideoGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL video_queue",
+        "uploads/queue and generated media",
+        "Redis queue/events"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-043",
+      "method": "DELETE",
+      "path": "/api/v1/queue/{item_id}",
+      "python_function": "delete_queue_item",
+      "python_line": 3708,
+      "async": false,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "item_id: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "queue-media",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/SimpleBatchGenerator.jsx",
+        "frontend/src/VideoGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL video_queue",
+        "uploads/queue and generated media",
+        "Redis queue/events"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-044",
+      "method": "POST",
+      "path": "/api/v1/queue/{item_id}/retry",
+      "python_function": "retry_queue_item",
+      "python_line": 3733,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "item_id: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "queue-media",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/SimpleBatchGenerator.jsx",
+        "frontend/src/VideoGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL video_queue",
+        "uploads/queue and generated media",
+        "Redis queue/events"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-045",
+      "method": "DELETE",
+      "path": "/api/v1/queue",
+      "python_function": "clear_queue",
+      "python_line": 3771,
+      "async": false,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "status: Optional[str]"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "queue-media",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/SimpleBatchGenerator.jsx",
+        "frontend/src/VideoGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL video_queue",
+        "uploads/queue and generated media",
+        "Redis queue/events"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-046",
+      "method": "POST",
+      "path": "/api/v1/queue/{item_id}/generate",
+      "python_function": "generate_queue_item_endpoint",
+      "python_line": 4288,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "item_id: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "queue-media",
+      "frontend_files": [
+        "frontend/src/FloatingGallery.jsx",
+        "frontend/src/Gallery.jsx",
+        "frontend/src/ImageGenerator.jsx",
+        "frontend/src/SimpleBatchGenerator.jsx",
+        "frontend/src/VideoGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL video_queue",
+        "uploads/queue and generated media",
+        "Redis queue/events"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-047",
+      "method": "POST",
+      "path": "/api/v1/story-chain",
+      "python_function": "create_story_chain",
+      "python_line": 5158,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "req: StoryChainRequest"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "story",
+      "frontend_files": [
+        "frontend/src/StoryGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image/video provider",
+        "uploads/story artifacts",
+        "persistent task status",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-048",
+      "method": "GET",
+      "path": "/api/v1/story-chain/{chain_id}",
+      "python_function": "get_story_chain_status",
+      "python_line": 5175,
+      "async": true,
+      "auth": "inspect",
+      "request_parameters": [
+        "chain_id: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "story",
+      "frontend_files": [
+        "frontend/src/StoryGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image/video provider",
+        "uploads/story artifacts",
+        "persistent task status",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-049",
+      "method": "POST",
+      "path": "/api/v1/story-fission",
+      "python_function": "create_story_fission",
+      "python_line": 6289,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "req: StoryFissionRequest"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "story",
+      "frontend_files": [
+        "frontend/src/StoryGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image/video provider",
+        "uploads/story artifacts",
+        "persistent task status",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-050",
+      "method": "GET",
+      "path": "/api/v1/story-fission/{fission_id}",
+      "python_function": "get_story_fission_status",
+      "python_line": 6308,
+      "async": true,
+      "auth": "inspect",
+      "request_parameters": [
+        "fission_id: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "story",
+      "frontend_files": [
+        "frontend/src/StoryGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image/video provider",
+        "uploads/story artifacts",
+        "persistent task status",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-051",
+      "method": "POST",
+      "path": "/api/v1/story-fission/{fission_id}/branch/{branch_id}/retry",
+      "python_function": "retry_fission_branch",
+      "python_line": 6322,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "fission_id: str",
+        "branch_id: int"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "story",
+      "frontend_files": [
+        "frontend/src/StoryGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image/video provider",
+        "uploads/story artifacts",
+        "persistent task status",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-052",
+      "method": "POST",
+      "path": "/api/v1/story-fission/{fission_id}/remerge",
+      "python_function": "remerge_fission_story",
+      "python_line": 6404,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "fission_id: str"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "story",
+      "frontend_files": [
+        "frontend/src/StoryGenerator.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external image/video provider",
+        "uploads/story artifacts",
+        "persistent task status",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-053",
+      "method": "WEBSOCKET",
+      "path": "/ws/{token}",
+      "python_function": "websocket_endpoint",
+      "python_line": 6556,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "other",
+      "frontend_files": [
+        "frontend/src/ApiWorkbench.jsx",
+        "frontend/src/apiWorkbenchCatalog.js",
+        "frontend/src/hooks/useWebSocket.js"
+      ],
+      "expected_side_effects": [],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-054",
+      "method": "GET",
+      "path": "/api/v1/admin/live-status",
+      "python_function": "get_admin_live_status",
+      "python_line": 6606,
+      "async": true,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "admin",
+      "frontend_files": [
+        "frontend/src/AdminDashboard.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL user_activities/video_queue",
+        "WebSocket online state"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-055",
+      "method": "DELETE",
+      "path": "/api/v1/admin/activities",
+      "python_function": "clear_activities",
+      "python_line": 6695,
+      "async": true,
+      "auth": "admin",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "admin",
+      "frontend_files": [
+        "frontend/src/AdminDashboard.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL user_activities/video_queue",
+        "WebSocket online state"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-056",
+      "method": "GET",
+      "path": "/api/v1/admin/user/{user_id}/tasks",
+      "python_function": "get_user_tasks_admin",
+      "python_line": 6710,
+      "async": true,
+      "auth": "admin",
+      "request_parameters": [
+        "user_id: int"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "auth-users",
+      "frontend_files": [
+        "frontend/src/AdminDashboard.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL users/system_config/experience_logs",
+        "uploads/avatars for avatar upload"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-057",
+      "method": "GET",
+      "path": "/api/v1/admin/activities",
+      "python_function": "get_all_activities",
+      "python_line": 6744,
+      "async": true,
+      "auth": "admin",
+      "request_parameters": [
+        "limit: int"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "admin",
+      "frontend_files": [
+        "frontend/src/AdminDashboard.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "PostgreSQL user_activities/video_queue",
+        "WebSocket online state"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-058",
+      "method": "POST",
+      "path": "/api/v1/character/generate",
+      "python_function": "generate_character_video",
+      "python_line": 6809,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "character",
+      "frontend_files": [
+        "frontend/src/CharacterVideo.jsx",
+        "frontend/src/apiWorkbenchCatalog.js"
+      ],
+      "expected_side_effects": [
+        "external video/voice provider",
+        "uploads or remote media"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-059",
+      "method": "POST",
+      "path": "/api/v1/keywords/analyze-single",
+      "python_function": "analyze_single_keyword",
+      "python_line": 6907,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": "KeywordAnalyzeResponse",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "generation",
+      "frontend_files": [
+        "frontend/src/KeywordExtractor.jsx",
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "external image provider",
+        "PostgreSQL image_logs/saved_images",
+        "uploads/gallery",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-060",
+      "method": "POST",
+      "path": "/api/v1/keywords/history",
+      "python_function": "save_keyword_history",
+      "python_line": 7008,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "keywords",
+      "frontend_files": [
+        "frontend/src/KeywordExtractor.jsx",
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "system_config/user history storage",
+        "Excel file generation",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-061",
+      "method": "GET",
+      "path": "/api/v1/keywords/history",
+      "python_function": "get_keyword_history",
+      "python_line": 7026,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": true,
+      "write_smoke_verified": false,
+      "rust_route_present": true,
+      "migration_slice": "keywords",
+      "frontend_files": [
+        "frontend/src/KeywordExtractor.jsx",
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "system_config/user history storage",
+        "Excel file generation",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Read-only differential smoke passed; provider-backed/write contract tests still required."
+    },
+    {
+      "id": "R-062",
+      "method": "DELETE",
+      "path": "/api/v1/keywords/history/{index}",
+      "python_function": "delete_keyword_history",
+      "python_line": 7031,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "index: int"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "keywords",
+      "frontend_files": [
+        "frontend/src/KeywordExtractor.jsx",
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "system_config/user history storage",
+        "Excel file generation",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-063",
+      "method": "DELETE",
+      "path": "/api/v1/keywords/history",
+      "python_function": "clear_keyword_history",
+      "python_line": 7039,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "keywords",
+      "frontend_files": [
+        "frontend/src/KeywordExtractor.jsx",
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "system_config/user history storage",
+        "Excel file generation",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-064",
+      "method": "POST",
+      "path": "/api/v1/keywords/export-excel",
+      "python_function": "export_keywords_excel",
+      "python_line": 7045,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "keywords",
+      "frontend_files": [
+        "frontend/src/KeywordExtractor.jsx",
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "system_config/user history storage",
+        "Excel file generation",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-065",
+      "method": "POST",
+      "path": "/api/v1/keywords/sync-feishu",
+      "python_function": "sync_keywords_to_feishu",
+      "python_line": 7179,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": "FeishuSyncResponse",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "keywords",
+      "frontend_files": [
+        "frontend/src/KeywordExtractor.jsx"
+      ],
+      "expected_side_effects": [
+        "system_config/user history storage",
+        "Excel file generation",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-066",
+      "method": "POST",
+      "path": "/api/v1/mexico-beauty/keyword-analysis-single",
+      "python_function": "mexico_keyword_analysis_single",
+      "python_line": 7439,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "mexico-beauty",
+      "frontend_files": [
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "external chat/image provider",
+        "prompt files and uploads",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-067",
+      "method": "POST",
+      "path": "/api/v1/mexico-beauty/title-optimization-single",
+      "python_function": "mexico_title_optimization_single",
+      "python_line": 7477,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "title: str",
+        "image: UploadFile"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "mexico-beauty",
+      "frontend_files": [
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "external chat/image provider",
+        "prompt files and uploads",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-068",
+      "method": "POST",
+      "path": "/api/v1/mexico-beauty/image-prompt-single",
+      "python_function": "mexico_image_prompt_single",
+      "python_line": 7527,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "image: UploadFile"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "mexico-beauty",
+      "frontend_files": [
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "external chat/image provider",
+        "prompt files and uploads",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-069",
+      "method": "POST",
+      "path": "/api/v1/mexico-beauty/description-single",
+      "python_function": "mexico_description_single",
+      "python_line": 7573,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "title: str",
+        "image: UploadFile"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "mexico-beauty",
+      "frontend_files": [
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "external chat/image provider",
+        "prompt files and uploads",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-070",
+      "method": "POST",
+      "path": "/api/v1/mexico-beauty/image-prompts-batch",
+      "python_function": "mexico_image_prompts_batch",
+      "python_line": 7637,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [
+        "title: str",
+        "keywords: str",
+        "description: str",
+        "aspect_ratio: str",
+        "target_language: str",
+        "image: UploadFile"
+      ],
+      "response_model": "ImagePromptsResponse",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "mexico-beauty",
+      "frontend_files": [
+        "frontend/src/components/ProductDescriptionModule.jsx"
+      ],
+      "expected_side_effects": [
+        "external chat/image provider",
+        "prompt files and uploads",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-071",
+      "method": "POST",
+      "path": "/api/v1/mexico-beauty/refine-prompt",
+      "python_function": "mexico_refine_prompt",
+      "python_line": 7939,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": "ImagePromptItem",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "mexico-beauty",
+      "frontend_files": [
+        "frontend/src/components/ProductDescriptionModule.jsx"
+      ],
+      "expected_side_effects": [
+        "external chat/image provider",
+        "prompt files and uploads",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-072",
+      "method": "POST",
+      "path": "/api/v1/mexico-beauty/generate-image",
+      "python_function": "mexico_generate_image",
+      "python_line": 8151,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "prompt_text: str",
+        "aspect_ratio: str",
+        "reference_image: UploadFile"
+      ],
+      "response_model": null,
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "mexico-beauty",
+      "frontend_files": [
+        "frontend/src/components/ProductDescriptionModule.jsx"
+      ],
+      "expected_side_effects": [
+        "external chat/image provider",
+        "prompt files and uploads",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-073",
+      "method": "POST",
+      "path": "/api/v1/mexico-beauty/sync-feishu",
+      "python_function": "mexico_beauty_sync_feishu",
+      "python_line": 8374,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": "MexicoBeautyFeishuSyncResponse",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "mexico-beauty",
+      "frontend_files": [
+        "frontend/src/MexicoBeautyStation.jsx"
+      ],
+      "expected_side_effects": [
+        "external chat/image provider",
+        "prompt files and uploads",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-074",
+      "method": "POST",
+      "path": "/api/v1/mexico-beauty/sync-description-feishu",
+      "python_function": "sync_description_to_feishu",
+      "python_line": 8506,
+      "async": true,
+      "auth": "bearer-token",
+      "request_parameters": [],
+      "response_model": "MexicoBeautyFeishuSyncResponse",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "mexico-beauty",
+      "frontend_files": [
+        "frontend/src/components/ProductDescriptionModule.jsx"
+      ],
+      "expected_side_effects": [
+        "external chat/image provider",
+        "prompt files and uploads",
+        "Feishu API when requested"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-075",
+      "method": "POST",
+      "path": "/api/v1/voice-clone/analyze-video",
+      "python_function": "voice_clone_analyze_video",
+      "python_line": 8620,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [
+        "video: UploadFile",
+        "target_lang: str",
+        "video_duration: float"
+      ],
+      "response_model": "VoiceCloneAnalyzeResponse",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "generation",
+      "frontend_files": [
+        "frontend/src/VoiceClone.jsx"
+      ],
+      "expected_side_effects": [
+        "external image provider",
+        "PostgreSQL image_logs/saved_images",
+        "uploads/gallery",
+        "Redis/WebSocket progress"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    },
+    {
+      "id": "R-076",
+      "method": "POST",
+      "path": "/api/v1/voice-clone/synthesize-speech",
+      "python_function": "voice_clone_synthesize_speech",
+      "python_line": 8781,
+      "async": true,
+      "auth": "bearer-user",
+      "request_parameters": [],
+      "response_model": "VoiceCloneSynthesizeResponse",
+      "rust_status": "parity-tested",
+      "smoke_verified": false,
+      "write_smoke_verified": true,
+      "rust_route_present": true,
+      "migration_slice": "voice-clone",
+      "frontend_files": [
+        "frontend/src/VoiceClone.jsx"
+      ],
+      "expected_side_effects": [
+        "external voice/video provider",
+        "temporary uploads and generated audio/video"
+      ],
+      "parity_note": "Isolated differential write smoke passed; provider/error matrices may still apply."
+    }
+  ],
+  "workers": [
+    {
+      "id": "W-001",
+      "source": "backend/queue_manager.py",
+      "responsibility": "Redis-backed queue scheduling, progress events, user notifications",
+      "rust_status": "partial",
+      "slice": "queue-media"
+    },
+    {
+      "id": "W-002",
+      "source": "backend/review_queue.py",
+      "responsibility": "review queue persistence/dispatch",
+      "rust_status": "partial",
+      "slice": "queue-media"
+    },
+    {
+      "id": "W-003",
+      "source": "backend/video_reviewer.py",
+      "responsibility": "video review provider call, score persistence and experience grant",
+      "rust_status": "parity-tested",
+      "slice": "queue-media"
+    },
+    {
+      "id": "W-004",
+      "source": "backend/websocket_manager.py",
+      "responsibility": "connection registry, user/broadcast events",
+      "rust_status": "partial",
+      "slice": "admin"
+    },
+    {
+      "id": "W-005",
+      "source": "backend/prompt_optimizer.py",
+      "responsibility": "prompt parsing/optimization and provider request construction",
+      "rust_status": "partial",
+      "slice": "generation"
+    },
+    {
+      "id": "W-006",
+      "source": "main.py:process_video_background/process_video_with_auto_retry",
+      "responsibility": "video generation, retry, watermark-free conversion, queue lifecycle",
+      "rust_status": "parity-tested",
+      "slice": "queue-media"
+    },
+    {
+      "id": "W-007",
+      "source": "main.py:process_batch_generate_async_task",
+      "responsibility": "persisted async batch generation and progress",
+      "rust_status": "parity-tested",
+      "slice": "generation"
+    },
+    {
+      "id": "W-008",
+      "source": "main.py:process_story_chain/process_story_fission",
+      "responsibility": "story chain/fission orchestration and artifact persistence",
+      "rust_status": "parity-tested",
+      "slice": "story"
+    },
+    {
+      "id": "W-009",
+      "source": "main.py:zombie_task_recovery/cleanup_task",
+      "responsibility": "restart recovery and stale task cleanup",
+      "rust_status": "parity-tested",
+      "slice": "queue-media"
+    },
+    {
+      "id": "W-010",
+      "source": "scripts/cron/backup/sync",
+      "responsibility": "operational backups and OneDrive synchronization",
+      "rust_status": "not-applicable",
+      "slice": "operations"
+    },
+    {
+      "id": "W-011",
+      "source": "backend/cleanup_gallery.py",
+      "responsibility": "remove gallery rows whose files no longer exist",
+      "rust_status": "partial",
+      "slice": "operations"
+    }
+  ],
+  "python_sqlalchemy_tables": [
+    "experience_logs",
+    "image_logs",
+    "saved_images",
+    "system_config",
+    "user_activities",
+    "users",
+    "video_queue"
+  ],
+  "required_external_boundaries": [
+    "OpenAI-compatible chat/image APIs",
+    "Gemini-compatible image/text APIs",
+    "Sora/video API",
+    "voice clone/TTS API",
+    "Cloudflare Turnstile",
+    "Feishu tenant token and spreadsheet API",
+    "Redis Pub/Sub",
+    "PostgreSQL"
+  ],
+  "status_legend": {
+    "missing": "No Rust route/worker counterpart exists.",
+    "partial": "Rust route or a related primitive exists, but exact contract and side effects are not differential-tested.",
+    "parity-tested": "Differential test suite proves compatibility. None are promoted by this generator automatically."
+  }
+}

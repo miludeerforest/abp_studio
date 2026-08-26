@@ -1,0 +1,21 @@
+[package]
+name = "abp-worker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "abp-worker"
+path = "src/main.rs"
+
+[dependencies]
+abp-api = { path = "../abp-api" }
+abp-ai = { path = "../abp-ai" }
+abp-core = { path = "../abp-core" }
+abp-infra = { path = "../abp-infra" }
+anyhow = { workspace = true }
+reqwest = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

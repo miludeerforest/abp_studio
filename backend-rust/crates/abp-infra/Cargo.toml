@@ -1,0 +1,22 @@
+[package]
+name = "abp-infra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+abp-core = { path = "../abp-core" }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+jsonwebtoken = { workspace = true }
+bcrypt = { workspace = true }
+sqlx = { workspace = true }
+redis = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

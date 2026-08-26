@@ -1,172 +1,214 @@
-# ABP Studio（智能商品场景生成系统）
+# ABP Studio
 
-## 项目简介
-ABP Studio 是一个面向电商与内容团队的 AI 生产平台，用于把商品图自动转化为营销场景图与短视频素材。
-系统提供从图片分析、文案生成、批量出图、视频生成到资源管理的一体化流程，支持多用户权限与运营管理。
+ABP Studio 是一个面向电商与内容团队的 AI 生产平台，用于把商品图转化为营销场景图、短视频和可管理的内容资产。
 
-## 核心能力
-| 模块 | 说明 |
-|---|---|
-| 批量场景生成 | 上传商品图后自动分析并生成多角度营销场景图 |
-| 视频生成 | 将图片任务一键加入视频队列并异步生成视频 |
-| 一镜到底（Story） | 支持故事化生成链路，输出连贯视频内容 |
-| 裂变模式 | 单图多分支生成并支持后续合并处理 |
-| 画廊管理 | 图片/视频筛选、预览、删除、批量下载 |
-| 多用户管理 | 用户权限、经验值、活动记录与监控 |
+> 本仓库同步的是源代码、配置模板和脱敏后的文档。生产环境的 `.env`、上传文件、数据库、构建产物、反向代理和备份配置不属于仓库内容。
 
-## 技术栈与架构
-- 前端：React 19 + Vite
-- 后端：FastAPI + SQLAlchemy
-- 数据库：PostgreSQL（外部服务）
-- 缓存/队列：Redis（外部服务）
-- 容器编排：Docker Compose（当前 compose 文件包含 `backend` 和 `frontend` 两个服务）
+## 当前架构
 
-默认端口：
-- 前端：`33012`
-- 后端 API：`33013`
-- API 文档：`http://localhost:33013/docs`
+项目目前保留 Python/FastAPI 兼容后端，同时提供 Rust/Axum 重构版。两套后端可以共享同一 PostgreSQL、Redis 和上传目录，并行运行，便于灰度验证和回滚。
 
-## 快速开始（Docker）
-### 1) 环境要求
-- Docker 24+
-- Docker Compose v2+
-- 可用的 PostgreSQL 与 Redis 服务
+| 服务 | 实现 | Compose 服务 | 默认端口/入口 | 职责 |
+|---|---|---|---|---|
+| Frontend | React 19 + Vite + Nginx | `frontend` | `33012` | Web 界面和静态资源 |
+| Legacy API | FastAPI + SQLAlchemy | `backend` | `33013` | 兼容实现和回滚目标 |
+| Rust API | Axum + SQLx + Tokio | `backend-rust` | `33014` | 重构后的 HTTP/WebSocket API |
+| Rust Worker | Tokio 独立进程 | `backend-rust-worker` | 无宿主机端口 | 持久化任务、视频队列和恢复循环 |
 
-### 2) 获取代码
+Rust workspace 位于 `backend-rust/`，包含：
+
+- `abp-core`：领域模型、配置和业务规则；
+- `abp-infra`：PostgreSQL、Redis、认证和按业务域拆分的仓储；
+- `abp-ai`：provider、SSE、媒体和 prompt 适配；
+- `abp-api`：Axum 路由、服务编排、WebSocket 和错误映射；
+- `abp-worker`：可独立重启的后台任务/视频 worker。
+
+详细设计见 [`backend-rust/ARCHITECTURE.md`](backend-rust/ARCHITECTURE.md)。
+
+## 数据与兼容性
+
+Rust 版遵循既有 Python API 契约，重点保持以下边界不变：
+
+- JWT 使用同一 `SECRET_KEY`，现有用户和存量 bcrypt 哈希可继续使用；
+- PostgreSQL 表结构以既有业务表为基线，启动迁移使用幂等 SQL；
+- Redis key、队列、Pub/Sub 事件和上传目录保持兼容；
+- API 响应字段、错误格式、分页结构和 WebSocket 入口保持兼容；
+- Python 后端和 Rust 后端可以暂时并行运行，不要求数据迁移或重新注册用户。
+
+### 请求路由说明
+
+Docker Compose 只负责启动服务和端口映射。真正的公网 API、WebSocket、uploads 和前端路由由部署环境的反向代理决定，反向代理配置不保存在本仓库中。
+
+因此，切换到 Rust API 前必须在目标环境中单独确认：
+
+1. `/api/` 是否指向 Rust API 端口；
+2. `/ws/` 是否允许 WebSocket 升级；
+3. `/uploads/` 是否指向共享上传目录；
+4. `/openapi.json` 是否指向预期的后端；
+5. Python 端是否仍可作为回滚目标。
+
+Rust API 提供：
+
+```text
+GET /healthz
+GET /openapi.json
+```
+
+## 快速开始
+
+### 1. 准备环境
+
+需要：
+
+- Docker 24+；
+- Docker Compose v2+；
+- 可访问的 PostgreSQL；
+- 可访问的 Redis；
+- 已配置的 AI、视频、语音或飞书 provider（按实际功能需要）。
+
+### 2. 配置本地环境
+
 ```bash
 git clone https://github.com/miludeerforest/abp_studio.git
 cd abp_studio
-```
-
-### 3) 配置环境变量
-```bash
 cp .env.example .env
-# 按需编辑 .env
+# 编辑 .env，填入本地或部署环境的真实值；不要提交 .env
 ```
 
-### 4) 启动服务
+### 3. 只校验 Compose 配置
+
+```bash
+docker compose config --quiet
+```
+
+该命令不会重启正在运行的服务。
+
+### 4. 启动 Compose 服务
+
 ```bash
 docker compose up -d --build
 ```
 
-### 5) 访问服务
-- 前端：`http://localhost:33012`
-- 后端：`http://localhost:33013`
-- OpenAPI 文档：`http://localhost:33013/docs`
+当前 Compose 文件会同时声明 Python API、Rust API、Rust worker 和前端。只更新单个服务时使用服务级命令，并先确认 `depends_on` 不会拉起不需要的依赖。
 
-## 关键环境变量说明
-以下字段建议在 `.env` 中优先确认：
+### 5. 启动 Rust 版服务
 
-| 变量 | 用途 | 示例/默认 |
-|---|---|---|
-| `DATABASE_URL` | PostgreSQL 连接串 | `postgresql://user:password@hostname:5432/database_name` |
-| `SECRET_KEY` | JWT 签名密钥 | `your-secret-key-change-this-in-production` |
-| `ADMIN_USER` | 初始管理员用户名 | `admin` |
-| `ADMIN_PASSWORD` | 初始管理员密码 | `your_secure_password_here` |
-| `FORCE_RESET_ADMIN_PASSWORD` | 是否强制按 env 重置管理员密码 | `false` |
-| `REDIS_HOST` | Redis 主机 | `redis_container_name` |
-| `REDIS_PORT` | Redis 端口 | `6379` |
-| `REDIS_PASSWORD` | Redis 密码 | `your_redis_password_here` |
-| `REDIS_DB` | Redis DB 索引 | `0` |
-| `DEFAULT_API_URL` | 图像生成 API 地址 | `https://your-api-provider.com/v1` |
-| `DEFAULT_API_KEY` | 图像生成 API Key | `sk-your-api-key-here` |
-| `DEFAULT_MODEL_NAME` | 图像生成模型名 | `gemini-2.0-flash-exp` |
-| `VIDEO_API_URL` | 视频生成 API 地址 | `https://your-video-api.com/v1` |
-| `VIDEO_API_KEY` | 视频生成 API Key | `sk-your-video-api-key-here` |
-| `VIDEO_MODEL_NAME` | 视频生成模型名 | `sora2-portrait-15s` |
+如果只需要构建镜像而不改变运行中的服务：
 
-## 管理员密码策略
-系统启动时的管理员密码行为如下：
-
-1. **首次启动（管理员不存在）**：
-   - 使用 `ADMIN_USER` / `ADMIN_PASSWORD` 创建管理员。
-2. **后续启动（管理员已存在）**：
-   - 默认**不覆盖**数据库中的现有管理员密码。
-3. **强制重置**：
-   - 仅当 `FORCE_RESET_ADMIN_PASSWORD=true` 时，启动阶段才会把管理员密码重置为 `ADMIN_PASSWORD`。
-   - 重置后请立即把该开关改回 `false`，避免后续重启再次覆盖。
-
-迁移提示：旧版本“每次启动覆盖密码”的行为已收敛为“默认不覆盖”。
-
-## 常用运维命令
 ```bash
-# 查看日志
-docker compose logs -f backend
-docker compose logs -f frontend
-
-# 重启服务
-docker compose restart backend
-docker compose restart frontend
-docker compose restart
-
-# 更新部署（示例）
-git pull
-docker compose up -d --build
-
-# 停止服务
-docker compose down
+docker compose build backend-rust backend-rust-worker
 ```
 
-## 开发说明
-### 前端
+确认后再按服务启动 Rust 版：
+
+```bash
+docker compose up -d --build backend-rust backend-rust-worker
+```
+
+启用独立 worker 时，建议让 Rust API 使用：
+
+```text
+DISABLE_BACKGROUND_WORKER=true
+```
+
+避免 API 内置循环和独立 worker 重复消费同一队列。更新单个 Rust 服务时，不要使用 `docker compose down`，也不要重建无关的主服务。
+
+## 环境变量
+
+`.env.example` 只包含变量名和占位值。Rust 版与 Python 版共用主要配置：
+
+| 变量 | 用途 |
+|---|---|
+| `DATABASE_URL` | PostgreSQL 连接串，Rust 版必需 |
+| `SECRET_KEY` | JWT 签名密钥 |
+| `ADMIN_USER` / `ADMIN_PASSWORD` | 首次启动管理员引导 |
+| `FORCE_RESET_ADMIN_PASSWORD` | 是否在启动时重置已有管理员密码 |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` / `REDIS_DB` | Redis 连接 |
+| `UPLOADS_DIR` | 上传目录，容器内通常为 `/app/uploads` |
+| `HOST` / `PORT` | Rust API 监听地址和端口 |
+| `CORS_ORIGINS` | Rust API 的允许来源 |
+| `DISABLE_BACKGROUND_WORKER` | 是否关闭 Rust API 内置后台循环 |
+
+管理员密码默认不会在每次重启时覆盖。只有显式设置 `FORCE_RESET_ADMIN_PASSWORD=true` 才会重置；完成恢复后应立即改回 `false`。
+
+## 开发与验证
+
+### Rust
+
+```bash
+cd backend-rust
+cargo fmt --all -- --check
+cargo test --workspace --locked
+cargo run -p abp-api
+cargo run -p abp-worker
+```
+
+需要执行 Redis 兼容测试时，使用隔离 Redis 数据库，并通过环境变量传入测试地址：
+
+```bash
+REDIS_TEST_URL='redis://<host>:<port>/<isolated-db>' cargo test --workspace --locked -- --ignored
+```
+
+不要把真实数据库地址、Token、API Key 或生产主机信息写入命令示例、测试报告或提交记录。
+
+### Frontend
+
 ```bash
 cd frontend
 npm install
-npm run dev
 npm run build
 npm run lint
-npm run preview
+npm run dev
 ```
 
-### 后端
+前端默认使用同源 `/api/`、`/ws/` 和 `/uploads/` 路径；本地或生产环境应由反向代理把这些路径转发到选定的后端。
+
+### 差分验证
+
+Rust 目录下的 `tools/` 提供 Python/Rust 差分和隔离 smoke 工具。完整说明见：
+
+- [`backend-rust/PARITY_EVIDENCE.md`](backend-rust/PARITY_EVIDENCE.md)
+- [`backend-rust/PARITY_MANIFEST.md`](backend-rust/PARITY_MANIFEST.md)
+
+差分测试应优先使用一次性数据库、Redis、uploads 目录和 provider stub，避免写入生产数据或消耗真实 provider 配额。
+
+## 安全与同步边界
+
+提交前确认：
+
 ```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+git status --short --untracked-files=all
+git diff --check
+git check-ignore -v .env backend-rust/target frontend/dist
 ```
+
+以下内容不得提交：
+
+- `.env` 和任何真实环境变量文件；
+- API Key、JWT、密码、私钥、云厂商 Token；
+- PostgreSQL/Redis 数据、uploads、视频和图片；
+- `target/`、`node_modules/`、`dist/`、`__pycache__/` 等构建或缓存目录；
+- 生产主机名、内网 IP、管理面板路径、备份路径和反向代理私有配置。
 
 ## 目录结构
+
 ```text
 .
-├── backend/
-│   ├── main.py
-│   ├── requirements.txt
-│   ├── uploads/
-│   └── ...
-├── frontend/
-│   ├── src/
-│   ├── package.json
-│   └── ...
+├── backend/                 # Python/FastAPI 兼容后端
+├── backend-rust/            # Rust workspace
+│   ├── crates/abp-core/     # 领域层
+│   ├── crates/abp-infra/    # 数据库、Redis、认证和仓储
+│   ├── crates/abp-ai/      # provider 与媒体适配
+│   ├── crates/abp-api/     # HTTP/WebSocket API
+│   ├── crates/abp-worker/  # 独立后台 worker
+│   ├── tools/              # 差分与隔离验证工具
+│   └── crates/abp-api/migrations/ # 幂等基线迁移
+├── frontend/               # React/Vite 前端
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
 ```
 
-## 安全建议
-1. 生产环境务必更换 `SECRET_KEY`，并保证强随机性。
-2. `ADMIN_PASSWORD`、`REDIS_PASSWORD` 使用高强度密码并定期轮换。
-3. 对外暴露时请在反向代理层启用 HTTPS。
-4. 避免把 `.env`、数据库备份、上传目录暴露到公网仓库。
-5. `FORCE_RESET_ADMIN_PASSWORD` 仅用于恢复场景，恢复完成后及时关闭。
-
-## 故障排查（FAQ）
-1. **后端启动失败提示数据库连接错误**
-   - 检查 `DATABASE_URL` 是否可达，用户名/密码/库名是否正确。
-2. **登录失败或管理员密码不生效**
-   - 先确认是否已有管理员账号；后续启动默认不覆盖密码。
-   - 需要重置时将 `FORCE_RESET_ADMIN_PASSWORD=true` 并重启 backend。
-3. **前端无法请求后端**
-   - 检查 `33013` 是否正常监听；确认反向代理与 CORS 配置。
-4. **视频队列卡住或长时间 pending**
-   - 检查 Redis 可用性与视频 API 配置（`VIDEO_API_*`）。
-5. **上传后文件不存在或无法预览**
-   - 检查 `backend/uploads` 挂载与文件权限。
-6. **WebSocket 状态更新异常**
-   - 检查 Redis 与网络连通；反向代理是否放行升级头。
-7. **构建失败**
-   - 前端执行 `npm install` 后重试 `npm run build`；后端确认虚拟环境依赖齐全。
-
 ## 许可证
+
 本项目使用 MIT License。

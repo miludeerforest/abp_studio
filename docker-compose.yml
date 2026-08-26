@@ -20,12 +20,47 @@ services:
       - ./backend/data:/app/data
       - ./backend:/app
 
+  # Rust 重构版后端（与 Python 版共用数据库/uploads，可灰度切换）
+  backend-rust:
+    build: ./backend-rust
+    ports:
+      - "127.0.0.1:33014:8000"
+    restart: always
+    networks:
+      - default
+      - 1panel-network
+    env_file:
+      - .env
+    environment:
+      - UPLOADS_DIR=/app/uploads
+      - PORT=8000
+      - DISABLE_BACKGROUND_WORKER=${DISABLE_BACKGROUND_WORKER:-true}
+    volumes:
+      - ./backend/uploads:/app/uploads
+
+
+  # Rust 持久化任务/视频 worker（与 API 共用数据库、Redis 和 uploads）
+  backend-rust-worker:
+    build: ./backend-rust
+    command: ["/usr/local/bin/abp-worker"]
+    restart: always
+    networks:
+      - default
+      - 1panel-network
+    env_file:
+      - .env
+    environment:
+      - UPLOADS_DIR=/app/uploads
+    volumes:
+      - ./backend/uploads:/app/uploads
+
   frontend:
     build: ./frontend
     ports:
       - "127.0.0.1:33012:80"
     depends_on:
       - backend
+      - backend-rust
     restart: always
     networks:
       - default
