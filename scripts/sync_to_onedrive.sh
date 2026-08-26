@@ -4,13 +4,16 @@
 # Syncs uploads (gallery, queue) to OneDrive every 7 days
 #
 # Usage: ./sync_to_onedrive.sh
-# Cron:  0 3 */7 * * /opt/1panel/docker/compose/auto_banana_product/scripts/sync_to_onedrive.sh >> /var/log/abp_sync.log 2>&1
+# Cron: install the portable entry from scripts/abp_sync.cron after setting ABP_PROJECT_ROOT
 #
 
-# Configuration
-SOURCE_DIR="/opt/1panel/docker/compose/auto_banana_product/backend/uploads"
-DEST_DIR="/mnt/onedrive/auto_banana_product_backup"
-LOG_FILE="/var/log/abp_sync.log"
+# Configuration: derive the project root from this script so the repository
+# remains portable. Deployment-specific values can be injected at runtime.
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="${ABP_PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+SOURCE_DIR="${ABP_SOURCE_DIR:-$PROJECT_ROOT/backend/uploads}"
+DEST_DIR="${ABP_DEST_DIR:-/mnt/onedrive/auto_banana_product_backup}"
+LOG_FILE="${ABP_LOG_FILE:-/var/log/abp_sync.log}"
 DATE=$(date '+%Y-%m-%d %H:%M:%S')
 
 # Colors for output
@@ -72,11 +75,11 @@ QUEUE_STATUS=$?
 # Summary
 if [ $GALLERY_STATUS -eq 0 ] && [ $QUEUE_STATUS -eq 0 ]; then
     success "Sync completed successfully!"
-    
+
     # Count files
     GALLERY_COUNT=$(find "$SOURCE_DIR/gallery" -type f 2>/dev/null | wc -l)
     QUEUE_COUNT=$(find "$SOURCE_DIR/queue" -type f 2>/dev/null | wc -l)
-    
+
     log "Gallery: $GALLERY_COUNT files"
     log "Queue: $QUEUE_COUNT files"
 else

@@ -1,3 +1,5 @@
-# Auto Banana Product - OneDrive Sync
-# Runs every 7 days at 3:00 AM
-0 3 */7 * * /opt/1panel/docker/compose/auto_banana_product/scripts/sync_to_onedrive.sh >> /var/log/abp_sync.log 2>&1
+# ABP Studio - OneDrive Sync
+# Replace the placeholder root before installing this crontab.
+ABP_PROJECT_ROOT=/path/to/abp_studio
+# Runs every 7 days at 03:00.
+0 3 */7 * * "$ABP_PROJECT_ROOT/scripts/sync_to_onedrive.sh" >> /var/log/abp_sync.log 2>&1

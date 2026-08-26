@@ -5,12 +5,14 @@
 
 set -e
 
-# 配置
-SOURCE_VIDEO="/opt/1panel/docker/compose/auto_banana_product/backend/uploads/queue"
-SOURCE_IMG="/opt/1panel/docker/compose/auto_banana_product/backend/uploads/gallery"
-RCLONE_REMOTE="onedrive"
-DEST_VIDEO="auto_banana_product/video"
-DEST_IMG="auto_banana_product/img"
+# 配置：默认从脚本所在仓库推导项目根目录；部署时可通过环境变量覆盖。
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="${ABP_PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+SOURCE_VIDEO="${ABP_SOURCE_VIDEO:-$PROJECT_ROOT/backend/uploads/queue}"
+SOURCE_IMG="${ABP_SOURCE_IMG:-$PROJECT_ROOT/backend/uploads/gallery}"
+RCLONE_REMOTE="${ABP_RCLONE_REMOTE:-onedrive}"
+DEST_VIDEO="${ABP_DEST_VIDEO:-auto_banana_product/video}"
+DEST_IMG="${ABP_DEST_IMG:-auto_banana_product/img}"
 LOG_FILE="/var/log/auto_banana_backup.log"
 TEMP_DIR="/tmp/banana_backup_$(date +%Y%m%d)"
 
