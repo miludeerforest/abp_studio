@@ -643,13 +643,14 @@ def main() -> int:
     )
 
     username = "writer_" + uuid.uuid4().hex[:10]
+    writer_password = "writer_" + uuid.uuid4().hex
     creates = [
         request(
             base,
             "POST",
             "/api/v1/users",
             token,
-            {"username": username, "password": "writer-pass", "role": "user"},
+            {"username": username, "password": writer_password, "role": "user"},
         )
         for base, token in zip(bases, tokens)
     ]
@@ -668,7 +669,7 @@ def main() -> int:
     ]
     failures += not compare("PUT /api/v1/users/{id}", updates[0], updates[1])
 
-    writer_logins = [login(base, username + "_updated", "writer-pass") for base in bases]
+    writer_logins = [login(base, username + "_updated", writer_password) for base in bases]
     failures += not compare("POST /api/v1/login as created user", writer_logins[0], writer_logins[1])
     writer_tokens = [result[1]["access_token"] for result in writer_logins]
     profile_updates = [

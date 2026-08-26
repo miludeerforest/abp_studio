@@ -36,14 +36,13 @@ impl Settings {
         let _ = dotenvy::dotenv();
         Ok(Self {
             database_url: require_env("DATABASE_URL")?,
-            secret_key: env::var("SECRET_KEY")
-                .unwrap_or_else(|_| "your-secret-key-change-this-in-production".into()),
+            secret_key: require_env("SECRET_KEY")?,
             access_token_expire_minutes: env::var("ACCESS_TOKEN_EXPIRE_MINUTES")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(1440),
             admin_user: env::var("ADMIN_USER").unwrap_or_else(|_| "admin".into()),
-            admin_password: env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "admin123".into()),
+            admin_password: require_env("ADMIN_PASSWORD")?,
             force_reset_admin_password: env::var("FORCE_RESET_ADMIN_PASSWORD")
                 .map(|v| v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
@@ -83,5 +82,12 @@ impl Settings {
 }
 
 fn require_env(key: &str) -> anyhow::Result<String> {
-    env::var(key).map_err(|_| anyhow::anyhow!("missing required environment variable: {key}"))
+    let value = env::var(key)
+        .map_err(|_| anyhow::anyhow!("missing required environment variable: {key}"))?;
+    if value.trim().is_empty() {
+        return Err(anyhow::anyhow!(
+            "environment variable {key} must not be empty"
+        ));
+    }
+    Ok(value)
 }

@@ -30,7 +30,7 @@ Submit credentials as form fields (not JSON body):
 curl -X POST "https://your-domain/api/v1/login" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin" \
-  -d "password=your_password" \
+  -d "password=${ABP_ADMIN_PASSWORD}" \
   -d "turnstile_token=optional_token_value"
 ```
 
@@ -38,7 +38,7 @@ curl -X POST "https://your-domain/api/v1/login" \
 ```javascript
 const formData = new URLSearchParams();
 formData.append('username', 'admin');
-formData.append('password', 'your_password');
+formData.append('password', adminPassword);
 
 const response = await fetch('/api/v1/login', {
   method: 'POST',
